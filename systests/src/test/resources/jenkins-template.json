@@ -1,0 +1,243 @@
+{
+  "apiVersion" : "v1",
+  "kind" : "Template",
+  "labels" : { },
+  "metadata" : {
+    "annotations" : {
+      "description" : "Jenkins CI is a leading open-source continuous integration server. Built with Java, it provides 985 plugins to support building and testing virtually any project.\n\n[http://jenkins-ci.org/](http://jenkins-ci.org/)",
+      "fabric8.jenkins/summary" : "[Jenkins](http://jenkins-ci.org/) extendable open source continuous integration server",
+      "fabric8.jenkins/iconUrl" : "https://cdn.rawgit.com/fabric8io/fabric8-devops/master/jenkins/src/main/fabric8/icon.svg"
+    },
+    "labels" : { },
+    "name" : "jenkins"
+  },
+  "objects" : [ {
+    "apiVersion" : "v1",
+    "imagePullSecrets" : [ ],
+    "kind" : "ServiceAccount",
+    "metadata" : {
+      "annotations" : { },
+      "labels" : { },
+      "name" : "jenkins"
+    },
+    "secrets" : [ {
+      "name" : "jenkins-git-ssh"
+    }, {
+      "name" : "jenkins-master-ssh"
+    }, {
+      "name" : "jenkins-release-gpg"
+    } ]
+  }, {
+    "apiVersion" : "v1",
+    "kind" : "Service",
+    "metadata" : {
+      "annotations" : { },
+      "labels" : {
+        "provider" : "fabric8",
+        "project" : "jenkins"
+      },
+      "name" : "jenkins"
+    },
+    "spec" : {
+      "deprecatedPublicIPs" : [ ],
+      "externalIPs" : [ ],
+      "ports" : [ {
+        "name" : "http",
+        "port" : 80,
+        "protocol" : "TCP",
+        "targetPort" : 8080
+      }, {
+        "name" : "agent",
+        "port" : 50000,
+        "protocol" : "TCP",
+        "targetPort" : 50000
+      } ],
+      "selector" : {
+        "provider" : "fabric8",
+        "project" : "jenkins"
+      },
+      "type" : "LoadBalancer"
+    }
+  }, {
+    "apiVersion" : "v1",
+    "kind" : "Service",
+    "metadata" : {
+      "annotations" : { },
+      "labels" : {
+        "provider" : "fabric8",
+        "project" : "jenkins"
+      },
+      "name" : "jenkins"
+    },
+    "spec" : {
+      "deprecatedPublicIPs" : [ ],
+      "externalIPs" : [ ],
+      "ports" : [ {
+        "name" : "http",
+        "port" : 80,
+        "protocol" : "TCP",
+        "targetPort" : 8080
+      }, {
+        "name" : "agent",
+        "port" : 50000,
+        "protocol" : "TCP",
+        "targetPort" : 50000
+      } ],
+      "selector" : {
+        "provider" : "fabric8",
+        "project" : "jenkins"
+      },
+      "type" : "LoadBalancer"
+    }
+  }, {
+    "apiVersion" : "v1",
+    "kind" : "Service",
+    "metadata" : {
+      "annotations" : { },
+      "labels" : {
+        "provider" : "fabric8",
+        "project" : "jenkins"
+      },
+      "name" : "jenkins"
+    },
+    "spec" : {
+      "deprecatedPublicIPs" : [ ],
+      "externalIPs" : [ ],
+      "ports" : [ {
+        "name" : "http",
+        "port" : 80,
+        "protocol" : "TCP",
+        "targetPort" : 8080
+      }, {
+        "name" : "agent",
+        "port" : 50000,
+        "protocol" : "TCP",
+        "targetPort" : 50000
+      } ],
+      "selector" : {
+        "provider" : "fabric8",
+        "project" : "jenkins"
+      },
+      "type" : "LoadBalancer"
+    }
+  }, {
+    "apiVersion" : "v1",
+    "kind" : "ReplicationController",
+    "metadata" : {
+      "annotations" : {
+        "fabric8.io/git-commit" : "30941bd590acaa7c5fa481d7dacfebe41075c971",
+        "fabric8.io/git-branch" : "stuff"
+      },
+      "labels" : {
+        "project" : "jenkins",
+        "provider" : "fabric8",
+        "version" : "2.2.133-SNAPSHOT",
+        "group" : "io.fabric8.devops.apps"
+      },
+      "name" : "jenkins"
+    },
+    "spec" : {
+      "replicas" : 1,
+      "selector" : {
+        "project" : "jenkins",
+        "provider" : "fabric8",
+        "version" : "2.2.133-SNAPSHOT",
+        "group" : "io.fabric8.devops.apps"
+      },
+      "template" : {
+        "metadata" : {
+          "annotations" : {
+            "fabric8.io/secret-ssh-key" : "jenkins-git-ssh,jenkins-master-ssh",
+            "fabric8.io/secret-ssh-config" : "jenkins-ssh-config",
+            "fabric8.io/secret-gpg-key" : "jenkins-release-gpg",
+            "fabric8.io/secret-maven-settings" : "jenkins-maven-settings",
+            "fabric8.io/secret-hub-api-token" : "jenkins-hub-api-token",
+            "fabric8.io/secret-docker-cfg" : "jenkins-docker-cfg"
+          },
+          "labels" : {
+            "project" : "jenkins",
+            "provider" : "fabric8",
+            "version" : "2.2.133-SNAPSHOT",
+            "group" : "io.fabric8.devops.apps"
+          }
+        },
+        "spec" : {
+          "containers" : [ {
+            "args" : [ ],
+            "command" : [ ],
+            "env" : [ {
+              "name" : "DOMAIN",
+              "value" : "${DOMAIN}"
+            }, {
+              "name" : "JENKINS_WORKFLOW_GIT_REPOSITORY",
+              "value" : "${JENKINS_WORKFLOW_GIT_REPOSITORY}"
+            }, {
+              "name" : "PROJECT_VERSION",
+              "value" : "latest"
+            }, {
+              "name" : "JENKINS_GOGS_PASSWORD",
+              "value" : "${JENKINS_GOGS_PASSWORD}"
+            }, {
+              "name" : "JENKINS_GOGS_USER",
+              "value" : "${JENKINS_GOGS_USER}"
+            }, {
+              "name" : "JENKINS_GOGS_EMAIL",
+              "value" : "${JENKINS_GOGS_EMAIL}"
+            }, {
+              "name" : "FABRIC8_CONSOLE",
+              "value" : "http://fabric8.${DOMAIN}"
+            }, {
+              "name" : "KUBERNETES_NAMESPACE",
+              "valueFrom" : {
+                "fieldRef" : {
+                  "fieldPath" : "metadata.namespace"
+                }
+              }
+            } ],
+            "image" : "fabric8/jenkins-docker",
+            "imagePullPolicy" : "IfNotPresent",
+            "lifecycle" : {
+              "postStart" : {
+                "exec" : {
+                  "command" : [ "/root/postStart.sh" ]
+                }
+              }
+            },
+            "name" : "jenkins",
+            "ports" : [ {
+              "containerPort" : 50000,
+              "name" : "slave"
+            }, {
+              "containerPort" : 8080,
+              "name" : "http"
+            } ]
+          } ],
+          "imagePullSecrets" : [ ],
+          "nodeSelector" : { },
+          "serviceAccountName" : "jenkins"
+        }
+      }
+    }
+  } ],
+  "parameters" : [ {
+    "description" : "The email address of the Jenkins user on Gogs",
+    "name" : "JENKINS_GOGS_EMAIL",
+    "value" : "gogsadmin@fabric8.local"
+  }, {
+    "description" : "The user name for Jenkins to login to Gogs",
+    "name" : "JENKINS_GOGS_USER",
+    "value" : "gogsadmin"
+  }, {
+    "description" : "The password for Jenkins to login to Gogs",
+    "name" : "JENKINS_GOGS_PASSWORD",
+    "value" : "RedHat$1"
+  }, {
+    "description" : "The git clone URL for the jenkins global workflow repository which can be reused across projects.  See https://github.com/jenkinsci/workflow-plugin/tree/master/cps-global-lib",
+    "name" : "JENKINS_WORKFLOW_GIT_REPOSITORY",
+    "value" : "https://github.com/fabric8io/jenkins-workflow-library.git"
+  }, {
+    "description" : "The domain name applications are installed on",
+    "name" : "DOMAIN",
+    "value" : "vagrant.f8"
+  } ]
+}
