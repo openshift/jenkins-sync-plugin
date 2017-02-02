@@ -21,8 +21,18 @@
                http://jboss.org/schema/arquillian/arquillian_1_0.xsd">
 
   <extension qualifier="kubernetes">
-    <property name="env.dependencies">mvn:io.fabric8.devops.apps/jenkins/${fabric8.devops.version}/json/kubernetes</property>
 <!--
+    <property name="env.dependencies">mvn:io.fabric8.devops.apps/jenkins/${fabric8.devops.version}/json/kubernetes</property>
+-->
+
+    <!-- TODO lets use a local hacked template for now -->
+    <property name="env.dependencies">src/test/resources/jenkins-template.json</property>
+
+
+    <!-- TODO for now lets use the same namespace each time -->
+    <property name="namespace.use.existing">test-jenkins</property>
+
+    <!--
     <property name="useGoFabric8">true</property>
 -->
   </extension>
