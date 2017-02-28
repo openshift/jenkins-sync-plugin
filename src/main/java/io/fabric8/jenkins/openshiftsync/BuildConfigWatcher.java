@@ -29,12 +29,15 @@ import io.fabric8.openshift.api.model.BuildConfigList;
 import jenkins.model.Jenkins;
 import jenkins.security.NotReallyRoleSensitiveCallable;
 import jenkins.util.Timer;
+
 import org.apache.tools.ant.filters.StringInputStream;
 import org.jenkinsci.plugins.workflow.flow.FlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 
 import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
+
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
@@ -153,6 +156,16 @@ public class BuildConfigWatcher implements Watcher<BuildConfig> {
       logger.log(Level.WARNING, "Caught: " + e, e);
     }
   }
+  
+  private void updateJob(WorkflowJob job, InputStream jobStream, String jobName, BuildConfig buildConfig, String existingBuildRunPolicy, BuildConfigProjectProperty buildConfigProjectProperty) throws IOException {
+      Source source = new StreamSource(jobStream);
+      job.updateByXml(source);
+      job.save();
+      logger.info("Updated job " + jobName + " from BuildConfig " + NamespaceName.create(buildConfig) + " with revision: " + buildConfig.getMetadata().getResourceVersion());
+      if (existingBuildRunPolicy != null && !existingBuildRunPolicy.equals(buildConfigProjectProperty.getBuildRunPolicy())) {
+        maybeScheduleNext(job);
+      }
+  }
 
   private void upsertJob(final BuildConfig buildConfig) throws Exception {
     if (isJenkinsBuildConfig(buildConfig)) {
@@ -211,19 +224,19 @@ public class BuildConfigWatcher implements Watcher<BuildConfig> {
           InputStream jobStream = new StringInputStream(new XStream2().toXML(job));
 
           if (newJob) {
-            Jenkins.getActiveInstance().createProjectFromXML(
-              jobName,
-              jobStream
-            ).save();
-            logger.info("Created job " + jobName + " from BuildConfig " + NamespaceName.create(buildConfig) + " with revision: " + buildConfig.getMetadata().getResourceVersion());
+              try {
+                  Jenkins.getActiveInstance().createProjectFromXML(
+                          jobName,
+                          jobStream
+                        ).save();
+                        logger.info("Created job " + jobName + " from BuildConfig " + NamespaceName.create(buildConfig) + " with revision: " + buildConfig.getMetadata().getResourceVersion());
+              } catch (IllegalArgumentException e) {
+                  // see https://github.com/openshift/jenkins-sync-plugin/issues/117, jenkins might reload existing jobs on startup between the
+                  // newJob check above and when we make the createProjectFromXML call; if so, retry as an update
+                  updateJob(job, jobStream, jobName, buildConfig, existingBuildRunPolicy, buildConfigProjectProperty);
+              }
           } else {
-            Source source = new StreamSource(jobStream);
-            job.updateByXml(source);
-            job.save();
-            logger.info("Updated job " + jobName + " from BuildConfig " + NamespaceName.create(buildConfig) + " with revision: " + buildConfig.getMetadata().getResourceVersion());
-            if (existingBuildRunPolicy != null && !existingBuildRunPolicy.equals(buildConfigProjectProperty.getBuildRunPolicy())) {
-              maybeScheduleNext(job);
-            }
+              updateJob(job, jobStream, jobName, buildConfig, existingBuildRunPolicy, buildConfigProjectProperty);
           }
           bk.commit();
           putJobWithBuildConfig(Jenkins.getActiveInstance().getItemByFullName(job.getFullName(), WorkflowJob.class), buildConfig);
