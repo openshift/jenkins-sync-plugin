@@ -11,6 +11,7 @@ import com.cloudbees.plugins.credentials.domains.DomainRequirement;
 import com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl;
 import hudson.remoting.Base64;
 import hudson.security.ACL;
+import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.openshift.api.model.BuildConfig;
 import jenkins.model.Jenkins;
@@ -39,27 +40,49 @@ public class CredentialsUtils {
   private final static Logger logger = Logger.getLogger(CredentialsUtils.class.getName());
 
   public static synchronized String updateSourceCredentials(BuildConfig buildConfig) throws IOException {
-    String id = null;
     if (buildConfig.getSpec() != null &&
-      buildConfig.getSpec().getSource() != null &&
-      buildConfig.getSpec().getSource().getSourceSecret() != null &&
-      !buildConfig.getSpec().getSource().getSourceSecret().getName().isEmpty()) {
-      Secret sourceSecret = getAuthenticatedOpenShiftClient().secrets().inNamespace(buildConfig.getMetadata().getNamespace()).withName(buildConfig.getSpec().getSource().getSourceSecret().getName()).get();
-      if (sourceSecret != null) {
-        Credentials creds = secretToCredentials(sourceSecret);
-        id = secretName(buildConfig.getMetadata().getNamespace(), buildConfig.getSpec().getSource().getSourceSecret().getName());
-        Credentials existingCreds = lookupCredentials(id);
-        final SecurityContext previousContext = ACL.impersonate(ACL.SYSTEM);
-        try {
-          CredentialsStore s = CredentialsProvider.lookupStores(Jenkins.getActiveInstance()).iterator().next();
-          if (existingCreds != null) {
-            s.updateCredentials(Domain.global(), existingCreds, creds);
-          } else {
-            s.addCredentials(Domain.global(), creds);
-          }
-        } finally {
-          SecurityContextHolder.setContext(previousContext);
+            buildConfig.getSpec().getSource() != null &&
+            buildConfig.getSpec().getSource().getSourceSecret() != null) {
+      String secretName = buildConfig.getSpec().getSource().getSourceSecret().getName();
+      String namespace = buildConfig.getMetadata().getNamespace();
+      if (!secretName.isEmpty()) {
+        Secret sourceSecret = getAuthenticatedOpenShiftClient().secrets().inNamespace(namespace).withName(secretName).get();
+        return upsertCredential(sourceSecret, namespace, secretName);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Inserts or creates a Jenkins Credential for the given Secret
+   */
+  public static synchronized String upsertCredential(Secret secret) throws IOException {
+    if (secret != null) {
+      ObjectMeta metadata = secret.getMetadata();
+      if (metadata != null){
+        return upsertCredential(secret, metadata.getNamespace(), metadata.getName());
+      }
+    }
+    return null;
+  }
+
+    
+  private static String upsertCredential(Secret secret, String namespace, String secretName) throws IOException {
+    String id = null;
+    if (secret != null) {
+      Credentials creds = secretToCredentials(secret);
+      id = secretName(namespace, secretName);
+      Credentials existingCreds = lookupCredentials(id);
+      final SecurityContext previousContext = ACL.impersonate(ACL.SYSTEM);
+      try {
+        CredentialsStore s = CredentialsProvider.lookupStores(Jenkins.getActiveInstance()).iterator().next();
+        if (existingCreds != null) {
+          s.updateCredentials(Domain.global(), existingCreds, creds);
+        } else {
+          s.addCredentials(Domain.global(), creds);
         }
+      } finally {
+        SecurityContextHolder.setContext(previousContext);
       }
     }
     return id;
@@ -96,6 +119,16 @@ public class CredentialsUtils {
   }
 
   private static String secretName(String namespace, String name) {
+    String watchNamespace = null;
+    GlobalPluginConfiguration config = GlobalPluginConfiguration.get();
+    if (config != null) {
+      watchNamespace = config.getNamespace();
+    }
+    // if we only watch a single namespace and this secret is in that namespace then
+    // lets avoid the namespace prefix in the name
+    if (watchNamespace != null && namespace.equals(watchNamespace)) {
+      return name;
+    }
     return namespace + "-" + name;
   }
 

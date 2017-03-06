@@ -15,25 +15,19 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
+import com.cloudbees.hudson.plugins.folder.Folder;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.BulkChange;
+import hudson.model.ItemGroup;
 import hudson.model.Job;
-import hudson.model.ParameterDefinition;
-import hudson.model.ParameterValue;
-import hudson.model.ParametersDefinitionProperty;
-import hudson.model.StringParameterDefinition;
-import hudson.model.StringParameterValue;
 import hudson.security.ACL;
 import hudson.triggers.SafeTimerTask;
 import hudson.util.XStream2;
-import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.Watch;
 import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.openshift.api.model.BuildConfig;
 import io.fabric8.openshift.api.model.BuildConfigList;
-import io.fabric8.openshift.api.model.JenkinsPipelineBuildStrategy;
-import io.fabric8.openshift.client.OpenShiftClient;
 import jenkins.model.Jenkins;
 import jenkins.security.NotReallyRoleSensitiveCallable;
 import jenkins.util.Timer;
@@ -47,7 +41,6 @@ import javax.xml.transform.stream.StreamSource;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,12 +49,24 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.*;
+import static io.fabric8.jenkins.openshiftsync.Annotations.DISABLE_SYNC_CREATE_ON;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.initializeBuildConfigToJobMap;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.putJobWithBuildConfig;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.removeJobWithBuildConfig;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMapper.mapBuildConfigToFlow;
 import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL;
 import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL_LATEST_ONLY;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.maybeScheduleNext;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.*;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAnnotation;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getFullNameParent;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getName;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getNamespace;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isJenkinsBuildConfig;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.jenkinsJobFullName;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.jenkinsJobName;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.parseResourceVersion;
 import static java.net.HttpURLConnection.HTTP_GONE;
 import static java.util.logging.Level.SEVERE;
 
@@ -183,14 +188,24 @@ public class BuildConfigWatcher implements Watcher<BuildConfig> {
         @Override
         public Void call() throws Exception {
           String jobName = jenkinsJobName(buildConfig);
+          String jobFullName = jenkinsJobFullName(buildConfig);
           WorkflowJob job = getJobFromBuildConfig(buildConfig);
+          Jenkins activeInstance = Jenkins.getActiveInstance();
+          ItemGroup parent = activeInstance;
+          if (job == null) {
+            job = (WorkflowJob) activeInstance.getItemByFullName(jobFullName);
+          }
           boolean newJob = job == null;
           if (newJob) {
-            job = new WorkflowJob(Jenkins.getActiveInstance(), jobName);
+            String disableOn = getAnnotation(buildConfig, DISABLE_SYNC_CREATE_ON);
+            if (disableOn != null && disableOn.equalsIgnoreCase("jenkins")) {
+              logger.fine("Not creating missing jenkins job " + jobFullName + " due to annotation: " + DISABLE_SYNC_CREATE_ON);
+              return null;
+            }
+            parent = getFullNameParent(activeInstance, jobFullName, getNamespace(buildConfig));
+            job = new WorkflowJob(parent, jobName);
           }
           BulkChange bk = new BulkChange(job);
-
-          job.setDisplayName(jenkinsJobDisplayName(buildConfig));
 
           FlowDefinition flowFromBuildConfig = mapBuildConfigToFlow(buildConfig);
           if (flowFromBuildConfig == null) {
@@ -237,22 +252,45 @@ public class BuildConfigWatcher implements Watcher<BuildConfig> {
           InputStream jobStream = new StringInputStream(new XStream2().toXML(job));
 
           if (newJob) {
+
               try {
-                  Jenkins.getActiveInstance().createProjectFromXML(
-                          jobName,
-                          jobStream
-                        ).save();
-                        logger.info("Created job " + jobName + " from BuildConfig " + NamespaceName.create(buildConfig) + " with revision: " + buildConfig.getMetadata().getResourceVersion());
+                if (parent instanceof Folder) {
+                  Folder folder = (Folder) parent;
+                  folder.createProjectFromXML(
+                    jobName,
+                    jobStream
+                  ).save();
+                } else {
+                  activeInstance.createProjectFromXML(
+                    jobName,
+                    jobStream
+                  ).save();
+                }
+                logger.info("Created job " + jobName + " from BuildConfig " + NamespaceName.create(buildConfig) + " with revision: " + buildConfig.getMetadata().getResourceVersion());
               } catch (IllegalArgumentException e) {
                   // see https://github.com/openshift/jenkins-sync-plugin/issues/117, jenkins might reload existing jobs on startup between the
                   // newJob check above and when we make the createProjectFromXML call; if so, retry as an update
                   updateJob(job, jobStream, jobName, buildConfig, existingBuildRunPolicy, buildConfigProjectProperty);
               }
+
           } else {
               updateJob(job, jobStream, jobName, buildConfig, existingBuildRunPolicy, buildConfigProjectProperty);
           }
           bk.commit();
-          putJobWithBuildConfig(Jenkins.getActiveInstance().getItemByFullName(job.getFullName(), WorkflowJob.class), buildConfig);
+          String fullName = job.getFullName();
+          WorkflowJob workflowJob = activeInstance.getItemByFullName(fullName, WorkflowJob.class);
+          if (workflowJob == null && parent instanceof Folder) {
+            // we should never need this but just in case there's an odd timing issue or something...
+            Folder folder = (Folder) parent;
+            folder.add(job, jobName);
+            workflowJob = activeInstance.getItemByFullName(fullName, WorkflowJob.class);
+          }
+          if (workflowJob == null) {
+            logger.warning("Could not find created job " + fullName + " for BuildConfig: " + getNamespace(buildConfig) + "/" + getName(buildConfig));
+          } else {
+            //logger.info((newJob ? "created" : "updated" ) + " job " + fullName + " with path " + jobFullName + " from BuildConfig: " + getNamespace(buildConfig) + "/" + getName(buildConfig));
+            putJobWithBuildConfig(workflowJob, buildConfig);
+          }
           return null;
         }
       });

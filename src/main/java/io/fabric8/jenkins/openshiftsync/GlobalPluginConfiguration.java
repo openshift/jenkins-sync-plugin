@@ -51,16 +51,27 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
 
   private String[] namespaces;
 
+  private String jobNamePattern;
+
+  private String skipOrganisationPrefix;
+
+  private String skipBranchSuffix;
+
   private transient BuildWatcher buildWatcher;
 
   private transient BuildConfigWatcher buildConfigWatcher;
 
+  private transient SecretWatcher secretWatcher;
+
   @DataBoundConstructor
-  public GlobalPluginConfiguration(boolean enable, String server, String namespace, String credentialsId) {
+  public GlobalPluginConfiguration(boolean enable, String server, String namespace, String credentialsId, String jobNamePattern, String skipOrganisationPrefix, String skipBranchSuffix) {
     this.enabled = enable;
     this.server = server;
     this.namespaces = StringUtils.isBlank(namespace)?null:namespace.split(" ");
     this.credentialsId = Util.fixEmptyAndTrim(credentialsId);
+    this.jobNamePattern = jobNamePattern;
+    this.skipOrganisationPrefix = skipOrganisationPrefix;
+    this.skipBranchSuffix = skipBranchSuffix;
     configChange();
   }
 
@@ -140,6 +151,30 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
             ;
   }
 
+  public String getJobNamePattern() {
+    return jobNamePattern;
+  }
+
+  public void setJobNamePattern(String jobNamePattern) {
+    this.jobNamePattern = jobNamePattern;
+  }
+
+  public String getSkipOrganisationPrefix() {
+    return skipOrganisationPrefix;
+  }
+
+  public void setSkipOrganisationPrefix(String skipOrganisationPrefix) {
+    this.skipOrganisationPrefix = skipOrganisationPrefix;
+  }
+
+  public String getSkipBranchSuffix() {
+    return skipBranchSuffix;
+  }
+
+  public void setSkipBranchSuffix(String skipBranchSuffix) {
+    this.skipBranchSuffix = skipBranchSuffix;
+  }
+
   private void configChange() {
     if (!enabled) {
       if (buildConfigWatcher != null) {
@@ -147,6 +182,9 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
       }
       if (buildWatcher != null) {
         buildWatcher.stop();
+      }
+      if (secretWatcher != null) {
+        secretWatcher.stop();
       }
       OpenShiftUtils.shutdownOpenShiftClient();
       return;
@@ -184,6 +222,8 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
           buildConfigWatcher.start();
           buildWatcher = new BuildWatcher(namespaces);
           buildWatcher.start();
+          secretWatcher = new SecretWatcher(namespaces);
+          secretWatcher.start();
         }
       };
       // lets give jenkins a while to get started ;)

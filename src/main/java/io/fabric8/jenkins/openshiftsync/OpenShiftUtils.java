@@ -15,15 +15,15 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
-import com.cloudbees.plugins.credentials.CredentialsProvider;
-import com.cloudbees.plugins.credentials.CredentialsUnavailableException;
-import com.cloudbees.plugins.credentials.domains.DomainRequirement;
+import com.cloudbees.hudson.plugins.folder.Folder;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import hudson.model.ItemGroup;
-import hudson.security.ACL;
+import hudson.BulkChange;
+import hudson.model.Item;
+import hudson.util.XStream2;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.ReplicationController;
@@ -43,17 +43,23 @@ import io.fabric8.openshift.api.model.RouteSpec;
 import io.fabric8.openshift.client.DefaultOpenShiftClient;
 import io.fabric8.openshift.client.OpenShiftClient;
 import io.fabric8.openshift.client.OpenShiftConfigBuilder;
-import jenkins.model.GlobalConfiguration;
+
+import jenkins.model.Jenkins;
+
 import org.apache.commons.lang.StringUtils;
+import org.apache.tools.ant.filters.StringInputStream;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.ISODateTimeFormat;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-import java.util.List;
+
+import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -67,6 +73,7 @@ import static java.util.logging.Level.FINE;
 /**
  */
 public class OpenShiftUtils {
+
   private final static Logger logger = Logger.getLogger(OpenShiftUtils.class.getName());
 
   private static OpenShiftClient openShiftClient;
@@ -132,7 +139,6 @@ public class OpenShiftUtils {
         }
       }
     }
-
     return false;
   }
 
@@ -143,20 +149,65 @@ public class OpenShiftUtils {
    * @return the jenkins job name for the given BuildConfig
    */
   public static String jenkinsJobName(BuildConfig bc) {
-    String namespace = bc.getMetadata().getNamespace();
-    String name = bc.getMetadata().getName();
-    return jenkinsJobName(namespace, name);
+    return getName(bc);
   }
 
   /**
-   * Creates the Jenkins Job name for the given buildConfigName
+   * Finds the full jenkins job path including folders for the given {@link BuildConfig}.
    *
-   * @param namespace the namespace of the build
-   * @param buildConfigName the name of the {@link BuildConfig} in in the namespace
-   * @return the jenkins job name for the given namespace and name
+   * @param bc the BuildConfig
+   * @return the jenkins job name for the given BuildConfig
    */
-  public static String jenkinsJobName(String namespace, String buildConfigName) {
-    return namespace + "-" + buildConfigName;
+  public static String jenkinsJobFullName(BuildConfig bc) {
+    String jobName = getAnnotation(bc, Annotations.JENKINS_JOB_PATH);
+    if (StringUtils.isNotBlank(jobName)) {
+      return jobName;
+    }
+    return getNamespace(bc) + "/" + getName(bc);
+  }
+
+  /**
+   * Returns the parent for the given item full name or default to the active jenkins if it does not exist
+   */
+  public static ItemGroup getFullNameParent(Jenkins activeJenkins, String fullName, String namespace) {
+    int idx = fullName.lastIndexOf('/');
+    if (idx > 0) {
+      String parentFullName = fullName.substring(0, idx);
+      Item parent = activeJenkins.getItemByFullName(parentFullName);
+      if (parent instanceof ItemGroup) {
+        return (ItemGroup) parent;
+      } else if (parentFullName.equals(namespace)) {
+
+        // lets lazily create a new folder for this namespace parent
+        Folder folder = new Folder(activeJenkins, namespace);
+        try {
+          folder.setDescription("Folder for the OpenShift project: " + namespace);
+        } catch (IOException e) {
+          // ignore
+        }
+        BulkChange bk = new BulkChange(folder);
+        InputStream jobStream = new StringInputStream(new XStream2().toXML(folder));
+        try {
+          activeJenkins.createProjectFromXML(
+            namespace,
+            jobStream
+          ).save();
+        } catch (IOException e) {
+          logger.warning("Failed to create the Folder: " + namespace);
+        }
+        try {
+          bk.commit();
+        } catch (IOException e) {
+          logger.warning("Failed to commit toe BulkChange for the Folder: " + namespace);
+        }
+        // lets look it up again to be sure
+        parent = activeJenkins.getItemByFullName(namespace);
+        if (parent instanceof ItemGroup) {
+          return (ItemGroup) parent;
+        }
+      }
+    }
+    return activeJenkins;
   }
 
   /**
@@ -191,6 +242,18 @@ public class OpenShiftUtils {
    */
   public static String[] getNamespaceOrUseDefault(String[] configuredNamespaces, OpenShiftClient client) {
     String[] namespaces = configuredNamespaces;
+
+    if (namespaces != null){
+      for(int i = 0; i < namespaces.length; i++){
+        if (namespaces[i].startsWith("${") && namespaces[i].endsWith("}")) {
+          String envVar = namespaces[i].substring(2, namespaces[i].length() - 1);
+          namespaces[i] = System.getenv(envVar);
+          if (StringUtils.isBlank(namespaces[i])) {
+            logger.warning("No value defined for namespace environment variable `" + envVar +"`");
+          }
+        }
+      }
+    }
     if (namespaces==null || namespaces.length==0) {
       namespaces = new String[]{client.getNamespace()};
       if (StringUtils.isBlank(namespaces[0])) {
@@ -355,6 +418,77 @@ public class OpenShiftUtils {
   public static boolean isCancelled(BuildStatus status) {
     return status != null && status.getCancelled() != null && Boolean.TRUE.equals(status.getCancelled());
   }
+
+  /**
+   * Lets convert the string to btw a valid kubernetes resource name
+   */
+  static String convertNameToValidResourceName(String text) {
+    String lower = text.toLowerCase();
+    StringBuilder builder = new StringBuilder();
+    boolean started = false;
+    char lastCh = ' ';
+    for (int i = 0, last = lower.length() - 1; i <= last; i++) {
+      char ch = lower.charAt(i);
+      if (!(ch >= 'a' && ch <= 'z') && !(ch >= '0' && ch <= '9')) {
+        if (ch == '/') {
+          ch = '.';
+        } else if (ch != '.' && ch != '-') {
+          ch = '-';
+        }
+        if (!started || lastCh == '-' || lastCh == '.' || i == last) {
+          continue;
+        }
+      }
+      builder.append(ch);
+      started = true;
+      lastCh = ch;
+    }
+    return builder.toString();
+  }
+
+  public static String getAnnotation(HasMetadata resource, String name) {
+    ObjectMeta metadata = resource.getMetadata();
+    if (metadata != null) {
+      Map<String, String> annotations = metadata.getAnnotations();
+      if (annotations != null) {
+        return annotations.get(name);
+      }
+    }
+    return null;
+  }
+
+
+  public static void addAnnotation(HasMetadata resource, String name, String value) {
+    ObjectMeta metadata = resource.getMetadata();
+    if (metadata == null) {
+      metadata = new ObjectMeta();
+      resource.setMetadata(metadata);
+    }
+    Map<String, String> annotations = metadata.getAnnotations();
+    if (annotations == null) {
+      annotations = new HashMap<>();
+      metadata.setAnnotations(annotations);
+    }
+    annotations.put(name, value);
+  }
+
+  public static String getNamespace(HasMetadata resource) {
+    ObjectMeta metadata = resource.getMetadata();
+    if (metadata != null) {
+      return metadata.getNamespace();
+    }
+    return null;
+  }
+
+  public static String getName(HasMetadata resource) {
+    ObjectMeta metadata = resource.getMetadata();
+    if (metadata != null) {
+      return metadata.getName();
+    }
+    return null;
+  }
+
+
 
   abstract class StatelessReplicationControllerMixIn extends ReplicationController {
     @JsonIgnore

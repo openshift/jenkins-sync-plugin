@@ -511,4 +511,47 @@ public class JenkinsUtils {
       }
     }
   }
+
+  public static String getFullJobName(WorkflowJob job) {
+    return job.getRelativeNameFrom(Jenkins.getInstance());
+  }
+
+  public static String getBuildConfigName(WorkflowJob job) {
+    String name = getFullJobName(job);
+    GlobalPluginConfiguration config = GlobalPluginConfiguration.get();
+    String[] paths = name.split("/");
+    if (paths.length > 1) {
+      String orgName = paths[0];
+      if (StringUtils.isNotBlank(orgName)) {
+        if (config != null) {
+          String skipOrganisationPrefix = config.getSkipOrganisationPrefix();
+          if (StringUtils.isEmpty(skipOrganisationPrefix)) {
+            config.setSkipOrganisationPrefix(orgName);
+            skipOrganisationPrefix = config.getSkipOrganisationPrefix();
+          }
+
+          // if the default organisation lets strip the organisation name from the prefix
+          int prefixLength = orgName.length() + 1;
+          if (orgName.equals(skipOrganisationPrefix) && name.length() > prefixLength) {
+            name = name.substring(prefixLength);
+          }
+        }
+      }
+    }
+
+      // lets avoid the .master postfixes as we treat master as the default branch name
+    String masterSuffix = "/master";
+    if (config != null) {
+      String skipBranchSuffix = config.getSkipBranchSuffix();
+      if (StringUtils.isEmpty(skipBranchSuffix)) {
+        config.setSkipBranchSuffix("master");
+        skipBranchSuffix = config.getSkipBranchSuffix();
+      }
+      masterSuffix = "/" + skipBranchSuffix;
+    }
+    if (name.endsWith(masterSuffix) && name.length() > masterSuffix.length()) {
+      name = name.substring(0, name.length() - masterSuffix.length());
+    }
+    return name;
+  }
 }
