@@ -1,11 +1,7 @@
 package io.fabric8.jenkins.openshiftsync;
 
 import com.cloudbees.jenkins.plugins.sshcredentials.impl.BasicSSHUserPrivateKey;
-import com.cloudbees.plugins.credentials.Credentials;
-import com.cloudbees.plugins.credentials.CredentialsMatchers;
-import com.cloudbees.plugins.credentials.CredentialsProvider;
-import com.cloudbees.plugins.credentials.CredentialsScope;
-import com.cloudbees.plugins.credentials.CredentialsStore;
+import com.cloudbees.plugins.credentials.*;
 import com.cloudbees.plugins.credentials.domains.Domain;
 import com.cloudbees.plugins.credentials.domains.DomainRequirement;
 import com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl;
@@ -26,12 +22,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static hudson.Util.fixNull;
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_SECRETS_DATA_PASSWORD;
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_SECRETS_DATA_SSHPRIVATEKEY;
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_SECRETS_DATA_USERNAME;
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_SECRETS_TYPE_BASICAUTH;
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_SECRETS_TYPE_OPAQUE;
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_SECRETS_TYPE_SSH;
+import static io.fabric8.jenkins.openshiftsync.Constants.*;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static org.apache.commons.lang.StringUtils.isNotBlank;
 
@@ -88,18 +79,25 @@ public class CredentialsUtils {
     return id;
   }
 
+  // getCurrentToken returns the ServiceAccount token currently selected by the user. A return value of empty string
+  // implies no token is configured.
   public static String getCurrentToken() {
+    String credentialsId = GlobalPluginConfiguration.get().getCredentialsId();
+    if(credentialsId.equals("")) {
+      return "";
+    }
+
     OpenShiftToken token = CredentialsMatchers.firstOrNull(
             CredentialsProvider.lookupCredentials(
                     OpenShiftToken.class,
                     Jenkins.getActiveInstance(),
                     ACL.SYSTEM,
-                    Collections.<DomainRequirement> emptyList()
+                    Collections.<DomainRequirement>emptyList()
             ),
-            CredentialsMatchers.withId(GlobalPluginConfiguration.get().getCredentialsId())
-            );
+            CredentialsMatchers.withId(credentialsId)
+    );
 
-    if( token != null ) {
+    if (token != null) {
       return token.getToken();
     }
 

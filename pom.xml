@@ -27,7 +27,7 @@
   </parent>
   <groupId>io.fabric8.jenkins.plugins</groupId>
   <artifactId>openshift-sync</artifactId>
-  <version>0.1.14-SNAPSHOT</version>
+  <version>0.1.17-SNAPSHOT</version>
   <packaging>hpi</packaging>
 
   <properties>

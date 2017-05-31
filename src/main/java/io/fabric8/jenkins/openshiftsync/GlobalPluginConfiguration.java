@@ -114,8 +114,9 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
     this.server = server;
   }
 
+  // When Jenkins is reset, credentialsId is strangely set to null. However, credentialsId has no reason to be null.
   public String getCredentialsId() {
-    return credentialsId;
+    return credentialsId == null ? "" : credentialsId;
   }
 
   public void setCredentialsId(String credentialsId) {

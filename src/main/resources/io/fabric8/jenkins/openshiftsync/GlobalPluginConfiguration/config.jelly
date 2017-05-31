@@ -30,7 +30,7 @@
       <c:select/>
     </f:entry>
     <f:entry title="Namespace" field="namespace"
-             description="The namespace to sync BuildConfigs with - leave blank to sync with all namespaces. Environment variables in the form ${name} will be expanded.  Multiple namespaces can be listed using a space separator.">
+             description="The namespace to sync BuildConfigs with. Environment variables in the form ${name} will be expanded.  Multiple namespaces can be listed using a space separator.">
       <f:textbox/>
     </f:entry>
     <f:entry title="Sync Job Name Pattern " field="jobNamePattern"

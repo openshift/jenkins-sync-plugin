@@ -226,9 +226,8 @@ public class PipelineJobListener extends ItemListener {
         return;
       }
     }
+
     updateBuildConfigFromJob(job, jobBuildConfig);
-
-
 
     if (!hasEmbeddedPipelineOrValidSource(jobBuildConfig)) {
       // this pipeline has not yet been populated with the git source or an embedded pipeline so lets not create/update a BC yet
@@ -297,5 +296,5 @@ public class PipelineJobListener extends ItemListener {
     }
   }
 
-
+  
 }
