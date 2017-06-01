@@ -22,14 +22,11 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import hudson.model.Descriptor;
 import hudson.model.ItemGroup;
 import hudson.security.ACL;
-import io.fabric8.kubernetes.api.model.HasMetadata;
-import io.fabric8.kubernetes.api.model.ObjectMeta;
-import io.fabric8.kubernetes.api.model.ReplicationController;
-import io.fabric8.kubernetes.api.model.ReplicationControllerStatus;
-import io.fabric8.kubernetes.api.model.Service;
-import io.fabric8.kubernetes.api.model.ServiceSpec;
+import hudson.slaves.Cloud;
+import io.fabric8.kubernetes.api.model.*;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildConfig;
@@ -44,7 +41,10 @@ import io.fabric8.openshift.client.DefaultOpenShiftClient;
 import io.fabric8.openshift.client.OpenShiftClient;
 import io.fabric8.openshift.client.OpenShiftConfigBuilder;
 import jenkins.model.GlobalConfiguration;
+import jenkins.model.Jenkins;
 import org.apache.commons.lang.StringUtils;
+import org.csanchez.jenkins.plugins.kubernetes.KubernetesCloud;
+import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.ISODateTimeFormat;
@@ -52,9 +52,7 @@ import org.joda.time.format.ISODateTimeFormat;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -134,6 +132,40 @@ public class OpenShiftUtils {
     }
 
     return false;
+  }
+
+  public static List<PodTemplate> getPodTemplates() {
+    KubernetesCloud kubeCloud = getKubernetesCloud();
+    if(kubeCloud != null){
+      return kubeCloud.getTemplates();
+    } else {
+      return null;
+    }
+  }
+
+  public static void addPodTemplate(PodTemplate podTemplate) {
+    KubernetesCloud kubeCloud = getKubernetesCloud();
+    if(kubeCloud != null){
+      logger.info("Adding PodTemplate: " + podTemplate.getName());
+      kubeCloud.addTemplate(podTemplate);
+    }
+  }
+
+  public static void removePodTemplate(PodTemplate podTemplate) {
+    KubernetesCloud kubeCloud = getKubernetesCloud();
+    if(kubeCloud != null){
+      logger.info("Removing PodTemplate: " + podTemplate.getName());
+      kubeCloud.removeTemplate(podTemplate);
+    }
+  }
+
+  public static KubernetesCloud getKubernetesCloud() {
+    Cloud openShiftCloud = Jenkins.getInstance().getCloud("openshift");
+    if(openShiftCloud instanceof KubernetesCloud) {
+      return (KubernetesCloud) openShiftCloud;
+    }
+
+    return null;
   }
 
   /**
