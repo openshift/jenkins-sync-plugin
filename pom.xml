@@ -34,7 +34,7 @@
     <!-- Baseline Jenkins version you use to build the plugin. Users must have this version or newer to run. -->
     <jenkins.version>1.651.2</jenkins.version>
     <!-- Java Level to use. Java 7 required when using core >= 1.612 -->
-    <java.level>7</java.level>
+    <java.level>8</java.level>
     <!-- Jenkins Test Harness version you use to test the plugin. -->
     <!-- For Jenkins version >= 1.580.1 use JTH 2.x or higher. -->
     <jenkins-test-harness.version>2.1</jenkins-test-harness.version>
@@ -244,6 +244,12 @@
       <version>1.0</version>
       <scope>test</scope>
     </dependency>
+
+	<dependency>
+		 <groupId>org.csanchez.jenkins.plugins</groupId>
+		 <artifactId>kubernetes</artifactId>
+		 <version>0.10</version>
+	</dependency>
 
   </dependencies>
 
