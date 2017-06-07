@@ -347,6 +347,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
     }
   }
 
+  //annotate the Build with pending input JSON so consoles can do the Proceed/Abort stuff if they want
   private String getPendingActionsJson(WorkflowRun run) {
     List<PendingInputActionsExt> pendingInputActions = new ArrayList<PendingInputActionsExt>();
     InputAction inputAction = run.getAction(InputAction.class);

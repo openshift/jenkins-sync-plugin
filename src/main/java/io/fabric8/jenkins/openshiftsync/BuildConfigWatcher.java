@@ -49,7 +49,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static io.fabric8.jenkins.openshiftsync.Annotations.DISABLE_SYNC_CREATE_ON;
+import static io.fabric8.jenkins.openshiftsync.Annotations.DISABLE_SYNC_CREATE;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.initializeBuildConfigToJobMap;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.putJobWithBuildConfig;
@@ -197,9 +197,9 @@ public class BuildConfigWatcher implements Watcher<BuildConfig> {
           }
           boolean newJob = job == null;
           if (newJob) {
-            String disableOn = getAnnotation(buildConfig, DISABLE_SYNC_CREATE_ON);
+            String disableOn = getAnnotation(buildConfig, DISABLE_SYNC_CREATE);
             if (disableOn != null && disableOn.equalsIgnoreCase("jenkins")) {
-              logger.fine("Not creating missing jenkins job " + jobFullName + " due to annotation: " + DISABLE_SYNC_CREATE_ON);
+              logger.fine("Not creating missing jenkins job " + jobFullName + " due to annotation: " + DISABLE_SYNC_CREATE);
               return null;
             }
             parent = getFullNameParent(activeInstance, jobFullName, getNamespace(buildConfig));
@@ -288,7 +288,6 @@ public class BuildConfigWatcher implements Watcher<BuildConfig> {
           if (workflowJob == null) {
             logger.warning("Could not find created job " + fullName + " for BuildConfig: " + getNamespace(buildConfig) + "/" + getName(buildConfig));
           } else {
-            //logger.info((newJob ? "created" : "updated" ) + " job " + fullName + " with path " + jobFullName + " from BuildConfig: " + getNamespace(buildConfig) + "/" + getName(buildConfig));
             putJobWithBuildConfig(workflowJob, buildConfig);
           }
           return null;

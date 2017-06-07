@@ -204,7 +204,7 @@ public class PipelineJobListener extends ItemListener {
 
   private void upsertBuildConfigForJob(WorkflowJob job, BuildConfigProjectProperty buildConfigProjectProperty) {
     boolean create = false;
-    BuildConfig jobBuildConfig = getOpenShiftClient().buildConfigs().
+    BuildConfig jobBuildConfig = getAuthenticatedOpenShiftClient().buildConfigs().
             inNamespace(buildConfigProjectProperty.getNamespace()).withName(buildConfigProjectProperty.getName()).get();
     if (jobBuildConfig == null) {
       create = true;
@@ -241,7 +241,7 @@ public class PipelineJobListener extends ItemListener {
     
     if (create) {
       try {
-        BuildConfig bc = getOpenShiftClient().buildConfigs().inNamespace(jobBuildConfig.getMetadata().getNamespace()).create(jobBuildConfig);
+        BuildConfig bc = getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(jobBuildConfig.getMetadata().getNamespace()).create(jobBuildConfig);
         String uid = bc.getMetadata().getUid();
         buildConfigProjectProperty.setUid(uid);
       } catch (Exception e) {

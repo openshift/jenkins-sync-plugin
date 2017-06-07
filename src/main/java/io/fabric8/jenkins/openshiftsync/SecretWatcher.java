@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenShiftClient;
 import static java.net.HttpURLConnection.HTTP_GONE;
 import static java.util.logging.Level.SEVERE;
@@ -63,7 +64,7 @@ public class SecretWatcher implements Watcher<Secret> {
         for(String namespace:namespaces) {
           try {
             logger.fine("listing Secrets resources");
-            final SecretList secrets = getOpenShiftClient().secrets().inNamespace(namespace).withLabel(LABEL_JENKINS, VALUE_SYNC).list();
+            final SecretList secrets = getAuthenticatedOpenShiftClient().secrets().inNamespace(namespace).withLabel(LABEL_JENKINS, VALUE_SYNC).list();
             onInitialSecrets(secrets);
             logger.fine("handled Secrets resources");
             if (secretWatch == null) {
