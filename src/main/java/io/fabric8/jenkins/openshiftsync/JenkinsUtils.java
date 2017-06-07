@@ -64,6 +64,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
@@ -222,6 +223,27 @@ public class JenkinsUtils {
       return buildActions;
   }
 
+  public static List<Action> setJobRunParamsFromEnvAndUIParams(WorkflowJob job, JenkinsPipelineBuildStrategy strat, List<Action> buildActions, ParametersAction params) {
+      List<EnvVar> envs = strat.getEnv();
+      List<String> envKeys = new ArrayList<String>();
+      List<ParameterValue> envVarList = new ArrayList<ParameterValue>();
+      if (envs.size() > 0) {
+          // build list of env var keys for compare with existing job params
+          for (EnvVar env : envs) {
+              envKeys.add(env.getName());
+              envVarList.add(new StringParameterValue(env.getName(),env.getValue()));
+          }
+      }
+      
+      if (params != null)
+          envVarList.addAll(params.getParameters());
+      
+      if (envVarList.size() > 0)
+          buildActions.add(new ParametersAction(envVarList));
+
+      return buildActions;
+  }
+
   public static boolean triggerJob(WorkflowJob job, Build build) throws IOException {
     if (isAlreadyTriggered(job, build)) {
       return false;
@@ -279,12 +301,19 @@ public class JenkinsUtils {
       }
     }
     
+    ParametersAction userProvidedParams = BuildToParametersActionMap.remove(build.getMetadata().getName());
     // grab envs from actual build in case user overrode default values via `oc start-build -e`
     JenkinsPipelineBuildStrategy strat = build.getSpec().getStrategy().getJenkinsPipelineStrategy();
     // only add new param defs for build envs which are not in build config envs
     addJobParamForBuildEnvs(job, strat, false);
-    // now add the actual param values stemming from openshift build env vars for this specific job
-    buildActions = setJobRunParamsFromEnv(job, strat, buildActions);
+    if (userProvidedParams == null) {
+        LOGGER.fine("setting all job run params since this was either started via oc, or started from the UI with no build parameters" );
+        // now add the actual param values stemming from openshift build env vars for this specific job
+        buildActions = setJobRunParamsFromEnv(job, strat, buildActions);
+    } else {
+        LOGGER.fine("setting job run params and since this is manually started from jenkins applying user provided parameters " + userProvidedParams + " along with any from bc's env vars");
+        buildActions = setJobRunParamsFromEnvAndUIParams(job, strat, buildActions, userProvidedParams);
+    }
 
     if (job.scheduleBuild2(0, buildActions.toArray(new Action[buildActions.size()])) != null) {
       updateOpenShiftBuildPhase(build, PENDING);

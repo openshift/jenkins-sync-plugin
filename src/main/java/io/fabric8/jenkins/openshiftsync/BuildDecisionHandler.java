@@ -17,14 +17,20 @@ package io.fabric8.jenkins.openshiftsync;
 
 import hudson.Extension;
 import hudson.model.Action;
+import hudson.model.ParameterValue;
 import hudson.model.Cause;
 import hudson.model.CauseAction;
+import hudson.model.ParametersAction;
 import hudson.model.Queue;
+import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildRequestBuilder;
+
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static io.fabric8.jenkins.openshiftsync.BuildSyncRunListener.joinPaths;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
@@ -33,6 +39,9 @@ import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getJenkinsURL;
 @Extension
 public class BuildDecisionHandler extends Queue.QueueDecisionHandler {
 
+  private static final Logger LOGGER = Logger.getLogger(BuildDecisionHandler.class.getName());
+  
+  
   @Override
   public boolean shouldSchedule(Queue.Task p, List<Action> actions) {
     if (p instanceof WorkflowJob && !isOpenShiftBuildCause(actions)) {
@@ -45,7 +54,7 @@ public class BuildDecisionHandler extends Queue.QueueDecisionHandler {
         String namespace = buildConfigProjectProperty.getNamespace();
         String jobURL = joinPaths(getJenkinsURL(getAuthenticatedOpenShiftClient(), namespace), wj.getUrl());
 
-        getAuthenticatedOpenShiftClient().buildConfigs()
+        Build ret = getAuthenticatedOpenShiftClient().buildConfigs()
           .inNamespace(namespace).withName(buildConfigProjectProperty.getName())
           .instantiate(
             new BuildRequestBuilder()
@@ -53,6 +62,10 @@ public class BuildDecisionHandler extends Queue.QueueDecisionHandler {
               .addNewTriggeredBy().withMessage("Triggered by Jenkins job at " + jobURL).and()
               .build()
           );
+        
+        ParametersAction params = dumpParams(actions);        
+        if (params != null && ret != null)
+            BuildToParametersActionMap.add(ret.getMetadata().getName(), params);
         return false;
       }
     }
@@ -60,18 +73,32 @@ public class BuildDecisionHandler extends Queue.QueueDecisionHandler {
     return true;
   }
 
-  private boolean isOpenShiftBuildCause(List<Action> actions) {
-    for (Action action : actions) {
-      if (action instanceof CauseAction) {
-        CauseAction causeAction = (CauseAction) action;
-        for (Cause cause : causeAction.getCauses()) {
-          if (cause instanceof BuildCause) {
-            return true;
+  private static boolean isOpenShiftBuildCause(List<Action> actions) {
+      for (Action action : actions) {
+        if (action instanceof CauseAction) {
+          CauseAction causeAction = (CauseAction) action;
+          for (Cause cause : causeAction.getCauses()) {
+            if (cause instanceof BuildCause) {
+              return true;
+            }
           }
         }
       }
+      return false;
     }
-    return false;
-  }
 
+  private static ParametersAction dumpParams(List<Action> actions) {
+      for (Action action : actions) {
+        if (action instanceof ParametersAction) {
+            ParametersAction paramAction = (ParametersAction) action;
+            if (LOGGER.isLoggable(Level.FINE))
+              for (ParameterValue param : paramAction.getAllParameters()) {
+                  LOGGER.fine("param name " + param.getName() + " param value " + param.getValue());
+              }
+          return paramAction;
+        }
+      }
+      return null;
+    }
+  
 }

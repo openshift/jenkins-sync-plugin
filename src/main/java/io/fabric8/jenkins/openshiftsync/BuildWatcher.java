@@ -66,6 +66,7 @@ public class BuildWatcher implements Watcher<Build> {
   }
 
   public void start() {
+    BuildToParametersActionMap.initialize();
     // lets do this in a background thread to avoid errors like:
     //  Tried proxying io.fabric8.jenkins.openshiftsync.GlobalPluginConfiguration to support a circular dependency, but it is not an interface.
     Runnable task = new SafeTimerTask() {
