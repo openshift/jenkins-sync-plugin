@@ -52,67 +52,45 @@ import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.*;
 import static java.net.HttpURLConnection.HTTP_GONE;
 import static java.util.logging.Level.WARNING;
 
-public class BuildWatcher implements Watcher<Build> {
+public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
   private static final Logger logger = Logger.getLogger(BuildWatcher.class.getName());
-
-  private final String[] namespaces;
-  private Map<String,Watch> buildWatches;
-  private ScheduledFuture relister;
 
   @SuppressFBWarnings("EI_EXPOSE_REP2")
   public BuildWatcher(String[] namespaces) {
-    this.namespaces = namespaces;
-    this.buildWatches=new HashMap<String,Watch>();
+      super(namespaces);
   }
+  
+  @Override
+  public Runnable getStartTimerTask() {
+      return new SafeTimerTask() {
+          @Override
+          public void doRun() {
+            if (!CredentialsUtils.hasCredentials()) {
+              logger.fine("No Openshift Token credential defined.");
+              return;
+            }
+            for(String namespace:namespaces) {
+              try {
+                logger.fine("listing Build resources");
+                BuildList newBuilds = getAuthenticatedOpenShiftClient().builds().inNamespace(namespace).withField(OPENSHIFT_BUILD_STATUS_FIELD, BuildPhases.NEW).list();
+                onInitialBuilds(newBuilds);
+                logger.fine("handled Build resources");
+                if (watches.get(namespace) == null) {
+                  watches.put(namespace,getAuthenticatedOpenShiftClient().builds().inNamespace(namespace).withResourceVersion(newBuilds.getMetadata().getResourceVersion()).watch(BuildWatcher.this));
+                }
+              } catch (Exception e) {
+                logger.log(Level.SEVERE, "Failed to load initial Builds: " + e, e);
+              }
+            }
+          }
+        };
+  }
+  
+  
 
   public void start() {
     BuildToParametersActionMap.initialize();
-    // lets do this in a background thread to avoid errors like:
-    //  Tried proxying io.fabric8.jenkins.openshiftsync.GlobalPluginConfiguration to support a circular dependency, but it is not an interface.
-    Runnable task = new SafeTimerTask() {
-      @Override
-      public void doRun() {
-        for(String namespace:namespaces) {
-          try {
-            logger.fine("listing Build resources");
-            BuildList newBuilds = getAuthenticatedOpenShiftClient().builds().inNamespace(namespace).withField(OPENSHIFT_BUILD_STATUS_FIELD, BuildPhases.NEW).list();
-            onInitialBuilds(newBuilds);
-            logger.fine("handled Build resources");
-            if (buildWatches.get(namespace) == null) {
-              buildWatches.put(namespace,getAuthenticatedOpenShiftClient().builds().inNamespace(namespace).withResourceVersion(newBuilds.getMetadata().getResourceVersion()).watch(BuildWatcher.this));
-            }
-          } catch (Exception e) {
-            logger.log(Level.SEVERE, "Failed to load initial Builds: " + e, e);
-          }
-        }
-      }
-    };
-    relister = Timer.get().scheduleAtFixedRate(task, 100, 10 * 1000, TimeUnit.MILLISECONDS);
-  }
-
-  public void stop() {
-    if (relister != null && !relister.isDone()) {
-      relister.cancel(true);
-      relister = null;
-    }
-
-    for(Map.Entry<String,Watch> entry:buildWatches.entrySet()) {
-      entry.getValue().close();
-      buildWatches.remove(entry.getKey());
-    }
-
-  }
-
-  @Override
-  public synchronized void onClose(KubernetesClientException e) {
-    if (e != null) {
-      logger.warning(e.toString());
-
-      if (e.getStatus() != null && e.getStatus().getCode() == HTTP_GONE) {
-        stop();
-        start();
-      }
-    }
+    super.start();
   }
 
   @SuppressFBWarnings("SF_SWITCH_NO_DEFAULT")

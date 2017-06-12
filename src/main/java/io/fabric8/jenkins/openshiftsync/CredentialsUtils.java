@@ -13,6 +13,7 @@ import io.fabric8.openshift.api.model.BuildConfig;
 import jenkins.model.Jenkins;
 import org.acegisecurity.context.SecurityContext;
 import org.acegisecurity.context.SecurityContextHolder;
+import org.apache.commons.lang.StringUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -201,4 +202,13 @@ public class CredentialsUtils {
       new String(Base64.decode(passwordData), StandardCharsets.UTF_8)
     );
   }
+
+  /**
+   * Does our configuration have credentials?
+   * @return true if found.
+   */
+  public static boolean hasCredentials() {
+    return !StringUtils.isEmpty(getAuthenticatedOpenShiftClient().getConfiguration().getOauthToken());
+  }
+
 }

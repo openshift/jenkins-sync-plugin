@@ -74,69 +74,44 @@ import static java.util.logging.Level.SEVERE;
  * Watches {@link BuildConfig} objects in OpenShift and for WorkflowJobs we ensure there is a
  * suitable Jenkins Job object defined with the correct configuration
  */
-public class BuildConfigWatcher implements Watcher<BuildConfig> {
+public class BuildConfigWatcher extends BaseWatcher implements Watcher<BuildConfig> {
   private final Logger logger = Logger.getLogger(getClass().getName());
-  private final String[] namespaces;
-  private Map<String,Watch> buildConfigWatches;
   
-  private ScheduledFuture relister;
-
   @SuppressFBWarnings("EI_EXPOSE_REP2")
   public BuildConfigWatcher(String[] namespaces) {
-	  this.namespaces = namespaces;
-	  this.buildConfigWatches=new HashMap<String,Watch>();
+	  super(namespaces);
+  }
+  
+  public Runnable getStartTimerTask() {
+      return new SafeTimerTask() {
+          @Override
+          public void doRun() {
+            if (!CredentialsUtils.hasCredentials()) {
+              logger.fine("No Openshift Token credential defined.");
+              return;
+            }
+            for(String namespace:namespaces) {
+              try {
+                logger.fine("listing BuildConfigs resources");
+                final BuildConfigList buildConfigs = getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace).list();
+                onInitialBuildConfigs(buildConfigs);
+                logger.fine("handled BuildConfigs resources");
+                if (watches.get(namespace) == null) {
+                  watches.put(namespace,getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace).withResourceVersion(buildConfigs.getMetadata().getResourceVersion()).watch(BuildConfigWatcher.this));
+                }
+              } catch (Exception e) {
+                logger.log(SEVERE, "Failed to load BuildConfigs: " + e, e);
+              }
+            }
+          }
+        };
   }
 
   public synchronized void start() {
     initializeBuildConfigToJobMap();
-
-    // lets process the initial state
     logger.info("Now handling startup build configs!!");
-    // lets do this in a background thread to avoid errors like:
-    //  Tried proxying io.fabric8.jenkins.openshiftsync.GlobalPluginConfiguration to support a circular dependency, but it is not an interface.
-    Runnable task = new SafeTimerTask() {
-      @Override
-      public void doRun() {
-        for(String namespace:namespaces) {
-          try {
-            logger.fine("listing BuildConfigs resources");
-            final BuildConfigList buildConfigs = getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace).list();
-            onInitialBuildConfigs(buildConfigs);
-            logger.fine("handled BuildConfigs resources");
-            if (buildConfigWatches.get(namespace) == null) {
-              buildConfigWatches.put(namespace,getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace).withResourceVersion(buildConfigs.getMetadata().getResourceVersion()).watch(BuildConfigWatcher.this));
-            }
-          } catch (Exception e) {
-            logger.log(SEVERE, "Failed to load BuildConfigs: " + e, e);
-          }
-        }
-      }
-    };
-    relister = Timer.get().scheduleAtFixedRate(task, 100, 10 * 1000, TimeUnit.MILLISECONDS);
-  }
+    super.start();
 
-  public synchronized void stop() {
-    if (relister != null && !relister.isDone()) {
-      relister.cancel(true);
-      relister = null;
-    }
-
-    for(Map.Entry<String,Watch> entry:buildConfigWatches.entrySet()) {
-      entry.getValue().close();
-      buildConfigWatches.remove(entry.getKey());
-    }
-  }
-
-  @Override
-  public synchronized void onClose(KubernetesClientException e) {
-    if (e != null) {
-      logger.warning(e.toString());
-
-      if (e.getStatus() != null && e.getStatus().getCode() == HTTP_GONE) {
-        stop();
-        start();
-      }
-    }
   }
 
   private synchronized void onInitialBuildConfigs(BuildConfigList buildConfigs) {

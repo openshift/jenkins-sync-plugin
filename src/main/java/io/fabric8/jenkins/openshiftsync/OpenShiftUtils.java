@@ -15,15 +15,19 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
+
 import com.cloudbees.hudson.plugins.folder.Folder;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+
 import hudson.model.ItemGroup;
 import hudson.BulkChange;
 import hudson.model.Item;
 import hudson.util.XStream2;
+
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.ReplicationController;
@@ -58,7 +62,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
