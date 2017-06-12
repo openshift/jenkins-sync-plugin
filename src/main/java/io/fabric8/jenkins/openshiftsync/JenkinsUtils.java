@@ -556,7 +556,7 @@ public class JenkinsUtils {
     }
   }
 
-<<<<<<< HEAD
+
   public static String getFullJobName(WorkflowJob job) {
     return job.getRelativeNameFrom(Jenkins.getInstance());
   }
@@ -599,7 +599,7 @@ public class JenkinsUtils {
     }
     return name;
   }
-=======
+
     public static void removePodTemplate(PodTemplate podTemplate) {
         KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
         if(kubeCloud != null){
@@ -697,6 +697,4 @@ public class JenkinsUtils {
         
         return podTemplate;
     }
-    
->>>>>>> 0eaf671eba1b7bd6ce48b4932eea176492a4e6cc
 }
