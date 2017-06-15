@@ -32,17 +32,14 @@ import hudson.model.Queue;
 import hudson.model.RunParameterDefinition;
 import hudson.model.StringParameterDefinition;
 import hudson.model.StringParameterValue;
-import hudson.model.TaskListener;
 import hudson.model.TopLevelItem;
 import hudson.plugins.git.RevisionParameterAction;
 import hudson.security.ACL;
-import hudson.security.SecurityRealm;
 import hudson.slaves.Cloud;
 import hudson.triggers.SafeTimerTask;
 import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.Pod;
-import io.fabric8.kubernetes.client.Config;
 import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildBuilder;
 import io.fabric8.openshift.api.model.BuildConfig;
@@ -50,10 +47,6 @@ import io.fabric8.openshift.api.model.GitBuildSource;
 import io.fabric8.openshift.api.model.GitSourceRevision;
 import io.fabric8.openshift.api.model.JenkinsPipelineBuildStrategy;
 import io.fabric8.openshift.api.model.SourceRevision;
-import io.fabric8.openshift.api.model.User;
-import io.fabric8.openshift.client.DefaultOpenShiftClient;
-import io.fabric8.openshift.client.OpenShiftClient;
-import io.fabric8.openshift.client.OpenShiftConfigBuilder;
 import jenkins.model.Jenkins;
 import jenkins.security.NotReallyRoleSensitiveCallable;
 import jenkins.util.Timer;
@@ -68,11 +61,7 @@ import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 
 import com.cloudbees.plugins.credentials.CredentialsParameterDefinition;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.ObjectInputStream;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -89,7 +78,7 @@ import static io.fabric8.jenkins.openshiftsync.BuildPhases.CANCELLED;
 import static io.fabric8.jenkins.openshiftsync.BuildPhases.PENDING;
 import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL;
 import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL_LATEST_ONLY;
-import static io.fabric8.jenkins.openshiftsync.BuildWatcher.buildAdded;
+import static io.fabric8.jenkins.openshiftsync.BuildWatcher.addEventToJenkinsJobRun;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_BUILD_NUMBER;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_BUILD_STATUS_FIELD;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_LABELS_BUILD_CONFIG_NAME;
@@ -353,14 +342,20 @@ public class JenkinsUtils {
   }
 
   public synchronized static void cancelBuild(WorkflowJob job, Build build) {
-    if (!cancelQueuedBuild(job, build)) {
-      cancelRunningBuild(job, build);
-    }
-    try {
-      updateOpenShiftBuildPhase(build, CANCELLED);
-    } catch (Exception e) {
-      throw e;
-    }
+      cancelBuild(job, build, false);
+  }
+  
+  public synchronized static void cancelBuild(WorkflowJob job, Build build, boolean deleted) {
+      if (!cancelQueuedBuild(job, build)) {
+          cancelRunningBuild(job, build);
+      }
+      if (deleted)
+          return;
+      try {
+        updateOpenShiftBuildPhase(build, CANCELLED);
+      } catch (Exception e) {
+        throw e;
+      }
   }
 
   private static WorkflowRun getRun(WorkflowJob job, Build build) {
@@ -547,7 +542,7 @@ public class JenkinsUtils {
       }
       boolean buildAdded = false;
       try {
-        buildAdded = buildAdded(b);
+        buildAdded = addEventToJenkinsJobRun(b);
       } catch (IOException e) {
         ObjectMeta meta = b.getMetadata();
         LOGGER.log(WARNING, "Failed to add new build " + meta.getNamespace() + "/" + meta.getName(), e);

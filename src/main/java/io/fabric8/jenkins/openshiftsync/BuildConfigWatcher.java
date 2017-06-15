@@ -21,14 +21,11 @@ import hudson.model.Job;
 import hudson.security.ACL;
 import hudson.triggers.SafeTimerTask;
 import hudson.util.XStream2;
-import io.fabric8.kubernetes.client.KubernetesClientException;
-import io.fabric8.kubernetes.client.Watch;
 import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.openshift.api.model.BuildConfig;
 import io.fabric8.openshift.api.model.BuildConfigList;
 import jenkins.model.Jenkins;
 import jenkins.security.NotReallyRoleSensitiveCallable;
-import jenkins.util.Timer;
 
 import org.apache.tools.ant.filters.StringInputStream;
 import org.jenkinsci.plugins.workflow.flow.FlowDefinition;
@@ -39,11 +36,7 @@ import javax.xml.transform.stream.StreamSource;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -53,7 +46,6 @@ import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL;
 import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL_LATEST_ONLY;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.maybeScheduleNext;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.*;
-import static java.net.HttpURLConnection.HTTP_GONE;
 import static java.util.logging.Level.SEVERE;
 
 /**
@@ -123,10 +115,10 @@ public class BuildConfigWatcher extends BaseWatcher implements Watcher<BuildConf
           upsertJob(buildConfig);
           break;
         case DELETED:
-          deleteJob(buildConfig);
+          deleteEventToJenkinsJob(buildConfig);
           break;
         case MODIFIED:
-          modifyJob(buildConfig);
+          modifyEventToJenkinsJob(buildConfig);
           break;
       }
     } catch (Exception e) {
@@ -229,35 +221,55 @@ public class BuildConfigWatcher extends BaseWatcher implements Watcher<BuildConf
     }
   }
 
-  private void modifyJob(BuildConfig buildConfig) throws Exception {
+  private synchronized void modifyEventToJenkinsJob(BuildConfig buildConfig) throws Exception {
     if (isJenkinsBuildConfig(buildConfig)) {
       upsertJob(buildConfig);
       return;
     }
 
     // no longer a Jenkins build so lets delete it if it exists
-    deleteJob(buildConfig);
+    deleteEventToJenkinsJob(buildConfig);
   }
-
-  private void deleteJob(final BuildConfig buildConfig) throws Exception {
-    final Job job = getJobFromBuildConfig(buildConfig);
-    if (job != null) {
+  
+  // innerDeleteEventToJenkinsJob is the actual delete logic at the heart of deleteEventToJenkinsJob
+  // that is either in a sync block or not based on the presence of a BC uid
+  private void innerDeleteEventToJenkinsJob(final BuildConfig buildConfig) throws Exception {
+      final Job job = getJobFromBuildConfig(buildConfig);
+      if (job != null) {
       // employ intern of the BC UID to facilitate sync'ing on the same actual object
       synchronized(buildConfig.getMetadata().getUid().intern()) {
-          ACL.impersonate(ACL.SYSTEM, new NotReallyRoleSensitiveCallable<Void, Exception>() {
-              @Override
-              public Void call() throws Exception {
-                try {
-                  job.delete();
-                } finally {
-                  removeJobWithBuildConfig(buildConfig);
-                  Jenkins.getActiveInstance().rebuildDependencyGraphAsync();
-                }
-                return null;
-              }
-            });
+        ACL.impersonate(ACL.SYSTEM, new NotReallyRoleSensitiveCallable<Void, Exception>() {
+          @Override
+          public Void call() throws Exception {
+            try {
+              job.delete();
+            } finally {
+              removeJobWithBuildConfig(buildConfig);
+              Jenkins.getActiveInstance().rebuildDependencyGraphAsync();
+            }
+            return null;
+          }
+        });
       }
-        
+      
+  }
+
+  // in response to receiving an openshift delete build config event, this method will drive 
+  // the clean up of the Jenkins job the build config is mapped one to one with; as part of that 
+  // clean up it will synchronize with the build event watcher to handle build config
+  // delete events and build delete events that arrive concurrently and in a nondeterministic
+  // order
+  private synchronized void deleteEventToJenkinsJob(final BuildConfig buildConfig) throws Exception {
+    String bcUid = buildConfig.getMetadata().getUid();
+    if (bcUid != null && bcUid.length() > 0) {
+        // employ intern of the BC UID to facilitate sync'ing on the same actual object
+        bcUid = bcUid.intern();
+        synchronized(bcUid) {
+            innerDeleteEventToJenkinsJob(buildConfig);
+            return;
+        }
     }
+    // uid should not be null / empty, but just in case, still clean up
+    innerDeleteEventToJenkinsJob(buildConfig);
   }
 }
