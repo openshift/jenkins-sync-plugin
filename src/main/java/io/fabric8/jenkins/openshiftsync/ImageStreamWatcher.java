@@ -111,12 +111,12 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
                     while (iter.hasNext()) {
                         PodTemplate podTemplate = iter.next();
                         if (!podTemplate.getName().equals(isname) && // actual IS
-                            !podTemplate.getName().startsWith(isname + ":")) // an IST starts with IS name followed by ":"
+                            !podTemplate.getName().startsWith(isname + ".")) // an IST starts with IS name followed by "." since we have to replace ":" with "."
                             continue;
                         if (this.predefinedOpenShiftSlaves.contains(podTemplate.getName()))
                             continue;
                         boolean keep = false;
-                        // if an IST based slave, see that particulat tag is still in list
+                        // if an IST based slave, see that particular tag is still in list
                         for (PodTemplate entry : slavesFromIS) {
                             if (entry.getName().equals(podTemplate.getName())) {
                                 keep = true;
@@ -133,7 +133,7 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
                     while (iter.hasNext()) {
                         PodTemplate podTemplate = iter.next();
                         if (!podTemplate.getName().equals(isname) && // actual IS
-                            !podTemplate.getName().startsWith(isname + ":")) // an IST starts with IS name followed by ":"
+                            !podTemplate.getName().startsWith(isname + ".")) // an IST starts with IS name followed by "." since we have to replace ":" with "."
                             continue;
                         if (this.predefinedOpenShiftSlaves.contains(podTemplate.getName()))
                             continue;
@@ -189,7 +189,8 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
             }
             // for IST, can't set labels, so check annotations
             if (ist != null && hasSlaveLabelOrAnnotation(ist.getMetadata().getAnnotations())) {
-                results.add(this.podTemplateFromData(ist.getMetadata().getName(),
+                // note, pod names cannot have colons
+                results.add(this.podTemplateFromData(ist.getMetadata().getName().replaceAll(":", "."),
                         ist.getImage().getDockerImageReference(), 
                         ist.getMetadata().getAnnotations()));
             }
@@ -199,7 +200,7 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
     
     private PodTemplate podTemplateFromData(String name, String image, Map<String,String> map) {
         String label = null;
-        if(map.containsKey("slave-label")) {
+        if(map != null && map.containsKey("slave-label")) {
             label = map.get("slave-label");
         } else {
             label = name;
