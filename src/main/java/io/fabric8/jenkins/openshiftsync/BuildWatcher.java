@@ -16,15 +16,16 @@
 package io.fabric8.jenkins.openshiftsync;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import hudson.security.ACL;
 import hudson.triggers.SafeTimerTask;
-import io.fabric8.kubernetes.client.KubernetesClientException;
-import io.fabric8.kubernetes.client.Watch;
+import io.fabric8.kubernetes.api.model.OwnerReference;
 import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildConfig;
 import io.fabric8.openshift.api.model.BuildList;
 import io.fabric8.openshift.api.model.BuildStatus;
-import jenkins.util.Timer;
+import jenkins.security.NotReallyRoleSensitiveCallable;
+
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 
@@ -35,12 +36,11 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfigUid;
 import static io.fabric8.jenkins.openshiftsync.BuildPhases.CANCELLED;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_BUILD_NUMBER;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_BUILD_STATUS_FIELD;
@@ -49,7 +49,6 @@ import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.getJobFromBuild;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.handleBuildList;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.triggerJob;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.*;
-import static java.net.HttpURLConnection.HTTP_GONE;
 import static java.util.logging.Level.WARNING;
 
 public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
@@ -99,11 +98,14 @@ public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
     try {
       switch (action) {
         case ADDED:
-          buildAdded(build);
+          addEventToJenkinsJobRun(build);
           break;
         case MODIFIED:
-          buildModified(build);
+          modifyEventToJenkinsJobRun(build);
           break;
+        case DELETED:
+            deleteEventToJenkinsJobRun(build);
+            break;
       }
     } catch (Exception e) {
       logger.log(WARNING, "Caught: " + e, e);
@@ -171,7 +173,7 @@ public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
     }
   }
 
-  private static synchronized void buildModified(Build build) {
+  private static synchronized void modifyEventToJenkinsJobRun(Build build) {
     BuildStatus status = build.getStatus();
     if (status != null &&
       isCancellable(status) &&
@@ -183,7 +185,7 @@ public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
     }
   }
 
-  public static synchronized boolean buildAdded(Build build) throws IOException {
+  public static synchronized boolean addEventToJenkinsJobRun(Build build) throws IOException {
     BuildStatus status = build.getStatus();
     if (status != null) {
       if (isCancelled(status)) {
@@ -201,5 +203,44 @@ public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
     }
     return false;
   }
+  
+  // innerDeleteEventToJenkinsJobRun is the actual delete logic at the heart of deleteEventToJenkinsJobRun
+  // that is either in a sync block or not based on the presence of a BC uid
+  private static synchronized void innerDeleteEventToJenkinsJobRun(final Build build) throws Exception {
+      final WorkflowJob job = getJobFromBuild(build);
+      if (job != null) {
+        ACL.impersonate(ACL.SYSTEM, new NotReallyRoleSensitiveCallable<Void, Exception>() {
+          @Override
+          public Void call() throws Exception {
+            cancelBuild(job, build, true);
+            return null;
+          }
+        });
+      }
+  }
 
+  // in response to receiving an openshift delete build event, this method will drive 
+  // the clean up of the Jenkins job run the build is mapped one to one with; as part of that 
+  // clean up it will synchronize with the build config event watcher to handle build config
+  // delete events and build delete events that arrive concurrently and in a nondeterministic
+  // order
+  private static synchronized void deleteEventToJenkinsJobRun(final Build build) throws Exception {
+      List<OwnerReference> ownerRefs = build.getMetadata().getOwnerReferences();
+      String bcUid = null;
+      for (OwnerReference ref : ownerRefs) {
+          if ("BuildConfig".equals(ref.getKind()) && ref.getUid() != null && ref.getUid().length() > 0) {
+              // employ intern to facilitate sync'ing on the same actual object
+              bcUid = ref.getUid().intern();
+              synchronized(bcUid) {
+                  // if entire job already deleted via bc delete, just return
+                  if (getJobFromBuildConfigUid(bcUid) == null)
+                      return;
+                  innerDeleteEventToJenkinsJobRun(build);
+                  return;
+              }
+          }
+      }
+      // otherwise, if something odd is up and there is no parent BC, just clean up
+      innerDeleteEventToJenkinsJobRun(build);
+  }
 }

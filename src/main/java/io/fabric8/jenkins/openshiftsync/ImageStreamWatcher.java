@@ -26,12 +26,11 @@ import io.fabric8.openshift.api.model.TagReference;
 import org.csanchez.jenkins.plugins.kubernetes.PodVolumes;
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
@@ -40,12 +39,14 @@ import static java.util.logging.Level.WARNING;
 
 public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStream> {
     private final Logger logger = Logger.getLogger(getClass().getName());
-    private Map<String, PodTemplate> trackedImageStreams;
+    private final List<String> predefinedOpenShiftSlaves;
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public ImageStreamWatcher(String[] namespaces) {
         super(namespaces);
-        this.trackedImageStreams = new ConcurrentHashMap<>();
+        this.predefinedOpenShiftSlaves = new ArrayList<String>();
+        this.predefinedOpenShiftSlaves.add("maven");
+        this.predefinedOpenShiftSlaves.add("nodejs");
     }
     
     public Runnable getStartTimerTask() {
@@ -82,47 +83,61 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
     @Override
     public void eventReceived(Action action, ImageStream imageStream) {
         try {
-            Map<String,PodTemplate> slavesFromIS = podTemplates(imageStream);
-            String isuuid = imageStream.getMetadata().getUid();
+            List<PodTemplate> slavesFromIS = podTemplates(imageStream);
+            String isname = imageStream.getMetadata().getName();
             switch (action) {
                 case ADDED:
-                    for (Map.Entry<String,PodTemplate> entry : slavesFromIS.entrySet()) {
-                        trackedImageStreams.put(entry.getKey(), entry.getValue());
-                        JenkinsUtils.addPodTemplate(entry.getValue());
+                    for (PodTemplate entry : slavesFromIS) {
+                        // timer might beat watch event - put call is technically fine, but 
+                        // not addPodTemplate given k8s plugin issues
+                        if (JenkinsUtils.hasPodTemplate(entry.getName()))
+                            continue;
+                        if (this.predefinedOpenShiftSlaves.contains(entry.getName()))
+                            continue;
+                        JenkinsUtils.addPodTemplate(entry);
                     }
                     break;
 
                 case MODIFIED:
                     // add/replace entries from latest IS incarnation
-                    for (Map.Entry<String,PodTemplate> entry : slavesFromIS.entrySet()) {
-                        boolean alreadyTracked = trackedImageStreams.containsKey(entry.getKey());
-                        if (alreadyTracked) {
-                            JenkinsUtils.removePodTemplate(trackedImageStreams.get(entry.getKey()));
-                        }
-                        JenkinsUtils.addPodTemplate(entry.getValue());
-                        trackedImageStreams.put(entry.getKey(), entry.getValue());
+                    for (PodTemplate entry : slavesFromIS) {
+                        if (this.predefinedOpenShiftSlaves.contains(entry.getName()))
+                            continue;
+                        JenkinsUtils.removePodTemplate(entry);
+                        JenkinsUtils.addPodTemplate(entry);
                     }
                     // go back and remove tracked items that no longer are marked slaves
-                    Set<Entry<String, PodTemplate>> entryset = trackedImageStreams.entrySet();
-                    for (Entry<String, PodTemplate> entry : entryset) {
-                        // if the entry is not for the IS from the watch event, skip
-                        if (!entry.getKey().startsWith(isuuid))
+                    Iterator<PodTemplate> iter = JenkinsUtils.getPodTemplates().iterator();
+                    while (iter.hasNext()) {
+                        PodTemplate podTemplate = iter.next();
+                        if (!podTemplate.getName().equals(isname) && // actual IS
+                            !podTemplate.getName().startsWith(isname + ".")) // an IST starts with IS name followed by "." since we have to replace ":" with "."
                             continue;
-                        if (!slavesFromIS.containsKey(entry.getKey())) {
-                            JenkinsUtils.removePodTemplate(entry.getValue());
-                            entryset.remove(entry); // removes from trackedImageStreams as well
+                        if (this.predefinedOpenShiftSlaves.contains(podTemplate.getName()))
+                            continue;
+                        boolean keep = false;
+                        // if an IST based slave, see that particular tag is still in list
+                        for (PodTemplate entry : slavesFromIS) {
+                            if (entry.getName().equals(podTemplate.getName())) {
+                                keep = true;
+                                break;
+                            }
                         }
+                        if (!keep)
+                            JenkinsUtils.removePodTemplate(podTemplate);
                     }
                     break;
 
                 case DELETED:
-                    entryset = trackedImageStreams.entrySet();
-                    for (Entry<String, PodTemplate> entry : entryset) {
-                        // if the entry is for the IS from the watch event, delete
-                        if (entry.getKey().startsWith(isuuid)) {
-                            JenkinsUtils.removePodTemplate(entry.getValue());
-                            entryset.remove(entry); // removes from trackedImageStreams as well
-                        }
+                    iter = JenkinsUtils.getPodTemplates().iterator();
+                    while (iter.hasNext()) {
+                        PodTemplate podTemplate = iter.next();
+                        if (!podTemplate.getName().equals(isname) && // actual IS
+                            !podTemplate.getName().startsWith(isname + ".")) // an IST starts with IS name followed by "." since we have to replace ":" with "."
+                            continue;
+                        if (this.predefinedOpenShiftSlaves.contains(podTemplate.getName()))
+                            continue;
+                        JenkinsUtils.removePodTemplate(podTemplate);
                     }
                     break;
 
@@ -133,17 +148,17 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
     }
 
     private synchronized void onInitialImageStream(ImageStreamList imageStreams) {
-        if(trackedImageStreams == null) {
-            trackedImageStreams = new ConcurrentHashMap<>(imageStreams.getItems().size());
-        }
         List<ImageStream> items = imageStreams.getItems();
         if (items != null) {
             for (ImageStream imageStream : items) {
                 try {
-                    Map<String,PodTemplate> slavesFromIS = podTemplates(imageStream);
-                    for (Map.Entry<String,PodTemplate> entry : slavesFromIS.entrySet()) {
-                        trackedImageStreams.put(entry.getKey(), entry.getValue());
-                        JenkinsUtils.addPodTemplate(entry.getValue());
+                    List<PodTemplate> slavesFromIS = podTemplates(imageStream);
+                    for (PodTemplate entry : slavesFromIS) {
+                        // watch event might beat the timer - put call is technically fine, but 
+                        // not addPodTemplate given k8s plugin issues
+                        if (JenkinsUtils.hasPodTemplate(entry.getName()))
+                            continue;
+                        JenkinsUtils.addPodTemplate(entry);
                     }
                 } catch (Exception e) {
                     logger.log(SEVERE, "Failed to update job", e);
@@ -152,36 +167,32 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
         }
     }
 
-    private Map<String,PodTemplate> podTemplates(ImageStream imageStream) {
-        Map<String,PodTemplate> results = new HashMap<String,PodTemplate>();
-        String isuuid = imageStream.getMetadata().getUid();
-        if (hasSlaveLabelOrAnnotation(imageStream.getMetadata().getLabels()))
-            results.put(isuuid,
-                    podTemplateFromData(imageStream.getMetadata().getName(),
+    private List<PodTemplate> podTemplates(ImageStream imageStream) {
+        List<PodTemplate> results = new ArrayList<PodTemplate>();
+        //for IS, since we can check labels, check there
+        if (hasSlaveLabelOrAnnotation(imageStream.getMetadata().getLabels())) {
+            results.add(podTemplateFromData(imageStream.getMetadata().getName(),
                     imageStream.getStatus().getDockerImageRepository(),
-                    imageStream.getMetadata().getLabels()));
+                    imageStream.getMetadata().getAnnotations())); // for slave-label, still check annotations
+        }
         
         String namespace = imageStream.getMetadata().getNamespace();
         
+        // since we cannot create watches on ImageStream tags, we have to traverse
+        // the tags and look for the slave label
         for (TagReference tagRef : imageStream.getSpec().getTags()) {
-            String istkey = "";
-            if (tagRef.getFrom() != null)
-                istkey = tagRef.getFrom().getName();
-            if (istkey.contains("/")) {
-                String[] parts = istkey.split("/");
-                if (parts.length > 1)
-                    istkey = parts[1];
+            ImageStreamTag ist = null;
+            try {
+                ist = getAuthenticatedOpenShiftClient().imageStreamTags().inNamespace(namespace).withName(imageStream.getMetadata().getName() + ":" + tagRef.getName()).get();
+            } catch (Throwable t) {
+                logger.log(Level.FINE, "podTemplates", t);
             }
-            if (istkey.length() > 0) {
-                ImageStreamTag ist = getAuthenticatedOpenShiftClient().imageStreamTags().inNamespace(namespace).withName(istkey).get();
-                if (ist != null && hasSlaveLabelOrAnnotation(ist.getMetadata().getAnnotations())) {
-                    // for the key, we do isuuid + istuuid so we can distinguish ist entries 
-                    // during cleanup actions induced by IS watch events
-                    results.put(isuuid + ist.getMetadata().getUid(),
-                            this.podTemplateFromData(ist.getMetadata().getName(), 
-                            ist.getImage().getDockerImageReference(), 
-                            ist.getMetadata().getAnnotations()));
-                }
+            // for IST, can't set labels, so check annotations
+            if (ist != null && hasSlaveLabelOrAnnotation(ist.getMetadata().getAnnotations())) {
+                // note, pod names cannot have colons
+                results.add(this.podTemplateFromData(ist.getMetadata().getName().replaceAll(":", "."),
+                        ist.getImage().getDockerImageReference(), 
+                        ist.getMetadata().getAnnotations()));
             }
         }
         return results;
@@ -189,7 +200,7 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
     
     private PodTemplate podTemplateFromData(String name, String image, Map<String,String> map) {
         String label = null;
-        if(map.containsKey("slave-label")) {
+        if(map != null && map.containsKey("slave-label")) {
             label = map.get("slave-label");
         } else {
             label = name;

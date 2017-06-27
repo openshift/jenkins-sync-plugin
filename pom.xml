@@ -27,7 +27,7 @@
   </parent>
   <groupId>io.fabric8.jenkins.plugins</groupId>
   <artifactId>openshift-sync</artifactId>
-  <version>0.1.19-SNAPSHOT</version>
+  <version>0.1.23-SNAPSHOT</version>
   <packaging>hpi</packaging>
 
   <properties>
@@ -44,6 +44,8 @@
     -->
     <openshift-client.version>2.1.2</openshift-client.version>
     <log.level>INFO</log.level>
+    <findbugs-maven-plugin.version>3.0.1</findbugs-maven-plugin.version>
+    <findbugs.failOnError>false</findbugs.failOnError>
   </properties>
 
   <name>OpenShift Sync</name>
@@ -310,6 +312,24 @@
 
   <build>
     <plugins>
+      <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>findbugs-maven-plugin</artifactId>
+          <version>${findbugs-maven-plugin.version}</version>
+          <configuration>
+              <xmlOutput>true</xmlOutput>
+              <failOnError>${findbugs.failOnError}</failOnError>
+          </configuration>
+          <executions>
+              <execution>
+                  <id>run-findbugs</id>
+                  <phase>verify</phase>
+                  <goals>
+                      <goal>check</goal>
+                  </goals>
+              </execution>
+          </executions>
+      </plugin>
       <plugin>
         <groupId>org.jenkins-ci.tools</groupId>
         <artifactId>maven-hpi-plugin</artifactId>
