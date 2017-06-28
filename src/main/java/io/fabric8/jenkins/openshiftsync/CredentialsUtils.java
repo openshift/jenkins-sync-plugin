@@ -32,9 +32,7 @@ public class CredentialsUtils {
   private final static Logger logger = Logger.getLogger(CredentialsUtils.class.getName());
 
   public static synchronized String updateSourceCredentials(BuildConfig buildConfig) throws IOException {
-    if (buildConfig.getSpec() != null &&
-            buildConfig.getSpec().getSource() != null &&
-            buildConfig.getSpec().getSource().getSourceSecret() != null) {
+    if (buildConfig.getSpec() != null && buildConfig.getSpec().getSource() != null && buildConfig.getSpec().getSource().getSourceSecret() != null) {
       String secretName = buildConfig.getSpec().getSource().getSourceSecret().getName();
       String namespace = buildConfig.getMetadata().getNamespace();
       if (!secretName.isEmpty()) {

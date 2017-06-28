@@ -564,15 +564,15 @@ public class JenkinsUtils {
       String orgName = paths[0];
       if (StringUtils.isNotBlank(orgName)) {
         if (config != null) {
-          String skipOrganisationPrefix = config.getSkipOrganisationPrefix();
-          if (StringUtils.isEmpty(skipOrganisationPrefix)) {
-            config.setSkipOrganisationPrefix(orgName);
-            skipOrganisationPrefix = config.getSkipOrganisationPrefix();
+          String skipOrganizationPrefix = config.getSkipOrganizationPrefix();
+          if (StringUtils.isEmpty(skipOrganizationPrefix)) {
+            config.setSkipOrganizationPrefix(orgName);
+            skipOrganizationPrefix = config.getSkipOrganizationPrefix();
           }
 
-          // if the default organisation lets strip the organisation name from the prefix
+          // if the default organization lets strip the organization name from the prefix
           int prefixLength = orgName.length() + 1;
-          if (orgName.equals(skipOrganisationPrefix) && name.length() > prefixLength) {
+          if (orgName.equals(skipOrganizationPrefix) && name.length() > prefixLength) {
             name = name.substring(prefixLength);
           }
         }

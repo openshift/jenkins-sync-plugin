@@ -37,8 +37,8 @@
              description="The regular expression to match pipeline job names which should be sync'd to BuildConfigs in OpenShift - leave blank to not sync Jenkins Jobs to OpenShift BuildConfigs.">
       <f:textbox/>
     </f:entry>
-    <f:entry title="Skip organisation prefix" field="skipOrganisationPrefix"
-             description="What organisation name prefix should we omit from the generated OpenShift BuildConfig resources created by the sync plugin. Its common for one user/team to use the same git organisation so prefixing all BuildConfig names with the organisation name can be noisy.">
+    <f:entry title="Skip organization prefix" field="skipOrganizationPrefix"
+             description="What organization name prefix should we omit from the generated OpenShift BuildConfig resources created by the sync plugin. Its common for one user/team to use the same git organization so prefixing all BuildConfig names with the organization name can be noisy.">
       <f:textbox/>
     </f:entry>
     <f:entry title="Skip branch suffix" field="skipBranchSuffix"

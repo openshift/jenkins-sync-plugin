@@ -53,7 +53,7 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
 
   private String jobNamePattern;
 
-  private String skipOrganisationPrefix;
+  private String skipOrganizationPrefix;
 
   private String skipBranchSuffix;
 
@@ -68,13 +68,13 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
   private transient ImageStreamWatcher imageStreamWatcher;
 
   @DataBoundConstructor
-  public GlobalPluginConfiguration(boolean enable, String server, String namespace, String credentialsId, String jobNamePattern, String skipOrganisationPrefix, String skipBranchSuffix) {
+  public GlobalPluginConfiguration(boolean enable, String server, String namespace, String credentialsId, String jobNamePattern, String skipOrganizationPrefix, String skipBranchSuffix) {
     this.enabled = enable;
     this.server = server;
     this.namespaces = StringUtils.isBlank(namespace)?null:namespace.split(" ");
     this.credentialsId = Util.fixEmptyAndTrim(credentialsId);
     this.jobNamePattern = jobNamePattern;
-    this.skipOrganisationPrefix = skipOrganisationPrefix;
+    this.skipOrganizationPrefix = skipOrganizationPrefix;
     this.skipBranchSuffix = skipBranchSuffix;
     configChange();
   }
@@ -164,12 +164,12 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
     this.jobNamePattern = jobNamePattern;
   }
 
-  public String getSkipOrganisationPrefix() {
-    return skipOrganisationPrefix;
+  public String getSkipOrganizationPrefix() {
+    return skipOrganizationPrefix;
   }
 
-  public void setSkipOrganisationPrefix(String skipOrganisationPrefix) {
-    this.skipOrganisationPrefix = skipOrganisationPrefix;
+  public void setSkipOrganizationPrefix(String skipOrganizationPrefix) {
+    this.skipOrganizationPrefix = skipOrganizationPrefix;
   }
 
   public String getSkipBranchSuffix() {

@@ -175,7 +175,7 @@ public class BuildConfigToJobMapper {
       return false;
     }
 
-    // support multi-branch or github organisation jobs
+    // support multi-branch or github organization jobs
     BranchJobProperty property = job.getProperty(BranchJobProperty.class);
     if (property != null) {
       Branch branch = property.getBranch();
