@@ -64,6 +64,7 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
                         onInitialImageStream(imageStreams);
                         logger.fine("handled ImageStream resources");
                         if (watches.get(namespace) == null) {
+                            logger.info("creating ImageStream watch for namespace " + namespace + " and resource version " + imageStreams.getMetadata().getResourceVersion());
                             watches.put(namespace,getAuthenticatedOpenShiftClient().imageStreams().inNamespace(namespace).withResourceVersion(imageStreams.getMetadata().getResourceVersion()).watch(ImageStreamWatcher.this));
                         }
                     } catch (Exception e) {

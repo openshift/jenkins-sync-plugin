@@ -191,6 +191,12 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
       if (secretWatcher != null) {
         secretWatcher.stop();
       }
+      if (configMapWatcher != null) {
+          configMapWatcher.stop();
+      }
+      if (imageStreamWatcher != null) {
+          imageStreamWatcher.stop();
+      }
       OpenShiftUtils.shutdownOpenShiftClient();
       return;
     }

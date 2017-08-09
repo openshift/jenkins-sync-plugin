@@ -29,7 +29,7 @@ public class OpenShiftToken extends BaseStandardCredentials {
     public static class DescriptorImpl extends BaseStandardCredentialsDescriptor {
         @Override
         public String getDisplayName() {
-            return "OpenShift Token";
+            return "OpenShift Token for OpenShift Sync Plugin";
         }
     }
 

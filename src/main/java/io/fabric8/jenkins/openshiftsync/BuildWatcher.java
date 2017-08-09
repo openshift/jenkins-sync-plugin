@@ -75,6 +75,7 @@ public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
                 onInitialBuilds(newBuilds);
                 logger.fine("handled Build resources");
                 if (watches.get(namespace) == null) {
+                    logger.info("creating Build watch for namespace " + namespace + " and resource version " + newBuilds.getMetadata().getResourceVersion());
                   watches.put(namespace,getAuthenticatedOpenShiftClient().builds().inNamespace(namespace).withResourceVersion(newBuilds.getMetadata().getResourceVersion()).watch(BuildWatcher.this));
                 }
               } catch (Exception e) {

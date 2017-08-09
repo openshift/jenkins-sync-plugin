@@ -23,6 +23,7 @@ import hudson.util.XStream2;
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.ConfigMapList;
 import io.fabric8.kubernetes.client.Watcher;
+import io.fabric8.openshift.api.model.ImageStreamTag;
 
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 import org.csanchez.jenkins.plugins.kubernetes.PodVolumes;
@@ -66,6 +67,7 @@ public class ConfigMapWatcher extends BaseWatcher implements Watcher<ConfigMap> 
                         onInitialConfigMaps(configMaps);
                         logger.fine("handled ConfigMap resources");
                         if (watches.get(namespace) == null) {
+                            logger.info("creating ConfigMap watch for namespace " + namespace + " and resource version " + configMaps.getMetadata().getResourceVersion());
                             watches.put(namespace,getAuthenticatedOpenShiftClient().configMaps().inNamespace(namespace).withResourceVersion(configMaps.getMetadata().getResourceVersion()).watch(ConfigMapWatcher.this));
                         }
                     } catch (Exception e) {
@@ -176,6 +178,13 @@ public class ConfigMapWatcher extends BaseWatcher implements Watcher<ConfigMap> 
         return hasSlaveLabelOrAnnotation(configMap.getMetadata().getLabels());
     }
 
+    private boolean hasOneAndOnlyOneWithSomethingAfter(String str, String substr) {
+        return str.contains(substr) && str.indexOf(substr) == str.lastIndexOf(substr) && str.indexOf(substr) < str.length(); 
+    }
+    
+    private static final String SPECIAL_IST_PREFIX = "imagestreamtag:";
+    private static final int SPECIAL_IST_PREFIX_IDX = SPECIAL_IST_PREFIX.length();
+    
     // podTemplatesFromConfigMap takes every key from a ConfigMap and tries to create a PodTemplate from the contained
     // XML.
     public List<PodTemplate> podTemplatesFromConfigMap(ConfigMap configMap) {
@@ -189,10 +198,62 @@ public class ConfigMapWatcher extends BaseWatcher implements Watcher<ConfigMap> 
             try {
                 podTemplate = xStream2.fromXML(entry.getValue());
 
+                String warningPrefix = "Content of key '" + entry.getKey() + "' in ConfigMap '" + configMap.getMetadata().getName();
                 if( podTemplate instanceof PodTemplate ) {
+                    PodTemplate pt = (PodTemplate)podTemplate;
+                    
+                    String image = pt.getImage();
+                    try {
+                        // if requested via special prefix, convert this images entry field, if not already fully qualified, as if
+                        // it were an IST
+                        // IST of form [optional_namespace]/imagestreamname:tag
+                        // checks based on ParseImageStreamTagName in https://github.com/openshift/origin/blob/master/pkg/image/apis/image/helper.go
+                        if (image.startsWith(SPECIAL_IST_PREFIX)) {
+                            image = image.substring(SPECIAL_IST_PREFIX_IDX);
+                            if (image.contains("@")) {
+                                logger.warning(warningPrefix + " the presence of @ implies an image stream image, not an image stream tag, " +
+                                " so no ImageStreamTag to Docker image reference translation was performed.");
+                            } else {
+                                boolean hasNamespace = hasOneAndOnlyOneWithSomethingAfter(image, "/");
+                                boolean hasTag  = hasOneAndOnlyOneWithSomethingAfter(image, ":");
+                                String namespace = getAuthenticatedOpenShiftClient().getNamespace();
+                                String isName = image;
+                                String newImage = null;
+                                if (hasNamespace) {
+                                    String[] parts = image.split("/");
+                                    namespace = parts[0];
+                                    isName = parts[1];
+                                }
+                                if (hasTag) {
+                                    ImageStreamTag ist = getAuthenticatedOpenShiftClient().imageStreamTags().inNamespace(namespace).withName(isName).get();
+                                    if (ist != null && ist.getImage() != null && ist.getImage().getDockerImageReference() != null && ist.getImage().getDockerImageReference().length() > 0) {
+                                        newImage = ist.getImage().getDockerImageReference();
+                                        logger.fine(String.format("Converting image ref %s as an imagestreamtag %s to fully qualified image %s", image, isName, newImage));
+                                    } else {
+                                        logger.warning(warningPrefix +
+                                        " used the 'imagestreamtag:' prefix in the image field, but the subsequent value, while a valid ImageStreamTag reference," +
+                                        " produced no valid ImageStreaTag upon lookup," +
+                                        " so no ImageStreamTag to Docker image reference translation was performed.");
+                                    }
+                                } else {
+                                    logger.warning(warningPrefix +
+                                            " used the 'imagestreamtag:' prefix in the image field, but the subsequent value had no tag indicator," +
+                                            " so no ImageStreamTag to Docker image reference translation was performed.");
+                                }
+                                
+                                if (newImage != null) {
+                                    logger.fine("translated IST ref " + image + " to docker image ref " + newImage);
+                                    pt.getContainers().get(0).setImage(newImage);
+                                }
+                            }
+                        }
+                    } catch (Throwable t) {
+                        if (logger.isLoggable(Level.FINE))
+                            logger.log(Level.FINE, "podTemplateFromConfigMap", t);
+                    }
                     results.add((PodTemplate) podTemplate);
                 } else {
-                    logger.warning("Content of key '" + entry.getKey() + "' in ConfigMap '" + configMap.getMetadata().getName() + "' is not a PodTemplate");
+                    logger.warning(warningPrefix + "' is not a PodTemplate");
                 }
             } catch (XStreamException xse) {
                 logger.warning(new IOException("Unable to read key '" + entry.getKey() + "' from ConfigMap '" + configMap.getMetadata().getName() + "'", xse).getMessage());

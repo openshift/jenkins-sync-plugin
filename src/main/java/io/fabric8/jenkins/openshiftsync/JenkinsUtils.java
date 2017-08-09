@@ -285,53 +285,56 @@ public class JenkinsUtils {
       return false;
     }
 
-    updateSourceCredentials(buildConfig);
+    // sync on intern of name should guarantee sync on same actual obj  
+    synchronized(buildConfig.getMetadata().getUid().intern()) {
+        updateSourceCredentials(buildConfig);
 
-    List<Action> buildActions = new ArrayList<Action>();
-    buildActions.add(new CauseAction(new BuildCause(build, bcProp.getUid())));
+        List<Action> buildActions = new ArrayList<Action>();
+        buildActions.add(new CauseAction(new BuildCause(build, bcProp.getUid())));
 
-    GitBuildSource gitBuildSource = build.getSpec().getSource().getGit();
-    SourceRevision sourceRevision = build.getSpec().getRevision();
+        GitBuildSource gitBuildSource = build.getSpec().getSource().getGit();
+        SourceRevision sourceRevision = build.getSpec().getRevision();
 
-    if (gitBuildSource != null && sourceRevision != null) {
-      GitSourceRevision gitSourceRevision = sourceRevision.getGit();
-      if (gitSourceRevision != null) {
-        try {
-          URIish repoURL = new URIish(gitBuildSource.getUri());
-          buildActions.add(new RevisionParameterAction(gitSourceRevision.getCommit(), repoURL));
-        } catch (URISyntaxException e) {
-          LOGGER.log(SEVERE, "Failed to parse git repo URL" + gitBuildSource.getUri(), e);
+        if (gitBuildSource != null && sourceRevision != null) {
+          GitSourceRevision gitSourceRevision = sourceRevision.getGit();
+          if (gitSourceRevision != null) {
+            try {
+              URIish repoURL = new URIish(gitBuildSource.getUri());
+              buildActions.add(new RevisionParameterAction(gitSourceRevision.getCommit(), repoURL));
+            } catch (URISyntaxException e) {
+              LOGGER.log(SEVERE, "Failed to parse git repo URL" + gitBuildSource.getUri(), e);
+            }
+          }
         }
-      }
-    }
-    
-    ParametersAction userProvidedParams = BuildToParametersActionMap.remove(build.getMetadata().getName());
-    // grab envs from actual build in case user overrode default values via `oc start-build -e`
-    JenkinsPipelineBuildStrategy strat = build.getSpec().getStrategy().getJenkinsPipelineStrategy();
-    // only add new param defs for build envs which are not in build config envs
-    addJobParamForBuildEnvs(job, strat, false);
-    if (userProvidedParams == null) {
-        LOGGER.fine("setting all job run params since this was either started via oc, or started from the UI with no build parameters" );
-        // now add the actual param values stemming from openshift build env vars for this specific job
-        buildActions = setJobRunParamsFromEnv(job, strat, buildActions);
-    } else {
-        LOGGER.fine("setting job run params and since this is manually started from jenkins applying user provided parameters " + userProvidedParams + " along with any from bc's env vars");
-        buildActions = setJobRunParamsFromEnvAndUIParams(job, strat, buildActions, userProvidedParams);
-    }
+        
+        ParametersAction userProvidedParams = BuildToParametersActionMap.remove(build.getMetadata().getName());
+        // grab envs from actual build in case user overrode default values via `oc start-build -e`
+        JenkinsPipelineBuildStrategy strat = build.getSpec().getStrategy().getJenkinsPipelineStrategy();
+        // only add new param defs for build envs which are not in build config envs
+        addJobParamForBuildEnvs(job, strat, false);
+        if (userProvidedParams == null) {
+            LOGGER.fine("setting all job run params since this was either started via oc, or started from the UI with no build parameters" );
+            // now add the actual param values stemming from openshift build env vars for this specific job
+            buildActions = setJobRunParamsFromEnv(job, strat, buildActions);
+        } else {
+            LOGGER.fine("setting job run params and since this is manually started from jenkins applying user provided parameters " + userProvidedParams + " along with any from bc's env vars");
+            buildActions = setJobRunParamsFromEnvAndUIParams(job, strat, buildActions, userProvidedParams);
+        }
 
-    if (job.scheduleBuild2(0, buildActions.toArray(new Action[buildActions.size()])) != null) {
-      updateOpenShiftBuildPhase(build, PENDING);
-      // If builds are queued too quickly, Jenkins can add the cause to the previous queued build so let's add a tiny
-      // sleep.
-      try {
-        Thread.sleep(50l);
-      } catch (InterruptedException e) {
-        // Ignore
-      }
-      return true;
-    }
+        if (job.scheduleBuild2(0, buildActions.toArray(new Action[buildActions.size()])) != null) {
+          updateOpenShiftBuildPhase(build, PENDING);
+          // If builds are queued too quickly, Jenkins can add the cause to the previous queued build so let's add a tiny
+          // sleep.
+          try {
+            Thread.sleep(50l);
+          } catch (InterruptedException e) {
+            // Ignore
+          }
+          return true;
+        }
 
-    return false;
+        return false;
+    }    
   }
 
   private static boolean isAlreadyTriggered(WorkflowJob job, Build build) {
