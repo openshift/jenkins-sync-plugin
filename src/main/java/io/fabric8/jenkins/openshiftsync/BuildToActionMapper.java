@@ -18,27 +18,41 @@ package io.fabric8.jenkins.openshiftsync;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import hudson.model.CauseAction;
 import hudson.model.ParametersAction;
 
-public class BuildToParametersActionMap {
-    
-    private static Map<String, ParametersAction> buildToParametersMap;
+public class BuildToActionMapper {
 
-    private BuildToParametersActionMap() {
+    private static Map<String, ParametersAction> buildToParametersMap;
+    private static Map<String, CauseAction> buildToCauseMap;
+
+    private BuildToActionMapper() {
     }
-    
+
     static synchronized void initialize() {
         if (buildToParametersMap == null) {
             buildToParametersMap = new ConcurrentHashMap<String, ParametersAction>();
         }
+        if (buildToCauseMap == null) {
+            buildToCauseMap = new ConcurrentHashMap<String, CauseAction>();
+        }
     }
-    
-    static synchronized void add(String buildId, ParametersAction params) {
+
+    static synchronized void addParameterAction(String buildId,
+            ParametersAction params) {
         buildToParametersMap.put(buildId, params);
     }
-    
-    static synchronized ParametersAction remove(String buildId) {
+
+    static synchronized ParametersAction removeParameterAction(String buildId) {
         return buildToParametersMap.remove(buildId);
+    }
+
+    static synchronized void addCauseAction(String buildId, CauseAction cause) {
+        buildToCauseMap.put(buildId, cause);
+    }
+
+    static synchronized CauseAction removeCauseAction(String buildId) {
+        return buildToCauseMap.remove(buildId);
     }
 
 }

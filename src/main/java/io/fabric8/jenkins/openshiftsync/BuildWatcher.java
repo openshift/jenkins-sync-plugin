@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
@@ -52,196 +53,320 @@ import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.*;
 import static java.util.logging.Level.WARNING;
 
 public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
-  private static final Logger logger = Logger.getLogger(BuildWatcher.class.getName());
+    private static final Logger logger = Logger.getLogger(BuildWatcher.class
+            .getName());
 
-  @SuppressFBWarnings("EI_EXPOSE_REP2")
-  public BuildWatcher(String[] namespaces) {
-      super(namespaces);
-  }
-  
-  @Override
-  public Runnable getStartTimerTask() {
-      return new SafeTimerTask() {
-          @Override
-          public void doRun() {
-            if (!CredentialsUtils.hasCredentials()) {
-              logger.fine("No Openshift Token credential defined.");
-              return;
-            }
-            for(String namespace:namespaces) {
-              try {
-                logger.fine("listing Build resources");
-                BuildList newBuilds = getAuthenticatedOpenShiftClient().builds().inNamespace(namespace).withField(OPENSHIFT_BUILD_STATUS_FIELD, BuildPhases.NEW).list();
-                onInitialBuilds(newBuilds);
-                logger.fine("handled Build resources");
-                if (watches.get(namespace) == null) {
-                    logger.info("creating Build watch for namespace " + namespace + " and resource version " + newBuilds.getMetadata().getResourceVersion());
-                  watches.put(namespace,getAuthenticatedOpenShiftClient().builds().inNamespace(namespace).withResourceVersion(newBuilds.getMetadata().getResourceVersion()).watch(BuildWatcher.this));
+    // the fabric8 classes like Build have equal/hashcode annotations that
+    // should allow
+    // us to index via the objects themselves;
+    // now that listing interval is 5 minutes (used to be 10 seconds), we have
+    // seen
+    // timing windows where if the build watch events come before build config
+    // watch events
+    // when both are created in a simultaneous fashion, there is an up to 5
+    // minute delay
+    // before the job run gets kicked off
+    private static final HashSet<Build> buildsWithNoBCList = new HashSet<Build>();
+
+    @SuppressFBWarnings("EI_EXPOSE_REP2")
+    public BuildWatcher(String[] namespaces) {
+        super(namespaces);
+    }
+
+    @Override
+    public Runnable getStartTimerTask() {
+        return new SafeTimerTask() {
+            @Override
+            public void doRun() {
+                if (!CredentialsUtils.hasCredentials()) {
+                    logger.fine("No Openshift Token credential defined.");
+                    return;
                 }
-              } catch (Exception e) {
-                logger.log(Level.SEVERE, "Failed to load initial Builds: " + e, e);
-              }
+                // prior to finding new builds poke the BuildWatcher builds with
+                // no BC list and see if we
+                // can create job runs for premature builds we already know
+                // about
+                BuildWatcher.flushBuildsWithNoBCList();
+                for (String namespace : namespaces) {
+                    try {
+                        logger.fine("listing Build resources");
+                        BuildList newBuilds = getAuthenticatedOpenShiftClient()
+                                .builds()
+                                .inNamespace(namespace)
+                                .withField(OPENSHIFT_BUILD_STATUS_FIELD,
+                                        BuildPhases.NEW).list();
+                        onInitialBuilds(newBuilds);
+                        logger.fine("handled Build resources");
+                        if (watches.get(namespace) == null) {
+                            logger.info("creating Build watch for namespace "
+                                    + namespace
+                                    + " and resource version "
+                                    + newBuilds.getMetadata()
+                                            .getResourceVersion());
+                            watches.put(
+                                    namespace,
+                                    getAuthenticatedOpenShiftClient()
+                                            .builds()
+                                            .inNamespace(namespace)
+                                            .withResourceVersion(
+                                                    newBuilds
+                                                            .getMetadata()
+                                                            .getResourceVersion())
+                                            .watch(BuildWatcher.this));
+                        }
+                    } catch (Exception e) {
+                        logger.log(Level.SEVERE,
+                                "Failed to load initial Builds: " + e, e);
+                    }
+                }
             }
-          }
         };
-  }
-  
-  
-
-  public void start() {
-    BuildToParametersActionMap.initialize();
-    super.start();
-  }
-
-  @SuppressFBWarnings("SF_SWITCH_NO_DEFAULT")
-  @Override
-  public synchronized void eventReceived(Action action, Build build) {
-    try {
-      switch (action) {
-        case ADDED:
-          addEventToJenkinsJobRun(build);
-          break;
-        case MODIFIED:
-          modifyEventToJenkinsJobRun(build);
-          break;
-        case DELETED:
-            deleteEventToJenkinsJobRun(build);
-            break;
-      }
-    } catch (Exception e) {
-      logger.log(WARNING, "Caught: " + e, e);
     }
-  }
 
-  public synchronized static void onInitialBuilds(BuildList buildList) {
-    List<Build> items = buildList.getItems();
-    if (items != null) {
-
-      Collections.sort(items, new Comparator<Build>() {
-        @Override
-        public int compare(Build b1, Build b2) {
-          return Long.compare(
-            Long.parseLong(b1.getMetadata().getAnnotations().get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER)),
-            Long.parseLong(b2.getMetadata().getAnnotations().get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER))
-          );
-        }
-      });
-
-      // We need to sort the builds into their build configs so we can handle build run policies correctly.
-      Map<String, BuildConfig> buildConfigMap = new HashMap<>();
-      Map<BuildConfig, List<Build>> buildConfigBuildMap = new HashMap<>(items.size());
-      for (Build b : items) {
-        String buildConfigName = b.getStatus().getConfig().getName();
-        if (StringUtils.isEmpty(buildConfigName)) {
-          continue;
-        }
-        String namespace = b.getMetadata().getNamespace();
-        String bcMapKey = namespace + "/" + buildConfigName;
-        BuildConfig bc = buildConfigMap.get(bcMapKey);
-        if (bc == null) {
-          bc = getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace).withName(buildConfigName).get();
-          if (bc == null) {
-            continue;
-          }
-          buildConfigMap.put(bcMapKey, bc);
-        }
-        List<Build> bcBuilds = buildConfigBuildMap.get(bc);
-        if (bcBuilds == null) {
-          bcBuilds = new ArrayList<>();
-          buildConfigBuildMap.put(bc, bcBuilds);
-        }
-        bcBuilds.add(b);
-      }
-
-      // Now handle the builds.
-      for (Map.Entry<BuildConfig, List<Build>> buildConfigBuilds : buildConfigBuildMap.entrySet()) {
-        BuildConfig bc = buildConfigBuilds.getKey();
-        if (bc.getMetadata() == null) {
-          // Should never happen but let's be safe...
-          continue;
-        }
-        WorkflowJob job = getJobFromBuildConfig(bc);
-        if (job == null) {
-          continue;
-        }
-        BuildConfigProjectProperty bcp = job.getProperty(BuildConfigProjectProperty.class);
-        if (bcp == null) {
-          continue;
-        }
-        List<Build> builds = buildConfigBuilds.getValue();
-        handleBuildList(job, builds, bcp);
-      }
+    public void start() {
+        BuildToActionMapper.initialize();
+        super.start();
     }
-  }
 
-  private static synchronized void modifyEventToJenkinsJobRun(Build build) {
-    BuildStatus status = build.getStatus();
-    if (status != null &&
-      isCancellable(status) &&
-      isCancelled(status)) {
-      WorkflowJob job = getJobFromBuild(build);
-      if (job != null) {
-        cancelBuild(job, build);
-      }
+    @SuppressFBWarnings("SF_SWITCH_NO_DEFAULT")
+    @Override
+    public synchronized void eventReceived(Action action, Build build) {
+        if (!OpenShiftUtils.isPipelineStrategyBuild(build))
+            return;
+        try {
+            switch (action) {
+            case ADDED:
+                addEventToJenkinsJobRun(build);
+                break;
+            case MODIFIED:
+                modifyEventToJenkinsJobRun(build);
+                break;
+            case DELETED:
+                deleteEventToJenkinsJobRun(build);
+                break;
+            }
+        } catch (Exception e) {
+            logger.log(WARNING, "Caught: " + e, e);
+        }
     }
-  }
 
-  public static synchronized boolean addEventToJenkinsJobRun(Build build) throws IOException {
-    BuildStatus status = build.getStatus();
-    if (status != null) {
-      if (isCancelled(status)) {
-        updateOpenShiftBuildPhase(build, CANCELLED);
+    public synchronized static void onInitialBuilds(BuildList buildList) {
+        List<Build> items = buildList.getItems();
+        if (items != null) {
+
+            Collections.sort(items, new Comparator<Build>() {
+                @Override
+                public int compare(Build b1, Build b2) {
+                    return Long.compare(
+                            Long.parseLong(b1.getMetadata().getAnnotations()
+                                    .get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER)),
+                            Long.parseLong(b2.getMetadata().getAnnotations()
+                                    .get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER)));
+                }
+            });
+
+            // We need to sort the builds into their build configs so we can
+            // handle build run policies correctly.
+            Map<String, BuildConfig> buildConfigMap = new HashMap<>();
+            Map<BuildConfig, List<Build>> buildConfigBuildMap = new HashMap<>(
+                    items.size());
+            for (Build b : items) {
+                if (!OpenShiftUtils.isPipelineStrategyBuild(b))
+                    continue;
+                String buildConfigName = b.getStatus().getConfig().getName();
+                if (StringUtils.isEmpty(buildConfigName)) {
+                    continue;
+                }
+                String namespace = b.getMetadata().getNamespace();
+                String bcMapKey = namespace + "/" + buildConfigName;
+                BuildConfig bc = buildConfigMap.get(bcMapKey);
+                if (bc == null) {
+                    bc = getAuthenticatedOpenShiftClient().buildConfigs()
+                            .inNamespace(namespace).withName(buildConfigName)
+                            .get();
+                    if (bc == null) {
+                        // if the bc is not there via a REST get, then it is not
+                        // going to be, and we are not handling manual creation
+                        // of pipeline build objects, so don't bother with "no bc list"
+                        continue;
+                    }
+                    buildConfigMap.put(bcMapKey, bc);
+                }
+                List<Build> bcBuilds = buildConfigBuildMap.get(bc);
+                if (bcBuilds == null) {
+                    bcBuilds = new ArrayList<>();
+                    buildConfigBuildMap.put(bc, bcBuilds);
+                }
+                bcBuilds.add(b);
+            }
+
+            // Now handle the builds.
+            for (Map.Entry<BuildConfig, List<Build>> buildConfigBuilds : buildConfigBuildMap
+                    .entrySet()) {
+                BuildConfig bc = buildConfigBuilds.getKey();
+                if (bc.getMetadata() == null) {
+                    // Should never happen but let's be safe...
+                    continue;
+                }
+                WorkflowJob job = getJobFromBuildConfig(bc);
+                if (job == null) {
+                    List<Build> builds = buildConfigBuilds.getValue();
+                    for (Build b : builds) {
+                        logger.info("skipping listed new build "
+                                + b.getMetadata().getName()
+                                + " no job at this time");
+                        addBuildToNoBCList(b);
+                    }
+                    continue;
+                }
+                BuildConfigProjectProperty bcp = job
+                        .getProperty(BuildConfigProjectProperty.class);
+                if (bcp == null) {
+                    List<Build> builds = buildConfigBuilds.getValue();
+                    for (Build b : builds) {
+                        logger.info("skipping listed new build "
+                                + b.getMetadata().getName()
+                                + " no prop at this time");
+                        addBuildToNoBCList(b);
+                    }
+                    continue;
+                }
+                List<Build> builds = buildConfigBuilds.getValue();
+                handleBuildList(job, builds, bcp);
+            }
+        }
+    }
+
+    private static synchronized void modifyEventToJenkinsJobRun(Build build) {
+        BuildStatus status = build.getStatus();
+        if (status != null && isCancellable(status) && isCancelled(status)) {
+            WorkflowJob job = getJobFromBuild(build);
+            if (job != null) {
+                cancelBuild(job, build);
+            } else {
+                removeBuildFromNoBCList(build);
+            }
+        } else {
+            // see if any pre-BC cached builds can now be flushed
+            flushBuildsWithNoBCList();
+        }
+    }
+
+    public static synchronized boolean addEventToJenkinsJobRun(Build build)
+            throws IOException {
+        // should have been caught upstack, but just in case since public method
+        if (!OpenShiftUtils.isPipelineStrategyBuild(build))
+            return false;
+        BuildStatus status = build.getStatus();
+        if (status != null) {
+            if (isCancelled(status)) {
+                updateOpenShiftBuildPhase(build, CANCELLED);
+                return false;
+            }
+            if (!isNew(status)) {
+                return false;
+            }
+        }
+
+        WorkflowJob job = getJobFromBuild(build);
+        if (job != null) {
+            return triggerJob(job, build);
+        }
+        logger.info("skipping watch event for build "
+                + build.getMetadata().getName() + " no job at this time");
+        addBuildToNoBCList(build);
         return false;
-      }
-      if (!isNew(status)) {
-        return false;
-      }
     }
 
-    WorkflowJob job = getJobFromBuild(build);
-    if (job != null) {
-      return triggerJob(job, build);
+    public static synchronized void addBuildToNoBCList(Build build) {
+        // should have been caught upstack, but just in case since public method
+        if (!OpenShiftUtils.isPipelineStrategyBuild(build))
+            return;
+        buildsWithNoBCList.add(build);
     }
-    return false;
-  }
-  
-  // innerDeleteEventToJenkinsJobRun is the actual delete logic at the heart of deleteEventToJenkinsJobRun
-  // that is either in a sync block or not based on the presence of a BC uid
-  private static synchronized void innerDeleteEventToJenkinsJobRun(final Build build) throws Exception {
-      final WorkflowJob job = getJobFromBuild(build);
-      if (job != null) {
-        ACL.impersonate(ACL.SYSTEM, new NotReallyRoleSensitiveCallable<Void, Exception>() {
-          @Override
-          public Void call() throws Exception {
-            cancelBuild(job, build, true);
-            return null;
-          }
-        });
-      }
-  }
 
-  // in response to receiving an openshift delete build event, this method will drive 
-  // the clean up of the Jenkins job run the build is mapped one to one with; as part of that 
-  // clean up it will synchronize with the build config event watcher to handle build config
-  // delete events and build delete events that arrive concurrently and in a nondeterministic
-  // order
-  private static synchronized void deleteEventToJenkinsJobRun(final Build build) throws Exception {
-      List<OwnerReference> ownerRefs = build.getMetadata().getOwnerReferences();
-      String bcUid = null;
-      for (OwnerReference ref : ownerRefs) {
-          if ("BuildConfig".equals(ref.getKind()) && ref.getUid() != null && ref.getUid().length() > 0) {
-              // employ intern to facilitate sync'ing on the same actual object
-              bcUid = ref.getUid().intern();
-              synchronized(bcUid) {
-                  // if entire job already deleted via bc delete, just return
-                  if (getJobFromBuildConfigUid(bcUid) == null)
-                      return;
-                  innerDeleteEventToJenkinsJobRun(build);
-                  return;
-              }
-          }
-      }
-      // otherwise, if something odd is up and there is no parent BC, just clean up
-      innerDeleteEventToJenkinsJobRun(build);
-  }
+    private static synchronized void removeBuildFromNoBCList(Build build) {
+        buildsWithNoBCList.remove(build);
+    }
+
+    private static synchronized void clearNoBCList() {
+        buildsWithNoBCList.clear();
+    }
+
+    // trigger any builds whose watch events arrived before the
+    // corresponding build config watch events
+    public static synchronized void flushBuildsWithNoBCList() {
+        HashSet<Build> clone = (HashSet<Build>) buildsWithNoBCList.clone();
+        clearNoBCList();
+        for (Build build : clone) {
+            WorkflowJob job = getJobFromBuild(build);
+            if (job != null)
+                try {
+                    logger.info("triggering job run for previously skipped build "
+                            + build.getMetadata().getName());
+                    triggerJob(job, build);
+                } catch (IOException e) {
+                    logger.log(Level.WARNING, "flushCachedBuilds", e);
+                }
+            else
+                addBuildToNoBCList(build);
+        }
+
+    }
+
+    // innerDeleteEventToJenkinsJobRun is the actual delete logic at the heart
+    // of deleteEventToJenkinsJobRun
+    // that is either in a sync block or not based on the presence of a BC uid
+    private static synchronized void innerDeleteEventToJenkinsJobRun(
+            final Build build) throws Exception {
+        final WorkflowJob job = getJobFromBuild(build);
+        if (job != null) {
+            ACL.impersonate(ACL.SYSTEM,
+                    new NotReallyRoleSensitiveCallable<Void, Exception>() {
+                        @Override
+                        public Void call() throws Exception {
+                            cancelBuild(job, build, true);
+                            return null;
+                        }
+                    });
+        } else {
+            // in case build was created and deleted quickly, prior to seeing BC
+            // event, clear out from pre-BC cache
+            removeBuildFromNoBCList(build);
+        }
+    }
+
+    // in response to receiving an openshift delete build event, this method
+    // will drive
+    // the clean up of the Jenkins job run the build is mapped one to one with;
+    // as part of that
+    // clean up it will synchronize with the build config event watcher to
+    // handle build config
+    // delete events and build delete events that arrive concurrently and in a
+    // nondeterministic
+    // order
+    private static synchronized void deleteEventToJenkinsJobRun(
+            final Build build) throws Exception {
+        List<OwnerReference> ownerRefs = build.getMetadata()
+                .getOwnerReferences();
+        String bcUid = null;
+        for (OwnerReference ref : ownerRefs) {
+            if ("BuildConfig".equals(ref.getKind()) && ref.getUid() != null
+                    && ref.getUid().length() > 0) {
+                // employ intern to facilitate sync'ing on the same actual
+                // object
+                bcUid = ref.getUid().intern();
+                synchronized (bcUid) {
+                    // if entire job already deleted via bc delete, just return
+                    if (getJobFromBuildConfigUid(bcUid) == null)
+                        return;
+                    innerDeleteEventToJenkinsJobRun(build);
+                    return;
+                }
+            }
+        }
+        // otherwise, if something odd is up and there is no parent BC, just
+        // clean up
+        innerDeleteEventToJenkinsJobRun(build);
+    }
 }

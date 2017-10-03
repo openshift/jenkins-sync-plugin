@@ -14,80 +14,89 @@ import static org.apache.commons.lang.StringUtils.isNotBlank;
 
 public class BuildConfigToJobMap {
 
-  private static Map<String, WorkflowJob> buildConfigToJobMap;
+    private static Map<String, WorkflowJob> buildConfigToJobMap;
 
-  private BuildConfigToJobMap() {
-  }
+    private BuildConfigToJobMap() {
+    }
 
-  static synchronized void initializeBuildConfigToJobMap() {
-    if (buildConfigToJobMap == null) {
-      List<WorkflowJob> jobs = Jenkins.getActiveInstance().getAllItems(WorkflowJob.class);
-      buildConfigToJobMap = new ConcurrentHashMap<>(jobs.size());
-      for (WorkflowJob job : jobs) {
-        BuildConfigProjectProperty buildConfigProjectProperty = job.getProperty(BuildConfigProjectProperty.class);
-        if (buildConfigProjectProperty == null) {
-          continue;
+    static synchronized void initializeBuildConfigToJobMap() {
+        if (buildConfigToJobMap == null) {
+            List<WorkflowJob> jobs = Jenkins.getActiveInstance().getAllItems(
+                    WorkflowJob.class);
+            buildConfigToJobMap = new ConcurrentHashMap<>(jobs.size());
+            for (WorkflowJob job : jobs) {
+                BuildConfigProjectProperty buildConfigProjectProperty = job
+                        .getProperty(BuildConfigProjectProperty.class);
+                if (buildConfigProjectProperty == null) {
+                    continue;
+                }
+                String bcUid = buildConfigProjectProperty.getUid();
+                if (isNotBlank(bcUid)) {
+                    buildConfigToJobMap.put(bcUid, job);
+                }
+            }
         }
-        String bcUid = buildConfigProjectProperty.getUid();
-        if (isNotBlank(bcUid)) {
-          buildConfigToJobMap.put(bcUid, job);
+    }
+
+    static synchronized WorkflowJob getJobFromBuildConfig(
+            BuildConfig buildConfig) {
+        ObjectMeta meta = buildConfig.getMetadata();
+        if (meta == null) {
+            return null;
         }
-      }
+        return getJobFromBuildConfigUid(meta.getUid());
     }
-  }
 
-  static synchronized WorkflowJob getJobFromBuildConfig(BuildConfig buildConfig) {
-    ObjectMeta meta = buildConfig.getMetadata();
-    if (meta == null) {
-      return null;
+    static synchronized WorkflowJob getJobFromBuildConfigUid(String uid) {
+        if (isBlank(uid)) {
+            return null;
+        }
+        return buildConfigToJobMap.get(uid);
     }
-    return getJobFromBuildConfigUid(meta.getUid());
-  }
 
-  static synchronized WorkflowJob getJobFromBuildConfigUid(String uid) {
-    if (isBlank(uid)) {
-      return null;
+    static synchronized void putJobWithBuildConfig(WorkflowJob job,
+            BuildConfig buildConfig) {
+        if (buildConfig == null) {
+            throw new IllegalArgumentException("BuildConfig cannot be null");
+        }
+        if (job == null) {
+            throw new IllegalArgumentException("Job cannot be null");
+        }
+        ObjectMeta meta = buildConfig.getMetadata();
+        if (meta == null) {
+            throw new IllegalArgumentException(
+                    "BuildConfig must contain valid metadata");
+        }
+        putJobWithBuildConfigUid(job, meta.getUid());
     }
-    return buildConfigToJobMap.get(uid);
-  }
 
-  static synchronized void putJobWithBuildConfig(WorkflowJob job, BuildConfig buildConfig) {
-    if (buildConfig == null) {
-      throw new IllegalArgumentException("BuildConfig cannot be null");
+    static synchronized void putJobWithBuildConfigUid(WorkflowJob job,
+            String uid) {
+        if (isBlank(uid)) {
+            throw new IllegalArgumentException(
+                    "BuildConfig uid must not be blank");
+        }
+        buildConfigToJobMap.put(uid, job);
     }
-    if (job == null) {
-      throw new IllegalArgumentException("Job cannot be null");
-    }
-    ObjectMeta meta = buildConfig.getMetadata();
-    if (meta == null) {
-      throw new IllegalArgumentException("BuildConfig must contain valid metadata");
-    }
-    putJobWithBuildConfigUid(job, meta.getUid());
-  }
 
-  static synchronized void putJobWithBuildConfigUid(WorkflowJob job, String uid) {
-    if (isBlank(uid)) {
-      throw new IllegalArgumentException("BuildConfig uid must not be blank");
+    static synchronized void removeJobWithBuildConfig(BuildConfig buildConfig) {
+        if (buildConfig == null) {
+            throw new IllegalArgumentException("BuildConfig cannot be null");
+        }
+        ObjectMeta meta = buildConfig.getMetadata();
+        if (meta == null) {
+            throw new IllegalArgumentException(
+                    "BuildConfig must contain valid metadata");
+        }
+        removeJobWithBuildConfigUid(meta.getUid());
     }
-    buildConfigToJobMap.put(uid, job);
-  }
 
-  static synchronized void removeJobWithBuildConfig(BuildConfig buildConfig) {
-    if (buildConfig == null) {
-      throw new IllegalArgumentException("BuildConfig cannot be null");
+    static synchronized void removeJobWithBuildConfigUid(String uid) {
+        if (isBlank(uid)) {
+            throw new IllegalArgumentException(
+                    "BuildConfig uid must not be blank");
+        }
+        buildConfigToJobMap.remove(uid);
     }
-    ObjectMeta meta = buildConfig.getMetadata();
-    if (meta == null) {
-      throw new IllegalArgumentException("BuildConfig must contain valid metadata");
-    }
-    removeJobWithBuildConfigUid(meta.getUid());
-  }
-
-  static synchronized void removeJobWithBuildConfigUid(String uid) {
-    if (isBlank(uid)) {
-      throw new IllegalArgumentException("BuildConfig uid must not be blank");
-    }
-    buildConfigToJobMap.remove(uid);
-  }
 
 }

@@ -39,66 +39,109 @@ import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getJenkinsURL;
 @Extension
 public class BuildDecisionHandler extends Queue.QueueDecisionHandler {
 
-  private static final Logger LOGGER = Logger.getLogger(BuildDecisionHandler.class.getName());
-  
-  
-  @Override
-  public boolean shouldSchedule(Queue.Task p, List<Action> actions) {
-    if (p instanceof WorkflowJob && !isOpenShiftBuildCause(actions)) {
-      WorkflowJob wj = (WorkflowJob) p;
-      BuildConfigProjectProperty buildConfigProjectProperty = wj.getProperty(BuildConfigProjectProperty.class);
-      if (buildConfigProjectProperty != null
-        && StringUtils.isNotBlank(buildConfigProjectProperty.getNamespace())
-        && StringUtils.isNotBlank(buildConfigProjectProperty.getName())) {
+    private static final Logger LOGGER = Logger
+            .getLogger(BuildDecisionHandler.class.getName());
 
-        String namespace = buildConfigProjectProperty.getNamespace();
-        String jobURL = joinPaths(getJenkinsURL(getAuthenticatedOpenShiftClient(), namespace), wj.getUrl());
+    @Override
+    public boolean shouldSchedule(Queue.Task p, List<Action> actions) {
+        if (p instanceof WorkflowJob && !isOpenShiftBuildCause(actions)) {
+            WorkflowJob wj = (WorkflowJob) p;
+            BuildConfigProjectProperty buildConfigProjectProperty = wj
+                    .getProperty(BuildConfigProjectProperty.class);
+            if (buildConfigProjectProperty != null
+                    && StringUtils.isNotBlank(buildConfigProjectProperty
+                            .getNamespace())
+                    && StringUtils.isNotBlank(buildConfigProjectProperty
+                            .getName())) {
 
-        Build ret = getAuthenticatedOpenShiftClient().buildConfigs()
-          .inNamespace(namespace).withName(buildConfigProjectProperty.getName())
-          .instantiate(
-            new BuildRequestBuilder()
-              .withNewMetadata().withName(buildConfigProjectProperty.getName()).and()
-              .addNewTriggeredBy().withMessage("Triggered by Jenkins job at " + jobURL).and()
-              .build()
-          );
-        
-        ParametersAction params = dumpParams(actions);        
-        if (params != null && ret != null)
-            BuildToParametersActionMap.add(ret.getMetadata().getName(), params);
-        return false;
-      }
-    }
+                String namespace = buildConfigProjectProperty.getNamespace();
+                String jobURL = joinPaths(
+                        getJenkinsURL(getAuthenticatedOpenShiftClient(),
+                                namespace), wj.getUrl());
 
-    return true;
-  }
+                Build ret = getAuthenticatedOpenShiftClient()
+                        .buildConfigs()
+                        .inNamespace(namespace)
+                        .withName(buildConfigProjectProperty.getName())
+                        .instantiate(
+                                new BuildRequestBuilder()
+                                        .withNewMetadata()
+                                        .withName(
+                                                buildConfigProjectProperty
+                                                        .getName())
+                                        .and()
+                                        .addNewTriggeredBy()
+                                        .withMessage(
+                                                "Triggered by Jenkins job at "
+                                                        + jobURL).and().build());
 
-  private static boolean isOpenShiftBuildCause(List<Action> actions) {
-      for (Action action : actions) {
-        if (action instanceof CauseAction) {
-          CauseAction causeAction = (CauseAction) action;
-          for (Cause cause : causeAction.getCauses()) {
-            if (cause instanceof BuildCause) {
-              return true;
+                ParametersAction params = dumpParams(actions);
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine("ParametersAction: " + params.toString());
+                }
+                if (params != null && ret != null)
+                    BuildToActionMapper.addParameterAction(ret.getMetadata()
+                            .getName(), params);
+
+                CauseAction cause = dumpCause(actions);
+                if (LOGGER.isLoggable(Level.FINE)) {
+                    LOGGER.fine("get CauseAction: " + cause.getDisplayName());
+                    for (Cause c : cause.getCauses()) {
+                        LOGGER.fine("Cause: " + c.getShortDescription());
+                    }
+                }
+                if (cause != null && ret != null)
+                    BuildToActionMapper.addCauseAction(ret.getMetadata()
+                            .getName(), cause);
+
+                return false;
             }
-          }
         }
-      }
-      return false;
+
+        return true;
     }
 
-  private static ParametersAction dumpParams(List<Action> actions) {
-      for (Action action : actions) {
-        if (action instanceof ParametersAction) {
-            ParametersAction paramAction = (ParametersAction) action;
-            if (LOGGER.isLoggable(Level.FINE))
-              for (ParameterValue param : paramAction.getAllParameters()) {
-                  LOGGER.fine("param name " + param.getName() + " param value " + param.getValue());
-              }
-          return paramAction;
+    private static boolean isOpenShiftBuildCause(List<Action> actions) {
+        for (Action action : actions) {
+            if (action instanceof CauseAction) {
+                CauseAction causeAction = (CauseAction) action;
+                for (Cause cause : causeAction.getCauses()) {
+                    if (cause instanceof BuildCause) {
+                        return true;
+                    }
+                }
+            }
         }
-      }
-      return null;
+        return false;
     }
-  
+
+    private static CauseAction dumpCause(List<Action> actions) {
+        for (Action action : actions) {
+            if (action instanceof CauseAction) {
+                CauseAction causeAction = (CauseAction) action;
+                if (LOGGER.isLoggable(Level.FINE))
+                    for (Cause cause : causeAction.getCauses()) {
+                        LOGGER.fine("cause: " + cause.getShortDescription());
+                    }
+                return causeAction;
+            }
+        }
+        return null;
+    }
+
+    private static ParametersAction dumpParams(List<Action> actions) {
+        for (Action action : actions) {
+            if (action instanceof ParametersAction) {
+                ParametersAction paramAction = (ParametersAction) action;
+                if (LOGGER.isLoggable(Level.FINE))
+                    for (ParameterValue param : paramAction.getAllParameters()) {
+                        LOGGER.fine("param name " + param.getName()
+                                + " param value " + param.getValue());
+                    }
+                return paramAction;
+            }
+        }
+        return null;
+    }
+
 }

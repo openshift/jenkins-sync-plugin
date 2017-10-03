@@ -37,7 +37,8 @@ import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOp
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
-public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStream> {
+public class ImageStreamWatcher extends BaseWatcher implements
+        Watcher<ImageStream> {
     private final Logger logger = Logger.getLogger(getClass().getName());
     private final List<String> predefinedOpenShiftSlaves;
 
@@ -48,7 +49,7 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
         this.predefinedOpenShiftSlaves.add("maven");
         this.predefinedOpenShiftSlaves.add("nodejs");
     }
-    
+
     public Runnable getStartTimerTask() {
         return new SafeTimerTask() {
             @Override
@@ -57,18 +58,33 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
                     logger.fine("No Openshift Token credential defined.");
                     return;
                 }
-                for(String namespace:namespaces) {
+                for (String namespace : namespaces) {
                     try {
                         logger.fine("listing ImageStream resources");
-                        final ImageStreamList imageStreams = getAuthenticatedOpenShiftClient().imageStreams().inNamespace(namespace).list();
+                        final ImageStreamList imageStreams = getAuthenticatedOpenShiftClient()
+                                .imageStreams().inNamespace(namespace).list();
                         onInitialImageStream(imageStreams);
                         logger.fine("handled ImageStream resources");
                         if (watches.get(namespace) == null) {
-                            logger.info("creating ImageStream watch for namespace " + namespace + " and resource version " + imageStreams.getMetadata().getResourceVersion());
-                            watches.put(namespace,getAuthenticatedOpenShiftClient().imageStreams().inNamespace(namespace).withResourceVersion(imageStreams.getMetadata().getResourceVersion()).watch(ImageStreamWatcher.this));
+                            logger.info("creating ImageStream watch for namespace "
+                                    + namespace
+                                    + " and resource version "
+                                    + imageStreams.getMetadata()
+                                            .getResourceVersion());
+                            watches.put(
+                                    namespace,
+                                    getAuthenticatedOpenShiftClient()
+                                            .imageStreams()
+                                            .inNamespace(namespace)
+                                            .withResourceVersion(
+                                                    imageStreams
+                                                            .getMetadata()
+                                                            .getResourceVersion())
+                                            .watch(ImageStreamWatcher.this));
                         }
                     } catch (Exception e) {
-                        logger.log(SEVERE, "Failed to load ImageStreams: " + e, e);
+                        logger.log(SEVERE, "Failed to load ImageStreams: " + e,
+                                e);
                     }
                 }
             }
@@ -80,67 +96,106 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
         logger.info("Now handling startup image streams!!");
         super.start();
     }
-    
+
     @Override
     public void eventReceived(Action action, ImageStream imageStream) {
         try {
             List<PodTemplate> slavesFromIS = podTemplates(imageStream);
             String isname = imageStream.getMetadata().getName();
             switch (action) {
-                case ADDED:
-                    for (PodTemplate entry : slavesFromIS) {
-                        // timer might beat watch event - put call is technically fine, but 
-                        // not addPodTemplate given k8s plugin issues
-                        if (JenkinsUtils.hasPodTemplate(entry.getName()))
-                            continue;
-                        if (this.predefinedOpenShiftSlaves.contains(entry.getName()))
-                            continue;
-                        JenkinsUtils.addPodTemplate(entry);
-                    }
-                    break;
+            case ADDED:
+                for (PodTemplate entry : slavesFromIS) {
+                    // timer might beat watch event - put call is technically
+                    // fine, but
+                    // not addPodTemplate given k8s plugin issues
+                    if (JenkinsUtils.hasPodTemplate(entry.getName()))
+                        continue;
+                    if (this.predefinedOpenShiftSlaves
+                            .contains(entry.getName()))
+                        continue;
+                    JenkinsUtils.addPodTemplate(entry);
+                }
+                break;
 
-                case MODIFIED:
-                    // add/replace entries from latest IS incarnation
+            case MODIFIED:
+                // add/replace entries from latest IS incarnation
+                for (PodTemplate entry : slavesFromIS) {
+                    if (this.predefinedOpenShiftSlaves
+                            .contains(entry.getName()))
+                        continue;
+                    JenkinsUtils.addPodTemplate(entry);
+                }
+                // go back and remove tracked items that no longer are marked
+                // slaves
+                Iterator<PodTemplate> iter = JenkinsUtils.getPodTemplates()
+                        .iterator();
+                while (iter.hasNext()) {
+                    PodTemplate podTemplate = iter.next();
+                    if (!podTemplate.getName().equals(isname) && // actual IS
+                            !podTemplate.getName().startsWith(isname + ".")) // an
+                                                                             // IST
+                                                                             // starts
+                                                                             // with
+                                                                             // IS
+                                                                             // name
+                                                                             // followed
+                                                                             // by
+                                                                             // "."
+                                                                             // since
+                                                                             // we
+                                                                             // have
+                                                                             // to
+                                                                             // replace
+                                                                             // ":"
+                                                                             // with
+                                                                             // "."
+                        continue;
+                    if (this.predefinedOpenShiftSlaves.contains(podTemplate
+                            .getName()))
+                        continue;
+                    boolean keep = false;
+                    // if an IST based slave, see that particular tag is still
+                    // in list
                     for (PodTemplate entry : slavesFromIS) {
-                        if (this.predefinedOpenShiftSlaves.contains(entry.getName()))
-                            continue;
-                        JenkinsUtils.removePodTemplate(entry);
-                        JenkinsUtils.addPodTemplate(entry);
-                    }
-                    // go back and remove tracked items that no longer are marked slaves
-                    Iterator<PodTemplate> iter = JenkinsUtils.getPodTemplates().iterator();
-                    while (iter.hasNext()) {
-                        PodTemplate podTemplate = iter.next();
-                        if (!podTemplate.getName().equals(isname) && // actual IS
-                            !podTemplate.getName().startsWith(isname + ".")) // an IST starts with IS name followed by "." since we have to replace ":" with "."
-                            continue;
-                        if (this.predefinedOpenShiftSlaves.contains(podTemplate.getName()))
-                            continue;
-                        boolean keep = false;
-                        // if an IST based slave, see that particular tag is still in list
-                        for (PodTemplate entry : slavesFromIS) {
-                            if (entry.getName().equals(podTemplate.getName())) {
-                                keep = true;
-                                break;
-                            }
+                        if (entry.getName().equals(podTemplate.getName())) {
+                            keep = true;
+                            break;
                         }
-                        if (!keep)
-                            JenkinsUtils.removePodTemplate(podTemplate);
                     }
-                    break;
-
-                case DELETED:
-                    iter = JenkinsUtils.getPodTemplates().iterator();
-                    while (iter.hasNext()) {
-                        PodTemplate podTemplate = iter.next();
-                        if (!podTemplate.getName().equals(isname) && // actual IS
-                            !podTemplate.getName().startsWith(isname + ".")) // an IST starts with IS name followed by "." since we have to replace ":" with "."
-                            continue;
-                        if (this.predefinedOpenShiftSlaves.contains(podTemplate.getName()))
-                            continue;
+                    if (!keep)
                         JenkinsUtils.removePodTemplate(podTemplate);
-                    }
-                    break;
+                }
+                break;
+
+            case DELETED:
+                iter = JenkinsUtils.getPodTemplates().iterator();
+                while (iter.hasNext()) {
+                    PodTemplate podTemplate = iter.next();
+                    if (!podTemplate.getName().equals(isname) && // actual IS
+                            !podTemplate.getName().startsWith(isname + ".")) // an
+                                                                             // IST
+                                                                             // starts
+                                                                             // with
+                                                                             // IS
+                                                                             // name
+                                                                             // followed
+                                                                             // by
+                                                                             // "."
+                                                                             // since
+                                                                             // we
+                                                                             // have
+                                                                             // to
+                                                                             // replace
+                                                                             // ":"
+                                                                             // with
+                                                                             // "."
+                        continue;
+                    if (this.predefinedOpenShiftSlaves.contains(podTemplate
+                            .getName()))
+                        continue;
+                    JenkinsUtils.removePodTemplate(podTemplate);
+                }
+                break;
 
             }
         } catch (Exception e) {
@@ -155,7 +210,8 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
                 try {
                     List<PodTemplate> slavesFromIS = podTemplates(imageStream);
                     for (PodTemplate entry : slavesFromIS) {
-                        // watch event might beat the timer - put call is technically fine, but 
+                        // watch event might beat the timer - put call is
+                        // technically fine, but
                         // not addPodTemplate given k8s plugin issues
                         if (JenkinsUtils.hasPodTemplate(entry.getName()))
                             continue;
@@ -170,38 +226,52 @@ public class ImageStreamWatcher extends BaseWatcher implements Watcher<ImageStre
 
     private List<PodTemplate> podTemplates(ImageStream imageStream) {
         List<PodTemplate> results = new ArrayList<PodTemplate>();
-        //for IS, since we can check labels, check there
+        // for IS, since we can check labels, check there
         if (hasSlaveLabelOrAnnotation(imageStream.getMetadata().getLabels())) {
-            results.add(podTemplateFromData(imageStream.getMetadata().getName(),
-                    imageStream.getStatus().getDockerImageRepository(),
-                    imageStream.getMetadata().getAnnotations())); // for slave-label, still check annotations
+            results.add(podTemplateFromData(
+                    imageStream.getMetadata().getName(), imageStream
+                            .getStatus().getDockerImageRepository(),
+                    imageStream.getMetadata().getAnnotations())); // for
+                                                                  // slave-label,
+                                                                  // still check
+                                                                  // annotations
         }
-        
+
         String namespace = imageStream.getMetadata().getNamespace();
-        
-        // since we cannot create watches on ImageStream tags, we have to traverse
+
+        // since we cannot create watches on ImageStream tags, we have to
+        // traverse
         // the tags and look for the slave label
         for (TagReference tagRef : imageStream.getSpec().getTags()) {
             ImageStreamTag ist = null;
             try {
-                ist = getAuthenticatedOpenShiftClient().imageStreamTags().inNamespace(namespace).withName(imageStream.getMetadata().getName() + ":" + tagRef.getName()).get();
+                ist = getAuthenticatedOpenShiftClient()
+                        .imageStreamTags()
+                        .inNamespace(namespace)
+                        .withName(
+                                imageStream.getMetadata().getName() + ":"
+                                        + tagRef.getName()).get();
             } catch (Throwable t) {
                 logger.log(Level.FINE, "podTemplates", t);
             }
             // for IST, can't set labels, so check annotations
-            if (ist != null && hasSlaveLabelOrAnnotation(ist.getMetadata().getAnnotations())) {
+            if (ist != null
+                    && hasSlaveLabelOrAnnotation(ist.getMetadata()
+                            .getAnnotations())) {
                 // note, pod names cannot have colons
-                results.add(this.podTemplateFromData(ist.getMetadata().getName().replaceAll(":", "."),
-                        ist.getImage().getDockerImageReference(), 
-                        ist.getMetadata().getAnnotations()));
+                results.add(this.podTemplateFromData(ist.getMetadata()
+                        .getName().replaceAll(":", "."), ist.getImage()
+                        .getDockerImageReference(), ist.getMetadata()
+                        .getAnnotations()));
             }
         }
         return results;
     }
-    
-    private PodTemplate podTemplateFromData(String name, String image, Map<String,String> map) {
+
+    private PodTemplate podTemplateFromData(String name, String image,
+            Map<String, String> map) {
         String label = null;
-        if(map != null && map.containsKey("slave-label")) {
+        if (map != null && map.containsKey("slave-label")) {
             label = map.get("slave-label");
         } else {
             label = name;

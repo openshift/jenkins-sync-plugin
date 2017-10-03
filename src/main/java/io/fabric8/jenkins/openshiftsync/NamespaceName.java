@@ -22,70 +22,73 @@ import io.fabric8.kubernetes.api.model.ObjectMeta;
  * Represents a name in a namespace we can use as a key in a map
  */
 public class NamespaceName {
-  private final String namespace;
-  private final String name;
+    private final String namespace;
+    private final String name;
 
-  public NamespaceName(String namespace, String name) {
-    this.namespace = namespace;
-    this.name = name;
-  }
-
-  public static NamespaceName create(HasMetadata hasMetadata) {
-    notNull(hasMetadata, "resource");
-    ObjectMeta metadata = hasMetadata.getMetadata();
-    notNull(metadata, "metadata");
-    String name = metadata.getName();
-    String namespace = metadata.getNamespace();
-    notNull(name, "metadata.name");
-    notNull(namespace, "metadata.namespace");
-    return new NamespaceName(namespace, name);
-  }
-
-  @Override
-  public String toString() {
-    return "NamespaceName{" +
-      namespace + ":" + name +
-      '}';
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
-
-    NamespaceName that = (NamespaceName) o;
-
-    if (!namespace.equals(that.namespace)) return false;
-    return name.equals(that.name);
-
-  }
-
-  @Override
-  public int hashCode() {
-    int result = namespace.hashCode();
-    result = 31 * result + name.hashCode();
-    return result;
-  }
-
-  public String getName() {
-    return name;
-  }
-
-  public String getNamespace() {
-    return namespace;
-  }
-
-
-  /**
-   * Asserts whether the value is <b>not</b> <tt>null</tt>
-   *
-   * @param value  the value to test
-   * @param name   the key that resolved the value
-   * @throws IllegalArgumentException is thrown if assertion fails
-   */
-  public static void notNull(Object value, String name) {
-    if (value == null) {
-      throw new IllegalArgumentException(name + " must be specified");
+    public NamespaceName(String namespace, String name) {
+        this.namespace = namespace;
+        this.name = name;
     }
-  }
+
+    public static NamespaceName create(HasMetadata hasMetadata) {
+        notNull(hasMetadata, "resource");
+        ObjectMeta metadata = hasMetadata.getMetadata();
+        notNull(metadata, "metadata");
+        String name = metadata.getName();
+        String namespace = metadata.getNamespace();
+        notNull(name, "metadata.name");
+        notNull(namespace, "metadata.namespace");
+        return new NamespaceName(namespace, name);
+    }
+
+    @Override
+    public String toString() {
+        return "NamespaceName{" + namespace + ":" + name + '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+
+        NamespaceName that = (NamespaceName) o;
+
+        if (!namespace.equals(that.namespace))
+            return false;
+        return name.equals(that.name);
+
+    }
+
+    @Override
+    public int hashCode() {
+        int result = namespace.hashCode();
+        result = 31 * result + name.hashCode();
+        return result;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getNamespace() {
+        return namespace;
+    }
+
+    /**
+     * Asserts whether the value is <b>not</b> <tt>null</tt>
+     *
+     * @param value
+     *            the value to test
+     * @param name
+     *            the key that resolved the value
+     * @throws IllegalArgumentException
+     *             is thrown if assertion fails
+     */
+    public static void notNull(Object value, String name) {
+        if (value == null) {
+            throw new IllegalArgumentException(name + " must be specified");
+        }
+    }
 }

@@ -12,7 +12,8 @@ public class OpenShiftToken extends BaseStandardCredentials {
     private final Secret secret;
 
     @DataBoundConstructor
-    public OpenShiftToken(CredentialsScope scope, String id, String description, Secret secret) {
+    public OpenShiftToken(CredentialsScope scope, String id,
+            String description, Secret secret) {
         super(scope, id, description);
         this.secret = secret;
     }
@@ -26,7 +27,8 @@ public class OpenShiftToken extends BaseStandardCredentials {
     }
 
     @Extension
-    public static class DescriptorImpl extends BaseStandardCredentialsDescriptor {
+    public static class DescriptorImpl extends
+            BaseStandardCredentialsDescriptor {
         @Override
         public String getDisplayName() {
             return "OpenShift Token for OpenShift Sync Plugin";
@@ -34,4 +36,3 @@ public class OpenShiftToken extends BaseStandardCredentials {
     }
 
 }
-

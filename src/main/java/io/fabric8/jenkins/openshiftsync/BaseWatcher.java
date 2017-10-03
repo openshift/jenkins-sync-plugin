@@ -33,14 +33,14 @@ public abstract class BaseWatcher {
 
     protected ScheduledFuture relister;
     protected final String[] namespaces;
-    protected Map<String,Watch> watches;
+    protected Map<String, Watch> watches;
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public BaseWatcher(String[] namespaces) {
         this.namespaces = namespaces;
-        watches = new HashMap<String,Watch>();
+        watches = new HashMap<String, Watch>();
     }
-    
+
     public abstract Runnable getStartTimerTask();
 
     public synchronized void start() {
@@ -49,23 +49,25 @@ public abstract class BaseWatcher {
         // io.fabric8.jenkins.openshiftsync.GlobalPluginConfiguration to support
         // a circular dependency, but it is not an interface.
         Runnable task = getStartTimerTask();
-        relister = Timer.get().scheduleAtFixedRate(task, 
-                100,  // still do the first run 100 milliseconds in 
-                5 * 60 * 1000, // 1000 ms * 60 seconds * 5 minutes between subsequent runs
+        relister = Timer.get().scheduleAtFixedRate(task, 100, // still do the
+                                                              // first run 100
+                                                              // milliseconds in
+                5 * 60 * 1000, // 1000 ms * 60 seconds * 5 minutes between
+                               // subsequent runs
                 TimeUnit.MILLISECONDS);
     }
-    
+
     public synchronized void stop() {
         if (relister != null && !relister.isDone()) {
-          relister.cancel(true);
-          relister = null;
+            relister.cancel(true);
+            relister = null;
         }
 
-        for(Map.Entry<String,Watch> entry:watches.entrySet()) {
-          entry.getValue().close();
-          watches.remove(entry.getKey());
+        for (Map.Entry<String, Watch> entry : watches.entrySet()) {
+            entry.getValue().close();
+            watches.remove(entry.getKey());
         }
-      }
+    }
 
     public synchronized void onClose(KubernetesClientException e) {
         if (e != null) {
@@ -77,10 +79,11 @@ public abstract class BaseWatcher {
             }
         }
     }
-    
+
     protected boolean hasSlaveLabelOrAnnotation(Map<String, String> map) {
         if (map != null)
-            return map.containsKey("role") && map.get("role").equals("jenkins-slave");
+            return map.containsKey("role")
+                    && map.get("role").equals("jenkins-slave");
         return false;
     }
 

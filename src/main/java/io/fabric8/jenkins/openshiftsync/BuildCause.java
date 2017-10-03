@@ -23,124 +23,128 @@ import org.apache.commons.lang.StringUtils;
 
 public class BuildCause extends Cause {
 
-  private String uid;
+    private String uid;
 
-  private String namespace;
+    private String namespace;
 
-  private String name;
+    private String name;
 
-  private String gitUri;
+    private String gitUri;
 
-  private String commit;
+    private String commit;
 
-  private String buildConfigUid;
-  
-  private int numStages = -1;
-  
-  private int numFlowNodes = -1;
-  
-  private long lastUpdateToOpenshift = -1;
+    private String buildConfigUid;
 
-  public BuildCause(String uid, String namespace, String name, String gitUri, String commit, String buildConfigUid) {
-    this.uid = uid;
-    this.namespace = namespace;
-    this.name = name;
-    this.gitUri = gitUri;
-    this.commit = commit;
-    this.buildConfigUid = buildConfigUid;
-  }
-  
-  public BuildCause(String uid, String namespace, String name, String gitUri, String commit, String buildConfigUid, int numStages, int numFlowNodes, long lastUpdateToOpenshift) {
-      this( uid,  namespace,  name,  gitUri,  commit,  buildConfigUid);
-      this.numStages = numStages;
-      this.numFlowNodes = numFlowNodes;
-      this.lastUpdateToOpenshift = lastUpdateToOpenshift;
-  }
+    private int numStages = -1;
 
-  public BuildCause(Build build, String buildConfigUid) {
-    this.buildConfigUid = buildConfigUid;
-    if (build == null || build.getMetadata() == null) {
-      return;
-    }
-    ObjectMeta meta = build.getMetadata();
-    uid = meta.getUid();
-    namespace = meta.getNamespace();
-    name = meta.getName();
+    private int numFlowNodes = -1;
 
-    if (build.getSpec() != null) {
-      if (build.getSpec().getSource() != null && build.getSpec().getSource().getGit() != null) {
-        GitBuildSource git = build.getSpec().getSource().getGit();
-        gitUri = git.getUri();
-      }
+    private long lastUpdateToOpenshift = -1;
 
-      if (build.getSpec().getRevision() != null && build.getSpec().getRevision().getGit() != null) {
-        commit = build.getSpec().getRevision().getGit().getCommit();
-      }
-    }
-  }
-
-  @Override
-  public String getShortDescription() {
-    StringBuilder sb = new StringBuilder("OpenShift Build ")
-      .append(namespace).append("/").append(name);
-
-    if (StringUtils.isNotBlank(gitUri)) {
-      sb.append(" from ").append(gitUri);
-      if (StringUtils.isNotBlank(commit)) {
-        sb.append(", commit ").append(commit);
-      }
+    public BuildCause(String uid, String namespace, String name, String gitUri,
+            String commit, String buildConfigUid) {
+        this.uid = uid;
+        this.namespace = namespace;
+        this.name = name;
+        this.gitUri = gitUri;
+        this.commit = commit;
+        this.buildConfigUid = buildConfigUid;
     }
 
-    return sb.toString();
-  }
+    public BuildCause(String uid, String namespace, String name, String gitUri,
+            String commit, String buildConfigUid, int numStages,
+            int numFlowNodes, long lastUpdateToOpenshift) {
+        this(uid, namespace, name, gitUri, commit, buildConfigUid);
+        this.numStages = numStages;
+        this.numFlowNodes = numFlowNodes;
+        this.lastUpdateToOpenshift = lastUpdateToOpenshift;
+    }
 
-  public String getUid() {
-    return uid;
-  }
+    public BuildCause(Build build, String buildConfigUid) {
+        this.buildConfigUid = buildConfigUid;
+        if (build == null || build.getMetadata() == null) {
+            return;
+        }
+        ObjectMeta meta = build.getMetadata();
+        uid = meta.getUid();
+        namespace = meta.getNamespace();
+        name = meta.getName();
 
-  public String getNamespace() {
-    return namespace;
-  }
+        if (build.getSpec() != null) {
+            if (build.getSpec().getSource() != null
+                    && build.getSpec().getSource().getGit() != null) {
+                GitBuildSource git = build.getSpec().getSource().getGit();
+                gitUri = git.getUri();
+            }
 
-  public String getName() {
-    return name;
-  }
+            if (build.getSpec().getRevision() != null
+                    && build.getSpec().getRevision().getGit() != null) {
+                commit = build.getSpec().getRevision().getGit().getCommit();
+            }
+        }
+    }
 
-  public String getGitUri() {
-    return gitUri;
-  }
+    @Override
+    public String getShortDescription() {
+        StringBuilder sb = new StringBuilder("OpenShift Build ")
+                .append(namespace).append("/").append(name);
 
-  public String getCommit() {
-    return commit;
-  }
+        if (StringUtils.isNotBlank(gitUri)) {
+            sb.append(" from ").append(gitUri);
+            if (StringUtils.isNotBlank(commit)) {
+                sb.append(", commit ").append(commit);
+            }
+        }
 
-  public String getBuildConfigUid() {
-    return buildConfigUid;
-  }
+        return sb.toString();
+    }
 
-public int getNumStages() {
-    return numStages;
-}
+    public String getUid() {
+        return uid;
+    }
 
-public void setNumStages(int numStages) {
-    this.numStages = numStages;
-}
+    public String getNamespace() {
+        return namespace;
+    }
 
-public int getNumFlowNodes() {
-    return numFlowNodes;
-}
+    public String getName() {
+        return name;
+    }
 
-public void setNumFlowNodes(int numFlowNodes) {
-    this.numFlowNodes = numFlowNodes;
-}
+    public String getGitUri() {
+        return gitUri;
+    }
 
-public long getLastUpdateToOpenshift() {
-    return lastUpdateToOpenshift;
-}
+    public String getCommit() {
+        return commit;
+    }
 
-public void setLastUpdateToOpenshift(long lastUpdateToOpenshift) {
-    this.lastUpdateToOpenshift = lastUpdateToOpenshift;
-}
-  
+    public String getBuildConfigUid() {
+        return buildConfigUid;
+    }
+
+    public int getNumStages() {
+        return numStages;
+    }
+
+    public void setNumStages(int numStages) {
+        this.numStages = numStages;
+    }
+
+    public int getNumFlowNodes() {
+        return numFlowNodes;
+    }
+
+    public void setNumFlowNodes(int numFlowNodes) {
+        this.numFlowNodes = numFlowNodes;
+    }
+
+    public long getLastUpdateToOpenshift() {
+        return lastUpdateToOpenshift;
+    }
+
+    public void setLastUpdateToOpenshift(long lastUpdateToOpenshift) {
+        this.lastUpdateToOpenshift = lastUpdateToOpenshift;
+    }
 
 }
