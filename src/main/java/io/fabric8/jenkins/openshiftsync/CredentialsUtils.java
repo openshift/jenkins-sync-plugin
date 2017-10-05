@@ -4,11 +4,13 @@ import com.cloudbees.jenkins.plugins.sshcredentials.impl.BasicSSHUserPrivateKey;
 import com.cloudbees.plugins.credentials.*;
 import com.cloudbees.plugins.credentials.domains.Domain;
 import com.cloudbees.plugins.credentials.domains.DomainRequirement;
+import com.cloudbees.plugins.credentials.impl.CertificateCredentialsImpl;
 import com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl;
 import hudson.remoting.Base64;
 import hudson.security.ACL;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.openshift.api.model.BuildConfig;
+import io.fabric8.openshift.api.model.SecretBuildSource;
 import jenkins.model.Jenkins;
 import org.acegisecurity.context.SecurityContext;
 import org.acegisecurity.context.SecurityContextHolder;
@@ -16,7 +18,9 @@ import org.apache.commons.lang.StringUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -69,6 +73,43 @@ public class CredentialsUtils {
             }
         }
         return id;
+    }
+
+    public static synchronized List<String> updateSecretData(BuildConfig buildConfig) throws IOException {
+      List<String> ids = new ArrayList<>();
+      if (buildConfig.getSpec() != null
+        && buildConfig.getSpec().getSource() != null
+        && buildConfig.getSpec().getSource().getSecrets() != null
+        && buildConfig.getSpec().getSource().getSecrets().size() > 0) {
+
+        for(int i=0; i < buildConfig.getSpec().getSource().getSecrets().size(); i++) {
+          SecretBuildSource secret = buildConfig.getSpec().getSource().getSecrets().get(i);
+          Secret dataSecret = getAuthenticatedOpenShiftClient()
+            .secrets()
+            .inNamespace(buildConfig.getMetadata().getNamespace())
+            .withName(secret.getSecret().getName()).get();
+
+          if (dataSecret != null) {
+            Credentials creds = secretToCredentials(dataSecret);
+            String id = secretName(buildConfig.getMetadata().getNamespace(), secret.getSecret().getName());
+            ids.add(id);
+
+            Credentials existingCreds = lookupCredentials(id);
+            final SecurityContext previousContext = ACL.impersonate(ACL.SYSTEM);
+            try {
+              CredentialsStore s = CredentialsProvider.lookupStores(Jenkins.getActiveInstance()).iterator().next();
+              if (existingCreds != null) {
+                s.updateCredentials(Domain.global(), existingCreds, creds);
+              } else {
+                s.addCredentials(Domain.global(), creds);
+              }
+            } finally {
+              SecurityContextHolder.setContext(previousContext);
+            }
+          }
+        }
+      }
+      return ids;
     }
 
     // getCurrentToken returns the ServiceAccount token currently selected by
@@ -126,12 +167,21 @@ public class CredentialsUtils {
                         data.get(OPENSHIFT_SECRETS_DATA_USERNAME), sshKeyData);
             }
 
+            String certData = data.get("p12");
+            String passData = new String(Base64.decode(data.get("password")));
+            if(isNotBlank(certData) && isNotBlank(passData)){
+              return newCertificateCredentials(secretName, new String(certData), new String(passData));
+            }
+
             logger.log(
                     Level.WARNING,
-                    "Opaque secret either requires {0} and {1} fields for basic auth or {2} field for SSH key",
+                    "Opaque secret either requires {0} and {1} fields for basic auth, or {2} field for SSH key, or {3} and {4} fields for a keystore",
                     new Object[] { OPENSHIFT_SECRETS_DATA_USERNAME,
                             OPENSHIFT_SECRETS_DATA_PASSWORD,
-                            OPENSHIFT_SECRETS_DATA_SSHPRIVATEKEY });
+                            OPENSHIFT_SECRETS_DATA_SSHPRIVATEKEY,
+                            OPENSHIFT_SECRETS_DATA_P12_DATA,
+                            OPENSHIFT_SECRETS_DATA_PASSWORD
+                    });
             return null;
         case OPENSHIFT_SECRETS_TYPE_BASICAUTH:
             return newUsernamePasswordCredentials(secretName,
@@ -143,7 +193,7 @@ public class CredentialsUtils {
                     data.get(OPENSHIFT_SECRETS_DATA_SSHPRIVATEKEY));
         default:
             logger.log(Level.WARNING,
-                    "Unknown secret type: " + secret.getType());
+                    String.format("Unknown secret type: %s", secret.getType()));
             return null;
         }
     }
@@ -163,6 +213,12 @@ public class CredentialsUtils {
                 secretName, secretName, new String(Base64.decode(usernameData),
                         StandardCharsets.UTF_8), new String(
                         Base64.decode(passwordData), StandardCharsets.UTF_8));
+    }
+
+    private static Credentials newCertificateCredentials(
+            String id, String p12, String password) {
+      CertificateCredentialsImpl.UploadedKeyStoreSource ks = new CertificateCredentialsImpl.UploadedKeyStoreSource(p12);
+      return new CertificateCredentialsImpl(CredentialsScope.GLOBAL, id, "p12 keystore", password, ks);
     }
 
     /**

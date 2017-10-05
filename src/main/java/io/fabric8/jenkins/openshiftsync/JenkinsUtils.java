@@ -84,6 +84,7 @@ import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_B
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_BUILD_STATUS_FIELD;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_LABELS_BUILD_CONFIG_NAME;
 import static io.fabric8.jenkins.openshiftsync.CredentialsUtils.updateSourceCredentials;
+import static io.fabric8.jenkins.openshiftsync.CredentialsUtils.updateSecretData;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.*;
 import static java.util.Collections.sort;
 import static java.util.logging.Level.SEVERE;
@@ -326,6 +327,7 @@ public class JenkinsUtils {
         // sync on intern of name should guarantee sync on same actual obj
         synchronized (buildConfig.getMetadata().getUid().intern()) {
             updateSourceCredentials(buildConfig);
+            updateSecretData(buildConfig);
 
             // We need to ensure that we do not remove
             // existing Causes from a Run since other

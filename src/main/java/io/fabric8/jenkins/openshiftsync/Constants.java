@@ -31,6 +31,7 @@ public class Constants {
 
     public static final String OPENSHIFT_SECRETS_DATA_USERNAME = "username";
     public static final String OPENSHIFT_SECRETS_DATA_PASSWORD = "password";
+    public static final String OPENSHIFT_SECRETS_DATA_P12_DATA = "p12";
     public static final String OPENSHIFT_SECRETS_DATA_SSHPRIVATEKEY = "ssh-privatekey";
     public static final String OPENSHIFT_SECRETS_TYPE_SSH = "kubernetes.io/ssh-auth";
     public static final String OPENSHIFT_SECRETS_TYPE_BASICAUTH = "kubernetes.io/basic-auth";
