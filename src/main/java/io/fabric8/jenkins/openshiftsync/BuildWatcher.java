@@ -151,6 +151,8 @@ public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
     }
 
     public synchronized static void onInitialBuilds(BuildList buildList) {
+        if (buildList == null)
+            return;
         List<Build> items = buildList.getItems();
         if (items != null) {
 

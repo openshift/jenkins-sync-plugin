@@ -204,6 +204,8 @@ public class ImageStreamWatcher extends BaseWatcher implements
     }
 
     private synchronized void onInitialImageStream(ImageStreamList imageStreams) {
+        if (imageStreams == null)
+            return;
         List<ImageStream> items = imageStreams.getItems();
         if (items != null) {
             for (ImageStream imageStream : items) {

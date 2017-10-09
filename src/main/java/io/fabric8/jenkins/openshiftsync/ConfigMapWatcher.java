@@ -177,6 +177,8 @@ public class ConfigMapWatcher extends BaseWatcher implements Watcher<ConfigMap> 
     }
 
     private synchronized void onInitialConfigMaps(ConfigMapList configMaps) {
+        if (configMaps == null)
+            return;
         if (trackedConfigMaps == null) {
             trackedConfigMaps = new ConcurrentHashMap<>(configMaps.getItems()
                     .size());
