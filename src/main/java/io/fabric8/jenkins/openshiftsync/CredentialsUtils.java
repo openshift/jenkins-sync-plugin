@@ -111,16 +111,6 @@ public class CredentialsUtils {
 	}
 
 	private static String secretName(String namespace, String name) {
-		String watchNamespace = null;
-		GlobalPluginConfiguration config = GlobalPluginConfiguration.get();
-		if (config != null) {
-			watchNamespace = config.getNamespace();
-		}
-		// if we only watch a single namespace and this secret is in that namespace then
-		// lets avoid the namespace prefix in the name
-		if (watchNamespace != null && namespace.equals(watchNamespace)) {
-			return name;
-		}
 		return namespace + "-" + name;
 	}
 

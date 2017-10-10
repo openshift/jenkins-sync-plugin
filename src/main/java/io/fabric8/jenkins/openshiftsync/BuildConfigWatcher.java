@@ -51,16 +51,7 @@ import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMapper.mapBuildCo
 import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL;
 import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL_LATEST_ONLY;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.maybeScheduleNext;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAnnotation;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getFullNameParent;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getName;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getNamespace;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isPipelineStrategyBuildConfig;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.jenkinsJobFullName;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.jenkinsJobName;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.jenkinsJobDisplayName;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.parseResourceVersion;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.*;
 import static java.util.logging.Level.SEVERE;
 
 /**
@@ -118,20 +109,20 @@ public class BuildConfigWatcher extends BaseWatcher implements Watcher<BuildConf
 
 	}
 
-    private synchronized void onInitialBuildConfigs(BuildConfigList buildConfigs) {
-        if (buildConfigs == null)
-            return;
-        List<BuildConfig> items = buildConfigs.getItems();
-        if (items != null) {
-            for (BuildConfig buildConfig : items) {
-                try {
-                    upsertJob(buildConfig);
-                } catch (Exception e) {
-                    logger.log(SEVERE, "Failed to update job", e);
-                }
-            }
-        }
-    }
+	private synchronized void onInitialBuildConfigs(BuildConfigList buildConfigs) {
+		if (buildConfigs == null)
+			return;
+		List<BuildConfig> items = buildConfigs.getItems();
+		if (items != null) {
+			for (BuildConfig buildConfig : items) {
+				try {
+					upsertJob(buildConfig);
+				} catch (Exception e) {
+					logger.log(SEVERE, "Failed to update job", e);
+				}
+			}
+		}
+	}
 
 	@SuppressFBWarnings("SF_SWITCH_NO_DEFAULT")
 	@Override
@@ -188,7 +179,7 @@ public class BuildConfigWatcher extends BaseWatcher implements Watcher<BuildConf
 						boolean newJob = job == null;
 						if (newJob) {
 							String disableOn = getAnnotation(buildConfig, DISABLE_SYNC_CREATE);
-							if (disableOn != null && disableOn.equalsIgnoreCase("jenkins")) {
+							if (disableOn != null && disableOn.length() > 0) {
 								logger.fine("Not creating missing jenkins job " + jobFullName + " due to annotation: "
 										+ DISABLE_SYNC_CREATE);
 								return null;
