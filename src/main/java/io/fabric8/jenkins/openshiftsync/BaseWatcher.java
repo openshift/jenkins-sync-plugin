@@ -82,6 +82,11 @@ public abstract class BaseWatcher {
                 start();
             }
         }
+        // clearing the watches here will signal the extending classes
+        // to attempt to re-establish the watch the next time they attempt
+        // to list; should shield from rapid/repeated close/reopen cycles
+        // doing it in this fashion
+        watches.clear();
     }
 
     protected boolean hasSlaveLabelOrAnnotation(Map<String, String> map) {
