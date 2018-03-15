@@ -70,6 +70,10 @@ public abstract class BaseWatcher {
     }
 
     public synchronized void onClose(KubernetesClientException e) {
+        //scans of fabric client confirm this call be called with null
+        //we do not want to totally ignore this, as the closing of the 
+        //watch can effect responsiveness
+        LOGGER.info("Watch for type " + this.getClass().getName() + " closed for one of the following namespaces: " + watches.keySet().toString());
         if (e != null) {
             LOGGER.warning(e.toString());
 
