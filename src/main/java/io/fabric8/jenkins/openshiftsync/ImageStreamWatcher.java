@@ -17,13 +17,12 @@ package io.fabric8.jenkins.openshiftsync;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.triggers.SafeTimerTask;
-import io.fabric8.kubernetes.client.Watcher;
+import io.fabric8.kubernetes.client.Watcher.Action;
 import io.fabric8.openshift.api.model.ImageStream;
 import io.fabric8.openshift.api.model.ImageStreamList;
 import io.fabric8.openshift.api.model.ImageStreamTag;
 import io.fabric8.openshift.api.model.TagReference;
 
-import org.csanchez.jenkins.plugins.kubernetes.PodVolumes;
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 
 import java.util.ArrayList;
@@ -37,8 +36,7 @@ import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOp
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
-public class ImageStreamWatcher extends BaseWatcher implements
-        Watcher<ImageStream> {
+public class ImageStreamWatcher extends BaseWatcher {
     private final Logger logger = Logger.getLogger(getClass().getName());
     private final List<String> predefinedOpenShiftSlaves;
 
@@ -78,19 +76,22 @@ public class ImageStreamWatcher extends BaseWatcher implements
                             resourceVersion = imageStreams.getMetadata()
                                     .getResourceVersion();
                         }
-                        if (watches.get(namespace) == null) {
-                            logger.info("creating ImageStream watch for namespace "
-                                    + namespace
-                                    + " and resource version "
-                                    + resourceVersion);
-                            watches.put(
-                                    namespace,
-                                    getAuthenticatedOpenShiftClient()
-                                            .imageStreams()
-                                            .inNamespace(namespace)
-                                            .withResourceVersion(
-                                                    resourceVersion)
-                                            .watch(ImageStreamWatcher.this));
+                        synchronized(ImageStreamWatcher.this) {
+                            if (watches.get(namespace) == null) {
+                                logger.info("creating ImageStream watch for namespace "
+                                        + namespace
+                                        + " and resource version "
+                                        + resourceVersion);
+                                watches.put(
+                                        namespace,
+                                        getAuthenticatedOpenShiftClient()
+                                                .imageStreams()
+                                                .inNamespace(namespace)
+                                                .withResourceVersion(
+                                                        resourceVersion)
+                                                        .watch(new WatcherCallback<ImageStream>(ImageStreamWatcher.this,
+                                                                namespace)));
+                            }
                         }
                     } catch (Exception e) {
                         logger.log(SEVERE, "Failed to load ImageStreams: " + e,
@@ -107,7 +108,6 @@ public class ImageStreamWatcher extends BaseWatcher implements
         super.start();
     }
 
-    @Override
     public void eventReceived(Action action, ImageStream imageStream) {
         try {
             List<PodTemplate> slavesFromIS = podTemplates(imageStream);
@@ -181,10 +181,21 @@ public class ImageStreamWatcher extends BaseWatcher implements
                 }
                 break;
 
+            case ERROR:
+                logger.warning("watch for imageStream " + imageStream.getMetadata().getName() + " received error event ");
+                break;
+            default:
+                logger.warning("watch for imageStream " + imageStream.getMetadata().getName() + " received unknown event " + action);
+                break;
             }
         } catch (Exception e) {
             logger.log(WARNING, "Caught: " + e, e);
         }
+    }
+    @Override
+    public <T> void eventReceived(io.fabric8.kubernetes.client.Watcher.Action action, T resource) {
+        ImageStream imageStream = (ImageStream)resource;
+        eventReceived(action, imageStream);
     }
 
     private synchronized void onInitialImageStream(ImageStreamList imageStreams) {

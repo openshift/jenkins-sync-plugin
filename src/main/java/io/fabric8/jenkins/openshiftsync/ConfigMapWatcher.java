@@ -22,11 +22,10 @@ import hudson.triggers.SafeTimerTask;
 import hudson.util.XStream2;
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.ConfigMapList;
-import io.fabric8.kubernetes.client.Watcher;
+import io.fabric8.kubernetes.client.Watcher.Action;
 import io.fabric8.openshift.api.model.ImageStreamTag;
 
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
-import org.csanchez.jenkins.plugins.kubernetes.PodVolumes;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -41,7 +40,7 @@ import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOp
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
-public class ConfigMapWatcher extends BaseWatcher implements Watcher<ConfigMap> {
+public class ConfigMapWatcher extends BaseWatcher {
     private final Logger logger = Logger.getLogger(getClass().getName());
     private Map<String, List<PodTemplate>> trackedConfigMaps;
 
@@ -78,19 +77,21 @@ public class ConfigMapWatcher extends BaseWatcher implements Watcher<ConfigMap> 
                             resourceVersion = configMaps.getMetadata()
                                     .getResourceVersion();
                         }
-                        if (watches.get(namespace) == null) {
-                            logger.info("creating ConfigMap watch for namespace "
-                                    + namespace
-                                    + " and resource version "
-                                    + resourceVersion);
-                            watches.put(
-                                    namespace,
-                                    getAuthenticatedOpenShiftClient()
-                                            .configMaps()
-                                            .inNamespace(namespace)
-                                            .withResourceVersion(
-                                                    resourceVersion)
-                                            .watch(ConfigMapWatcher.this));
+                        synchronized(ConfigMapWatcher.this) {
+                            if (watches.get(namespace) == null) {
+                                logger.info("creating ConfigMap watch for namespace "
+                                        + namespace
+                                        + " and resource version "
+                                        + resourceVersion);
+                                watches.put(
+                                        namespace,
+                                        getAuthenticatedOpenShiftClient()
+                                        .configMaps()
+                                        .inNamespace(namespace)
+                                        .withResourceVersion(
+                                                resourceVersion)
+                                                .watch(new WatcherCallback<ConfigMap>(ConfigMapWatcher.this,namespace)));
+                            }
                         }
                     } catch (Exception e) {
                         logger.log(SEVERE, "Failed to load ConfigMaps: " + e, e);
@@ -106,7 +107,6 @@ public class ConfigMapWatcher extends BaseWatcher implements Watcher<ConfigMap> 
         logger.info("Now handling startup config maps!!");
     }
 
-    @Override
     public void eventReceived(Action action, ConfigMap configMap) {
         try {
             switch (action) {
@@ -175,14 +175,22 @@ public class ConfigMapWatcher extends BaseWatcher implements Watcher<ConfigMap> 
                     trackedConfigMaps.remove(configMap.getMetadata().getUid());
                 }
                 break;
-            // pedantic mvn:findbugs complaint
+            case ERROR:
+                logger.warning("watch for configMap " + configMap.getMetadata().getName() + " received error event ");
+                break;
             default:
+                logger.warning("watch for configMap " + configMap.getMetadata().getName() + " received unknown event " + action);
                 break;
 
             }
         } catch (Exception e) {
             logger.log(WARNING, "Caught: " + e, e);
         }
+    }
+    @Override
+    public <T> void eventReceived(io.fabric8.kubernetes.client.Watcher.Action action, T resource) {
+        ConfigMap cfgmap = (ConfigMap)resource;
+        eventReceived(action, cfgmap);
     }
 
     private synchronized void onInitialConfigMaps(ConfigMapList configMaps) {

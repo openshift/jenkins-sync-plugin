@@ -19,7 +19,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.security.ACL;
 import hudson.triggers.SafeTimerTask;
 import io.fabric8.kubernetes.api.model.OwnerReference;
-import io.fabric8.kubernetes.client.Watcher;
+import io.fabric8.kubernetes.client.Watcher.Action;
 import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildConfig;
 import io.fabric8.openshift.api.model.BuildList;
@@ -47,7 +47,6 @@ import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBui
 import static io.fabric8.jenkins.openshiftsync.BuildPhases.CANCELLED;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_BUILD_NUMBER;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_BUILD_STATUS_FIELD;
-
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.cancelBuild;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.deleteRun;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.getJobFromBuild;
@@ -60,7 +59,7 @@ import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isNew;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.updateOpenShiftBuildPhase;
 import static java.util.logging.Level.WARNING;
 
-public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
+public class BuildWatcher extends BaseWatcher {
     private static final Logger logger = Logger.getLogger(BuildWatcher.class
             .getName());
 
@@ -118,19 +117,23 @@ public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
                             resourceVersion = newBuilds.getMetadata()
                                     .getResourceVersion();
                         }
-                        if (watches.get(namespace) == null) {
-                            logger.info("creating Build watch for namespace "
-                                    + namespace
-                                    + " and resource version "
-                                    + resourceVersion);
-                            watches.put(
-                                    namespace,
-                                    getAuthenticatedOpenShiftClient()
-                                            .builds()
-                                            .inNamespace(namespace)
-                                            .withResourceVersion(
-                                                    resourceVersion)
-                                            .watch(BuildWatcher.this));
+                        synchronized(BuildWatcher.this) {
+                            if (watches.get(namespace) == null) {
+                                logger.info("creating Build watch for namespace "
+                                        + namespace
+                                        + " and resource version "
+                                        + resourceVersion);
+                                watches.put(
+                                        namespace,
+                                        getAuthenticatedOpenShiftClient()
+                                                .builds()
+                                                .inNamespace(namespace)
+                                                .withResourceVersion(
+                                                        resourceVersion)
+                                                .watch(new WatcherCallback<Build>(
+                                                        BuildWatcher.this,
+                                                        namespace)));
+                            }
                         }
                     } catch (Exception e) {
                         logger.log(Level.SEVERE,
@@ -148,7 +151,6 @@ public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
     }
 
     @SuppressFBWarnings("SF_SWITCH_NO_DEFAULT")
-    @Override
     public synchronized void eventReceived(Action action, Build build) {
         if (!OpenShiftUtils.isPipelineStrategyBuild(build))
             return;
@@ -163,10 +165,21 @@ public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
             case DELETED:
                 deleteEventToJenkinsJobRun(build);
                 break;
+            case ERROR:
+                logger.warning("watch for build " + build.getMetadata().getName() + " received error event ");
+                break;
+            default:
+                logger.warning("watch for build " + build.getMetadata().getName() + " received unknown event " + action);
+                break;
             }
         } catch (Exception e) {
             logger.log(WARNING, "Caught: " + e, e);
         }
+    }
+    @Override
+    public <T> void eventReceived(io.fabric8.kubernetes.client.Watcher.Action action, T resource) {
+        Build build = (Build)resource;
+        eventReceived(action, build);
     }
 
     public synchronized static void onInitialBuilds(BuildList buildList) {
@@ -460,4 +473,5 @@ public class BuildWatcher extends BaseWatcher implements Watcher<Build> {
       }
     }
   }
+
 }

@@ -25,7 +25,7 @@ import hudson.model.ParameterDefinition;
 import hudson.security.ACL;
 import hudson.triggers.SafeTimerTask;
 import hudson.util.XStream2;
-import io.fabric8.kubernetes.client.Watcher;
+import io.fabric8.kubernetes.client.Watcher.Action;
 import io.fabric8.openshift.api.model.BuildConfig;
 import io.fabric8.openshift.api.model.BuildConfigList;
 import io.fabric8.openshift.api.model.BuildList;
@@ -68,7 +68,7 @@ import static java.util.logging.Level.SEVERE;
  * ensure there is a suitable Jenkins Job object defined with the correct
  * configuration
  */
-public class BuildConfigWatcher extends BaseWatcher implements Watcher<BuildConfig> {
+public class BuildConfigWatcher extends BaseWatcher {
     private final Logger logger = Logger.getLogger(getClass().getName());
 
     // for coordinating between ItemListener.onUpdate and onDeleted both
@@ -120,9 +120,11 @@ public class BuildConfigWatcher extends BaseWatcher implements Watcher<BuildConf
                         } else {
                             resourceVersion = buildConfigs.getMetadata().getResourceVersion();
                         }
-                        if (watches.get(namespace) == null) {
-                            logger.info("creating BuildConfig watch for namespace " + namespace + " and resource version " + resourceVersion);
-                            watches.put(namespace, getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace).withResourceVersion(resourceVersion).watch(BuildConfigWatcher.this));
+                        synchronized(BuildConfigWatcher.this) {
+                            if (watches.get(namespace) == null) {
+                                logger.info("creating BuildConfig watch for namespace " + namespace + " and resource version " + resourceVersion);
+                                watches.put(namespace, getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace).withResourceVersion(resourceVersion).watch(new WatcherCallback<BuildConfig>(BuildConfigWatcher.this,namespace)));
+                            }
                         }
                     } catch (Exception e) {
                         logger.log(SEVERE, "Failed to load BuildConfigs: " + e, e);
@@ -159,8 +161,7 @@ public class BuildConfigWatcher extends BaseWatcher implements Watcher<BuildConf
     }
 
     @SuppressFBWarnings("SF_SWITCH_NO_DEFAULT")
-    @Override
-    public synchronized void eventReceived(Watcher.Action action, BuildConfig buildConfig) {
+    public synchronized void eventReceived(Action action, BuildConfig buildConfig) {
         try {
             switch (action) {
             case ADDED:
@@ -171,6 +172,12 @@ public class BuildConfigWatcher extends BaseWatcher implements Watcher<BuildConf
                 break;
             case MODIFIED:
                 modifyEventToJenkinsJob(buildConfig);
+                break;
+            case ERROR:
+                logger.warning("watch for buildconfig " + buildConfig.getMetadata().getName() + " received error event ");
+                break;
+            default:
+                logger.warning("watch for buildconfig " + buildConfig.getMetadata().getName() + " received unknown event " + action);
                 break;
             }
             // we employ impersonation here to insure we have "full access";
@@ -194,7 +201,7 @@ public class BuildConfigWatcher extends BaseWatcher implements Watcher<BuildConf
                     // at a quicker interval than the default 5 minute
                     // general build
                     // relist function
-                    if (action == Watcher.Action.ADDED) {
+                    if (action == Action.ADDED) {
                         Runnable backupBuildQuery = new SafeTimerTask() {
                             @Override
                             public void doRun() {
@@ -218,6 +225,11 @@ public class BuildConfigWatcher extends BaseWatcher implements Watcher<BuildConf
         } catch (Exception e) {
             logger.log(Level.WARNING, "Caught: " + e, e);
         }
+    }
+    @Override
+    public <T> void eventReceived(io.fabric8.kubernetes.client.Watcher.Action action, T resource) {
+        BuildConfig bc = (BuildConfig)resource;
+        eventReceived(action, bc);
     }
 
     private void updateJob(WorkflowJob job, InputStream jobStream, String jobName, BuildConfig buildConfig, String existingBuildRunPolicy, BuildConfigProjectProperty buildConfigProjectProperty) throws IOException {

@@ -20,7 +20,7 @@ import hudson.triggers.SafeTimerTask;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretList;
-import io.fabric8.kubernetes.client.Watcher;
+import io.fabric8.kubernetes.client.Watcher.Action;
 
 import java.util.List;
 import java.util.Map;
@@ -35,7 +35,7 @@ import static java.util.logging.Level.SEVERE;
  * Watches {@link Secret} objects in Kubernetes and syncs then to Credentials in
  * Jenkins
  */
-public class SecretWatcher extends BaseWatcher implements Watcher<Secret> {
+public class SecretWatcher extends BaseWatcher {
     private Map<String, String> trackedSecrets;
 
     private final Logger logger = Logger.getLogger(getClass().getName());
@@ -75,20 +75,23 @@ public class SecretWatcher extends BaseWatcher implements Watcher<Secret> {
                             resourceVersion = secrets.getMetadata()
                                     .getResourceVersion();
                         }
-                        if (watches.get(namespace) == null) {
-                            logger.info("creating Secret watch for namespace "
-                                    + namespace + " and resource version"
-                                    + resourceVersion);
-                            watches.put(
-                                    namespace,
-                                    getAuthenticatedOpenShiftClient()
-                                            .secrets()
-                                            .inNamespace(namespace)
-                                            .withLabel(Constants.OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC,
-                                                    Constants.VALUE_SECRET_SYNC)
-                                            .withResourceVersion(
-                                                    resourceVersion)
-                                            .watch(SecretWatcher.this));
+                        synchronized(SecretWatcher.this) {
+                            if (watches.get(namespace) == null) {
+                                logger.info("creating Secret watch for namespace "
+                                        + namespace + " and resource version"
+                                        + resourceVersion);
+                                watches.put(
+                                        namespace,
+                                        getAuthenticatedOpenShiftClient()
+                                        .secrets()
+                                        .inNamespace(namespace)
+                                        .withLabel(Constants.OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC,
+                                                Constants.VALUE_SECRET_SYNC)
+                                                .withResourceVersion(
+                                                        resourceVersion)
+                                                        .watch(new WatcherCallback<Secret>(SecretWatcher.this,
+                                                                namespace)));
+                            }
                         }
                     } catch (Exception e) {
                         logger.log(SEVERE, "Failed to load Secrets: " + e, e);
@@ -127,7 +130,6 @@ public class SecretWatcher extends BaseWatcher implements Watcher<Secret> {
     }
 
     @SuppressFBWarnings("SF_SWITCH_NO_DEFAULT")
-    @Override
     public synchronized void eventReceived(Action action, Secret secret) {
         try {
             switch (action) {
@@ -140,14 +142,21 @@ public class SecretWatcher extends BaseWatcher implements Watcher<Secret> {
             case MODIFIED:
                 modifyCredential(secret);
                 break;
+            case ERROR:
+                logger.warning("watch for secret " + secret.getMetadata().getName() + " received error event ");
+                break;
             default:
-                if (logger.isLoggable(Level.FINE))
-                    logger.fine("got event " + action + " for secret " + secret);
+                logger.warning("watch for secret " + secret.getMetadata().getName() + " received unknown event " + action);
                 break;
             }
         } catch (Exception e) {
             logger.log(Level.WARNING, "Caught: " + e, e);
         }
+    }
+    @Override
+    public <T> void eventReceived(io.fabric8.kubernetes.client.Watcher.Action action, T resource) {
+        Secret secret = (Secret)resource;
+        eventReceived(action, secret);
     }
 
     private void upsertCredential(final Secret secret) throws Exception {
