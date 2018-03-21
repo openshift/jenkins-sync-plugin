@@ -47,6 +47,11 @@ public class SecretWatcher extends BaseWatcher {
     }
 
     @Override
+    public int getListIntervalInSeconds() {
+        return GlobalPluginConfiguration.get().getSecretListInterval();
+    }
+
+    @Override
     public Runnable getStartTimerTask() {
         return new SafeTimerTask() {
             @Override

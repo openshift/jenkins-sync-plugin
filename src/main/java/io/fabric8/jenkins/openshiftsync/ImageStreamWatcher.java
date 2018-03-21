@@ -48,6 +48,11 @@ public class ImageStreamWatcher extends BaseWatcher {
         this.predefinedOpenShiftSlaves.add("nodejs");
     }
 
+    @Override
+    public int getListIntervalInSeconds() {
+        return GlobalPluginConfiguration.get().getImageStreamListInterval();
+    }
+
     public Runnable getStartTimerTask() {
         return new SafeTimerTask() {
             @Override

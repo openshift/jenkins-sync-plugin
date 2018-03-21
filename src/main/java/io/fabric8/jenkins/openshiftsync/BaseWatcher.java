@@ -43,6 +43,8 @@ public abstract class BaseWatcher {
 
     public abstract Runnable getStartTimerTask();
     
+    public abstract int getListIntervalInSeconds();
+    
     public abstract <T> void eventReceived(io.fabric8.kubernetes.client.Watcher.Action action, T resource);
 
     public synchronized void start() {
@@ -54,8 +56,7 @@ public abstract class BaseWatcher {
         relister = Timer.get().scheduleAtFixedRate(task, 100, // still do the
                                                               // first run 100
                                                               // milliseconds in
-                5 * 60 * 1000, // 1000 ms * 60 seconds * 5 minutes between
-                               // subsequent runs
+                getListIntervalInSeconds() * 1000,
                 TimeUnit.MILLISECONDS);
     }
 

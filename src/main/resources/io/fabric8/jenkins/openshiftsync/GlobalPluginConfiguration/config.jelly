@@ -45,5 +45,25 @@
              description="What branch name suffix should we omit from the generated OpenShift BuildConfig resources created by the sync plugin.  Its common to use a common branch name like `master` which we can omit from names to avoid noise.">
       <f:textbox/>
     </f:entry>
+    <f:entry title="Build list interval" field="buildListInterval"
+             description="Time in seconds the sync plugin runs a list operation for builds">
+      <f:textbox/>
+    </f:entry>
+    <f:entry title="Build config list interval" field="buildConfigListInterval"
+             description="Time in seconds the sync plugin runs a list operation for builds configs">
+      <f:textbox/>
+    </f:entry>
+    <f:entry title="Config map list interval" field="configMapListInterval"
+             description="Time in seconds the sync plugin runs a list operation for config maps">
+      <f:textbox/>
+    </f:entry>
+    <f:entry title="Image stream list interval" field="imageStreamListInterval"
+             description="Time in seconds the sync plugin runs a list operation for image streams">
+      <f:textbox/>
+    </f:entry>
+    <f:entry title="Secret list interval" field="secretListInterval"
+             description="Time in seconds the sync plugin runs a list operation for secrets">
+      <f:textbox/>
+    </f:entry>
   </f:section>
 </j:jelly>

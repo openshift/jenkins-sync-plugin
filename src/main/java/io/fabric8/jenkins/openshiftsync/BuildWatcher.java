@@ -82,6 +82,11 @@ public class BuildWatcher extends BaseWatcher {
     }
 
     @Override
+    public int getListIntervalInSeconds() {
+        return GlobalPluginConfiguration.get().getBuildListInterval();
+    }
+
+    @Override
     public Runnable getStartTimerTask() {
         return new SafeTimerTask() {
             @Override

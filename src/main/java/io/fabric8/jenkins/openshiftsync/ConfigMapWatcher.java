@@ -50,6 +50,11 @@ public class ConfigMapWatcher extends BaseWatcher {
         this.trackedConfigMaps = new ConcurrentHashMap<>();
     }
 
+    @Override
+    public int getListIntervalInSeconds() {
+        return GlobalPluginConfiguration.get().getConfigMapListInterval();
+    }
+
     public Runnable getStartTimerTask() {
         return new SafeTimerTask() {
             @Override

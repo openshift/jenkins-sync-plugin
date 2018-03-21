@@ -57,6 +57,12 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
 
 	private String skipBranchSuffix;
 
+    private int buildListInterval = 300;
+    private int buildConfigListInterval = 300;
+    private int secretListInterval = 300;
+    private int configMapListInterval = 300;
+    private int imageStreamListInterval = 300;
+    
 	private transient BuildWatcher buildWatcher;
 
 	private transient BuildConfigWatcher buildConfigWatcher;
@@ -69,7 +75,9 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
 
 	@DataBoundConstructor
 	public GlobalPluginConfiguration(boolean enable, String server, String namespace, String credentialsId,
-			String jobNamePattern, String skipOrganizationPrefix, String skipBranchSuffix) {
+			String jobNamePattern, String skipOrganizationPrefix, String skipBranchSuffix,
+			int buildListInterval, int buildConfigListInterval, int configMapListInterval,
+			int secretListInterval, int imageStreamListInterval) {
 		this.enabled = enable;
 		this.server = server;
 		this.namespaces = StringUtils.isBlank(namespace) ? null : namespace.split(" ");
@@ -77,6 +85,11 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
 		this.jobNamePattern = jobNamePattern;
 		this.skipOrganizationPrefix = skipOrganizationPrefix;
 		this.skipBranchSuffix = skipBranchSuffix;
+		this.buildListInterval = buildListInterval;
+		this.buildConfigListInterval = buildConfigListInterval;
+		this.configMapListInterval = configMapListInterval;
+		this.secretListInterval = secretListInterval;
+		this.imageStreamListInterval = imageStreamListInterval;
 		configChange();
 	}
 
@@ -161,7 +174,47 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
 		this.skipBranchSuffix = skipBranchSuffix;
 	}
 
-	// https://wiki.jenkins-ci.org/display/JENKINS/Credentials+Plugin
+    public int getBuildListInterval() {
+        return buildListInterval;
+    }
+
+    public void setBuildListInterval(int buildListInterval) {
+        this.buildListInterval = buildListInterval;
+    }
+
+    public int getBuildConfigListInterval() {
+        return buildConfigListInterval;
+    }
+
+    public void setBuildConfigListInterval(int buildConfigListInterval) {
+        this.buildConfigListInterval = buildConfigListInterval;
+    }
+
+    public int getSecretListInterval() {
+        return secretListInterval;
+    }
+
+    public void setSecretListInterval(int secretListInterval) {
+        this.secretListInterval = secretListInterval;
+    }
+
+    public int getConfigMapListInterval() {
+        return configMapListInterval;
+    }
+
+    public void setConfigMapListInterval(int configMapListInterval) {
+        this.configMapListInterval = configMapListInterval;
+    }
+
+    public int getImageStreamListInterval() {
+        return imageStreamListInterval;
+    }
+
+    public void setImageStreamListInterval(int imageStreamListInterval) {
+        this.imageStreamListInterval = imageStreamListInterval;
+    }
+
+    // https://wiki.jenkins-ci.org/display/JENKINS/Credentials+Plugin
 	// http://javadoc.jenkins-ci.org/credentials/com/cloudbees/plugins/credentials/common/AbstractIdCredentialsListBoxModel.html
 	// https://github.com/jenkinsci/kubernetes-plugin/blob/master/src/main/java/org/csanchez/jenkins/plugins/kubernetes/KubernetesCloud.java
 	public static ListBoxModel doFillCredentialsIdItems(String credentialsId) {
