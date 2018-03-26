@@ -44,7 +44,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
-import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfigUid;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfigNameNamespace;
 import static io.fabric8.jenkins.openshiftsync.BuildPhases.CANCELLED;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_BUILD_NUMBER;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_BUILD_STATUS_FIELD;
@@ -441,7 +441,8 @@ public class BuildWatcher extends BaseWatcher {
                 bcUid = ref.getUid().intern();
                 synchronized (bcUid) {
                     // if entire job already deleted via bc delete, just return
-                    if (getJobFromBuildConfigUid(bcUid) == null)
+                    if (getJobFromBuildConfigNameNamespace(build.getMetadata().getName(),
+                            build.getMetadata().getNamespace()) == null)
                         return;
                     innerDeleteEventToJenkinsJobRun(build);
                     return;

@@ -575,6 +575,13 @@ public class JenkinsUtils {
 		if (StringUtils.isEmpty(buildConfigName)) {
 			return null;
 		}
+
+		WorkflowJob job = BuildConfigToJobMap.getJobFromBuildConfigNameNamespace(buildConfigName, 
+		        build.getMetadata().getNamespace());
+		if (job != null) {
+		    return job;
+		}
+		
 		BuildConfig buildConfig = getAuthenticatedOpenShiftClient().buildConfigs()
 				.inNamespace(build.getMetadata().getNamespace()).withName(buildConfigName).get();
 		if (buildConfig == null) {

@@ -3,19 +3,22 @@ package io.fabric8.jenkins.openshiftsync;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.openshift.api.model.BuildConfig;
 import jenkins.model.Jenkins;
+
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
 
 import static org.apache.commons.lang.StringUtils.isBlank;
 import static org.apache.commons.lang.StringUtils.isNotBlank;
 
 public class BuildConfigToJobMap {
 
+    private final static Logger logger = Logger.getLogger(BuildConfigToJobMap.class.getName());
     private static Map<String, WorkflowJob> buildConfigToJobMap;
-
+    
     private BuildConfigToJobMap() {
     }
 
@@ -30,9 +33,10 @@ public class BuildConfigToJobMap {
                 if (buildConfigProjectProperty == null) {
                     continue;
                 }
-                String bcUid = buildConfigProjectProperty.getUid();
-                if (isNotBlank(bcUid)) {
-                    buildConfigToJobMap.put(bcUid, job);
+                String namespace = buildConfigProjectProperty.getNamespace();
+                String name = buildConfigProjectProperty.getName();
+                if (isNotBlank(namespace) && isNotBlank(name)) {
+                    buildConfigToJobMap.put(OpenShiftUtils.jenkinsJobName(namespace, name), job);
                 }
             }
         }
@@ -44,14 +48,14 @@ public class BuildConfigToJobMap {
         if (meta == null) {
             return null;
         }
-        return getJobFromBuildConfigUid(meta.getUid());
+        return getJobFromBuildConfigNameNamespace(meta.getName(), meta.getNamespace());
     }
 
-    static synchronized WorkflowJob getJobFromBuildConfigUid(String uid) {
-        if (isBlank(uid)) {
+    static synchronized WorkflowJob getJobFromBuildConfigNameNamespace(String name, String namespace) {
+        if (isBlank(name) || isBlank(namespace)) {
             return null;
         }
-        return buildConfigToJobMap.get(uid);
+        return buildConfigToJobMap.get(OpenShiftUtils.jenkinsJobName(namespace, name));
     }
 
     static synchronized void putJobWithBuildConfig(WorkflowJob job,
@@ -67,16 +71,16 @@ public class BuildConfigToJobMap {
             throw new IllegalArgumentException(
                     "BuildConfig must contain valid metadata");
         }
-        putJobWithBuildConfigUid(job, meta.getUid());
+        putJobWithBuildConfigNameNamespace(job, meta.getName(), meta.getNamespace());
     }
 
-    static synchronized void putJobWithBuildConfigUid(WorkflowJob job,
-            String uid) {
-        if (isBlank(uid)) {
+    static synchronized void putJobWithBuildConfigNameNamespace(WorkflowJob job,
+            String name, String namespace) {
+        if (isBlank(name) || isBlank(namespace)) {
             throw new IllegalArgumentException(
-                    "BuildConfig uid must not be blank");
+                    "BuildConfig name and namespace must not be blank");
         }
-        buildConfigToJobMap.put(uid, job);
+        buildConfigToJobMap.put(OpenShiftUtils.jenkinsJobName(namespace, name), job);
     }
 
     static synchronized void removeJobWithBuildConfig(BuildConfig buildConfig) {
@@ -88,15 +92,15 @@ public class BuildConfigToJobMap {
             throw new IllegalArgumentException(
                     "BuildConfig must contain valid metadata");
         }
-        removeJobWithBuildConfigUid(meta.getUid());
+        removeJobWithBuildConfigNameNamespace(meta.getName(), meta.getNamespace());
     }
 
-    static synchronized void removeJobWithBuildConfigUid(String uid) {
-        if (isBlank(uid)) {
+    static synchronized void removeJobWithBuildConfigNameNamespace(String name, String namespace) {
+        if (isBlank(name) || isBlank(namespace)) {
             throw new IllegalArgumentException(
-                    "BuildConfig uid must not be blank");
+                    "BuildConfig name/namepsace must not be blank");
         }
-        buildConfigToJobMap.remove(uid);
+        buildConfigToJobMap.remove(OpenShiftUtils.jenkinsJobName(namespace, name));
     }
 
 }
