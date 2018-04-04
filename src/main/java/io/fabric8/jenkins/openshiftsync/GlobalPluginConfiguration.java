@@ -233,24 +233,32 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
 				.includeCurrentValue(credentialsId);
 	}
 
-	private void configChange() {
+	private synchronized void configChange() {
+	    logger.info("OpenShift Sync Plugin processing a newly supplied configuration");
+        if (buildConfigWatcher != null) {
+            buildConfigWatcher.stop();
+        }
+        if (buildWatcher != null) {
+            buildWatcher.stop();
+        }
+        if (configMapWatcher != null) {
+            configMapWatcher.stop();
+        }
+        if (imageStreamWatcher != null) {
+            imageStreamWatcher.stop();
+        }
+        if (secretWatcher != null) {
+            secretWatcher.stop();
+        }
+        buildWatcher = null;
+        buildConfigWatcher = null;
+        configMapWatcher = null;
+        imageStreamWatcher = null;
+        secretWatcher = null;
+        OpenShiftUtils.shutdownOpenShiftClient();
+        
 		if (!enabled) {
-			if (buildConfigWatcher != null) {
-				buildConfigWatcher.stop();
-			}
-			if (buildWatcher != null) {
-				buildWatcher.stop();
-			}
-			if (configMapWatcher != null) {
-				configMapWatcher.stop();
-			}
-			if (imageStreamWatcher != null) {
-				imageStreamWatcher.stop();
-			}
-			if (secretWatcher != null) {
-			    secretWatcher.stop();
-			}
-			OpenShiftUtils.shutdownOpenShiftClient();
+		    logger.info("OpenShift Sync Plugin has been disabled");
 			return;
 		}
 		try {
@@ -260,7 +268,7 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
 			Runnable task = new SafeTimerTask() {
 				@Override
 				protected void doRun() throws Exception {
-					logger.info("Waiting for Jenkins to be started");
+					logger.info("Confirming Jenkins is started");
 					while (true) {
 						final Jenkins instance = Jenkins.getActiveInstance();
 						// We can look at Jenkins Init Level to see if we are
