@@ -52,7 +52,7 @@ import static org.apache.commons.lang.StringUtils.isNotBlank;
 public class BuildConfigToJobMapper {
 	public static final String JENKINS_PIPELINE_BUILD_STRATEGY = "JenkinsPipeline";
 	public static final String DEFAULT_JENKINS_FILEPATH = "Jenkinsfile";
-	private static final Logger LOGGER = Logger.getLogger(BuildConfigToJobMapper.class.getName());
+	private static final Logger logger = Logger.getLogger(BuildConfigToJobMapper.class.getName());
 
 	public static FlowDefinition mapBuildConfigToFlow(BuildConfig bc) throws IOException {
 		if (!OpenShiftUtils.isPipelineStrategyBuildConfig(bc)) {
@@ -97,7 +97,7 @@ public class BuildConfigToJobMapper {
 						Collections.<GitSCMExtension>emptyList());
 				return new CpsScmFlowDefinition(scm, jenkinsfilePath);
 			} else {
-				LOGGER.warning("BuildConfig does not contain source repository information - "
+				logger.warning("BuildConfig does not contain source repository information - "
 						+ "cannot map BuildConfig to Jenkins job");
 				return null;
 			}
@@ -127,7 +127,7 @@ public class BuildConfigToJobMapper {
 		}
 
 		if (jenkinsPipelineStrategy == null) {
-			LOGGER.warning("No jenkinsPipelineStrategy available in the BuildConfig " + namespaceName);
+			logger.warning("No jenkinsPipelineStrategy available in the BuildConfig " + namespaceName);
 			return false;
 		}
 
@@ -144,7 +144,7 @@ public class BuildConfigToJobMapper {
 				}
 
 				if (!scriptPath.equals(jenkinsPipelineStrategy.getJenkinsfilePath())) {
-					LOGGER.log(Level.FINE,
+					logger.log(Level.FINE,
 							"updating bc " + namespaceName + " jenkinsfile path to " + scriptPath + " from ");
 					rc = true;
 					jenkinsPipelineStrategy.setJenkinsfilePath(scriptPath);
@@ -153,7 +153,7 @@ public class BuildConfigToJobMapper {
 				SCM scm = cpsScmFlowDefinition.getScm();
 				if (scm instanceof GitSCM) {
 					populateFromGitSCM(buildConfig, source, (GitSCM) scm, null);
-					LOGGER.log(Level.FINE, "updating bc " + namespaceName);
+					logger.log(Level.FINE, "updating bc " + namespaceName);
 					rc = true;
 				}
 				return rc;
@@ -166,7 +166,7 @@ public class BuildConfigToJobMapper {
 			String jenkinsfile = cpsFlowDefinition.getScript();
 			if (jenkinsfile != null && jenkinsfile.trim().length() > 0
 					&& !jenkinsfile.equals(jenkinsPipelineStrategy.getJenkinsfile())) {
-				LOGGER.log(Level.FINE, "updating bc " + namespaceName + " jenkinsfile to " + jenkinsfile
+				logger.log(Level.FINE, "updating bc " + namespaceName + " jenkinsfile to " + jenkinsfile
 						+ " where old jenkinsfile was " + jenkinsPipelineStrategy.getJenkinsfile());
 				jenkinsPipelineStrategy.setJenkinsfile(jenkinsfile);
 				return true;
@@ -192,7 +192,7 @@ public class BuildConfigToJobMapper {
       }
     }
 
-		LOGGER.warning("Cannot update BuildConfig " + namespaceName + " as the definition is of class "
+		logger.warning("Cannot update BuildConfig " + namespaceName + " as the definition is of class "
 				+ (definition == null ? "null" : definition.getClass().getName()));
 		return false;
 	}
