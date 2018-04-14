@@ -448,7 +448,7 @@ public class OpenShiftUtils {
             String namespace) {
         // if the user has explicitly configured the jenkins root URL, use it
         String rootUrl = Jenkins.getInstance().getRootUrl();
-        if (rootUrl != null && StringUtils.isNotEmpty(rootUrl)) {
+        if (StringUtils.isNotEmpty(rootUrl)) {
             return rootUrl;
         }
 

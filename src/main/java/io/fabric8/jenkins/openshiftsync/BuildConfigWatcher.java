@@ -413,7 +413,6 @@ public class BuildConfigWatcher extends BaseWatcher {
     // nondeterministic
     // order
     private synchronized void deleteEventToJenkinsJob(final BuildConfig buildConfig) throws Exception {
-        String bcUid = buildConfig.getMetadata().getUid();
         if (buildConfig.getMetadata().getUid() != null && buildConfig.getMetadata().getUid().length() > 0) {
             // employ intern of the BC UID to facilitate sync'ing on the same
             // actual object
