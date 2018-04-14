@@ -1,17 +1,17 @@
-/**
- * Copyright (C) 2016 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *         http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+/*
+  Copyright (C) 2016 Red Hat, Inc.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
  */
 package io.fabric8.jenkins.openshiftsync;
 
@@ -437,14 +437,12 @@ public class BuildWatcher extends BaseWatcher {
             final Build build) throws Exception {
         List<OwnerReference> ownerRefs = build.getMetadata()
                 .getOwnerReferences();
-        String bcUid = null;
         for (OwnerReference ref : ownerRefs) {
             if ("BuildConfig".equals(ref.getKind()) && ref.getUid() != null
                     && ref.getUid().length() > 0) {
                 // employ intern to facilitate sync'ing on the same actual
                 // object
-                bcUid = ref.getUid().intern();
-                synchronized (bcUid) {
+                synchronized (ref.getUid().intern()) {
                     // if entire job already deleted via bc delete, just return
                     if (getJobFromBuildConfigNameNamespace(build.getMetadata().getName(),
                             build.getMetadata().getNamespace()) == null)

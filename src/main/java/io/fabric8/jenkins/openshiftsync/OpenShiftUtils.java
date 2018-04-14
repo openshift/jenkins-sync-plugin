@@ -1,17 +1,17 @@
-/**
- * Copyright (C) 2016 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *         http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+/*
+  Copyright (C) 2016 Red Hat, Inc.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
  */
 package io.fabric8.jenkins.openshiftsync;
 
@@ -82,7 +82,7 @@ public class OpenShiftUtils {
             .getName());
 
     private static OpenShiftClient openShiftClient;
-    private static String jenkinsPodNamespace = null;
+    private static String jenkinsPodNamespace;
     
     static {
         jenkinsPodNamespace = System
@@ -90,12 +90,12 @@ public class OpenShiftUtils {
         if (jenkinsPodNamespace != null && jenkinsPodNamespace.trim().length() > 0) {
             jenkinsPodNamespace = jenkinsPodNamespace.trim();
         } else {
-            File f = new File(Constants.OPENSHIFT_PROJECT_FILE);
+            File f = Constants.OPENSHIFT_PROJECT_FILE;
             if (f.exists()) {
                 FileReader fr = null;
                 BufferedReader br = null;
                 try {
-                    fr = new FileReader(Constants.OPENSHIFT_PROJECT_FILE);
+                    fr = new FileReader(f);
                     br = new BufferedReader(fr);
                     // should just be one line
                     jenkinsPodNamespace = br.readLine();
@@ -257,6 +257,12 @@ public class OpenShiftUtils {
     /**
      * Returns the parent for the given item full name or default to the active
      * jenkins if it does not exist
+     *
+     * @param activeJenkins the active Jenkins instance
+     * @param fullName the full name of the job to find the parent for
+     * @param namespace the namespace to search in
+     *
+     * @return the full name of the parent job that was found
      */
     public static ItemGroup getFullNameParent(Jenkins activeJenkins,
             String fullName, String namespace) {
@@ -442,7 +448,7 @@ public class OpenShiftUtils {
             String namespace) {
         // if the user has explicitly configured the jenkins root URL, use it
         String rootUrl = Jenkins.getInstance().getRootUrl();
-        if (StringUtils.isNotEmpty(rootUrl)) {
+        if (rootUrl != null && StringUtils.isNotEmpty(rootUrl)) {
             return rootUrl;
         }
 
