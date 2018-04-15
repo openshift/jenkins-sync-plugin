@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2017 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +29,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jenkins.util.Timer;
 
 public abstract class BaseWatcher {
-    private final Logger LOGGER = Logger.getLogger(BaseWatcher.class.getName());
+    private final Logger logger = Logger.getLogger(BaseWatcher.class.getName());
 
     protected ScheduledFuture relister;
     protected final String[] namespaces;
@@ -76,9 +76,9 @@ public abstract class BaseWatcher {
         //scans of fabric client confirm this call be called with null
         //we do not want to totally ignore this, as the closing of the
         //watch can effect responsiveness
-        LOGGER.info("Watch for type " + this.getClass().getName() + " closed for one of the following namespaces: " + watches.keySet().toString());
+        logger.info("Watch for type " + this.getClass().getName() + " closed for one of the following namespaces: " + watches.keySet().toString());
         if (e != null) {
-            LOGGER.warning(e.toString());
+            logger.warning(e.toString());
 
             if (e.getStatus() != null && e.getStatus().getCode() == HTTP_GONE) {
                 stop();

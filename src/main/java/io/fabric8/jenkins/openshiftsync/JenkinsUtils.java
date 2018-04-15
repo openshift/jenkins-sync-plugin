@@ -1,17 +1,17 @@
-/**
- * Copyright (C) 2016 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *         http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+/*
+  Copyright (C) 2016 Red Hat, Inc.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
  */
 package io.fabric8.jenkins.openshiftsync;
 
@@ -98,7 +98,7 @@ import static org.apache.commons.lang.StringUtils.isBlank;
  */
 public class JenkinsUtils {
 
-	private static final Logger LOGGER = Logger.getLogger(JenkinsUtils.class.getName());
+	private static final Logger logger = Logger.getLogger(JenkinsUtils.class.getName());
 	private static final String PARAM_FROM_ENV_DESCRIPTION = "From OpenShift Build Environment Variable";
 
 	public static Job getJob(String job) {
@@ -127,14 +127,14 @@ public class JenkinsUtils {
             if (job == null) {
                 // this should not occur if an impersonate call has been made higher up
                 // the stack
-                LOGGER.warning("A run of workflow job " + workflowJob.getName() + " unexpectantly not saved to disk.");
+                logger.warning("A run of workflow job " + workflowJob.getName() + " unexpectantly not saved to disk.");
                 return false;
             }
             ParametersDefinitionProperty props = job.getProperty(ParametersDefinitionProperty.class);
             List<String> names = props.getParameterDefinitionNames();
             for (String name : names) {
                 if (!paramMap.containsKey(name)) {
-                    LOGGER.warning("A run of workflow job " + job.getName() + " was expecting parameter " + name + ", but it is not in the parameter list");
+                    logger.warning("A run of workflow job " + job.getName() + " was expecting parameter " + name + ", but it is not in the parameter list");
                     return false;
                 }
             }
@@ -314,7 +314,7 @@ public class JenkinsUtils {
         BuildConfigProjectProperty bcProp = job
                 .getProperty(BuildConfigProjectProperty.class);
         if (bcProp == null || bcProp.getBuildRunPolicy() == null) {
-            LOGGER.warning("aborting trigger of build " + build
+            logger.warning("aborting trigger of build " + build
                     + "because of missing bc project property or run policy");
             return false;
         }
@@ -355,16 +355,16 @@ public class JenkinsUtils {
             CauseAction originalCauseAction = BuildToActionMapper
                     .removeCauseAction(build.getMetadata().getName());
             if (originalCauseAction != null) {
-                if (LOGGER.isLoggable(Level.FINE)) {
-                    LOGGER.fine("Adding existing causes...");
+                if (logger.isLoggable(Level.FINE)) {
+                    logger.fine("Adding existing causes...");
                     for (Cause c : originalCauseAction.getCauses()) {
-                        LOGGER.fine("orginal cause: " + c.getShortDescription());
+                        logger.fine("orginal cause: " + c.getShortDescription());
                     }
                 }
                 newCauses.addAll(originalCauseAction.getCauses());
-                if (LOGGER.isLoggable(Level.FINE)) {
+                if (logger.isLoggable(Level.FINE)) {
                     for (Cause c : newCauses) {
-                        LOGGER.fine("new cause: " + c.getShortDescription());
+                        logger.fine("new cause: " + c.getShortDescription());
                     }
                 }
             }
@@ -385,7 +385,7 @@ public class JenkinsUtils {
                         buildActions.add(new RevisionParameterAction(
                                 gitSourceRevision.getCommit(), repoURL));
                     } catch (URISyntaxException e) {
-                        LOGGER.log(SEVERE, "Failed to parse git repo URL"
+                        logger.log(SEVERE, "Failed to parse git repo URL"
                                 + gitBuildSource.getUri(), e);
                     }
                 }
@@ -403,13 +403,13 @@ public class JenkinsUtils {
                     job, strat, false);
             verifyEnvVars(paramMap, job);
             if (userProvidedParams == null) {
-                LOGGER.fine("setting all job run params since this was either started via oc, or started from the UI "
+                logger.fine("setting all job run params since this was either started via oc, or started from the UI "
                         + "with no build parameters");
                 // now add the actual param values stemming from openshift build
                 // env vars for this specific job
                 buildActions = setJobRunParamsFromEnv(job, strat, buildActions);
             } else {
-                LOGGER.fine("setting job run params and since this is manually started from jenkins applying user "
+                logger.fine("setting job run params and since this is manually started from jenkins applying user "
                         + "provided parameters "
                         + userProvidedParams
                         + " along with any from bc's env vars");
@@ -451,12 +451,8 @@ public class JenkinsUtils {
 		if (deleted) {
 			return;
 		}
-		try {
-			updateOpenShiftBuildPhase(build, CANCELLED);
-		} catch (Exception e) {
-			throw e;
-		}
-	}
+    updateOpenShiftBuildPhase(build, CANCELLED);
+  }
 
 	private static WorkflowRun getRun(WorkflowJob job, Build build) {
 		if (build != null && build.getMetadata() != null) {
@@ -477,10 +473,10 @@ public class JenkinsUtils {
 
 	public synchronized static void deleteRun(WorkflowRun run) {
 			try {
-			  LOGGER.info("Deleting run: " + run.toString());
+			  logger.info("Deleting run: " + run.toString());
 				run.delete();
 			} catch (IOException e) {
-				LOGGER.warning("Unable to delete run " + run.toString() + ":" + e.getMessage());
+				logger.warning("Unable to delete run " + run.toString() + ":" + e.getMessage());
 			}
 	}
 
@@ -645,7 +641,7 @@ public class JenkinsUtils {
                 if (b1.getMetadata().getAnnotations() == null
                         || b1.getMetadata().getAnnotations()
                                 .get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER) == null) {
-                    LOGGER.warning("cannot compare build "
+                    logger.warning("cannot compare build "
                             + b1.getMetadata().getName()
                             + " from namespace "
                             + b1.getMetadata().getNamespace()
@@ -656,7 +652,7 @@ public class JenkinsUtils {
                 if (b2.getMetadata().getAnnotations() == null
                         || b2.getMetadata().getAnnotations()
                                 .get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER) == null) {
-                    LOGGER.warning("cannot compare build "
+                    logger.warning("cannot compare build "
                             + b2.getMetadata().getName()
                             + " from namespace "
                             + b2.getMetadata().getNamespace()
@@ -677,7 +673,7 @@ public class JenkinsUtils {
                                     .getAnnotations()
                                     .get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER)));
                 } catch (Throwable t) {
-                    LOGGER.log(Level.FINE, "handleBuildList", t);
+                    logger.log(Level.FINE, "handleBuildList", t);
                 }
                 return rc;
 			}
@@ -709,7 +705,7 @@ public class JenkinsUtils {
 				buildAdded = addEventToJenkinsJobRun(b);
 			} catch (IOException e) {
 				ObjectMeta meta = b.getMetadata();
-				LOGGER.log(WARNING, "Failed to add new build " + meta.getNamespace() + "/" + meta.getName(), e);
+				logger.log(WARNING, "Failed to add new build " + meta.getNamespace() + "/" + meta.getName(), e);
 			}
 			// If it's a serial build then we only need to schedule the first
 			// build request.
@@ -766,7 +762,7 @@ public class JenkinsUtils {
 	public static void removePodTemplate(PodTemplate podTemplate) {
 		KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
 		if (kubeCloud != null) {
-			LOGGER.info("Removing PodTemplate: " + podTemplate.getName());
+			logger.info("Removing PodTemplate: " + podTemplate.getName());
 			// NOTE - PodTemplate does not currently override hashCode, equals,
 			// so
 			// the KubernetsCloud.removeTemplate currently is broken;
@@ -787,13 +783,13 @@ public class JenkinsUtils {
 				if (jenkins != null)
 					jenkins.save();
 			} catch (IOException e) {
-				LOGGER.log(Level.SEVERE, "removePodTemplate", e);
+				logger.log(Level.SEVERE, "removePodTemplate", e);
 			}
 
-			if (LOGGER.isLoggable(Level.FINE)) {
-				LOGGER.fine("PodTemplates now:");
+			if (logger.isLoggable(Level.FINE)) {
+				logger.fine("PodTemplates now:");
 				for (PodTemplate pt : kubeCloud.getTemplates()) {
-					LOGGER.fine(pt.getName());
+					logger.fine(pt.getName());
 				}
 			}
 		}
@@ -832,7 +828,7 @@ public class JenkinsUtils {
 
 		KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
 		if (kubeCloud != null) {
-			LOGGER.info("Adding PodTemplate: " + podTemplate.getName());
+			logger.info("Adding PodTemplate: " + podTemplate.getName());
 			kubeCloud.addTemplate(podTemplate);
 			try {
 				// pedantic mvn:findbugs
@@ -840,7 +836,7 @@ public class JenkinsUtils {
 				if (jenkins != null)
 					jenkins.save();
 			} catch (IOException e) {
-				LOGGER.log(Level.SEVERE, "addPodTemplate", e);
+				logger.log(Level.SEVERE, "addPodTemplate", e);
 			}
 		}
 	}

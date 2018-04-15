@@ -1,20 +1,22 @@
-/**
- * Copyright (C) 2016 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *         http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+/*
+  Copyright (C) 2016 Red Hat, Inc.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
  */
 package io.fabric8.jenkins.openshiftsync;
 
+
+import java.io.File;
 
 /**
  */
@@ -36,8 +38,8 @@ public class Constants {
 	// a query param on the REST invocation) was causing okhttp3 to complain (there is even more history/discussion
 	// in the PR as to issues with fixing).
 	// so we avoid use of "/" for this label
-    public static final String OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC = "credential.sync.jenkins.openshift.io";
-    public static final String VALUE_SECRET_SYNC = "true";
+  public static final String OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC = "credential.sync.jenkins.openshift.io";
+  public static final String VALUE_SECRET_SYNC = "true";
 
 	public static final String OPENSHIFT_SECRETS_DATA_USERNAME = "username";
 	public static final String OPENSHIFT_SECRETS_DATA_PASSWORD = "password";
@@ -49,7 +51,7 @@ public class Constants {
 	public static final String OPENSHIFT_BUILD_STATUS_FIELD = "status";
 	
 	public static final String OPENSHIFT_PROJECT_ENV_VAR_NAME = "PROJECT_NAME";
-    public static final String OPENSHIFT_PROJECT_FILE = "/run/secrets/kubernetes.io/serviceaccount/namespace";
+	public static final File OPENSHIFT_PROJECT_FILE = new File("/run/secrets/kubernetes.io/serviceaccount/namespace");
 
 
 }

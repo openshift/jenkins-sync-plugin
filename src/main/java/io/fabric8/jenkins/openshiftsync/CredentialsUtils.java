@@ -43,13 +43,12 @@ public class CredentialsUtils {
                 && buildConfig.getSpec().getSource().getSourceSecret() != null
                 && !buildConfig.getSpec().getSource().getSourceSecret()
                         .getName().isEmpty()) {
-            Secret sourceSecret = getAuthenticatedOpenShiftClient()
+            return getAuthenticatedOpenShiftClient()
                     .secrets()
                     .inNamespace(buildConfig.getMetadata().getNamespace())
                     .withName(
                             buildConfig.getSpec().getSource().getSourceSecret()
                                     .getName()).get();
-            return sourceSecret;
         }
         return null;
     }
@@ -57,7 +56,7 @@ public class CredentialsUtils {
     public static synchronized String updateSourceCredentials(
             BuildConfig buildConfig) throws IOException {
         Secret sourceSecret = getSourceCredentials(buildConfig);
-        String credID = null;
+        String credID;
         if (sourceSecret != null) {
             credID = upsertCredential(sourceSecret, sourceSecret
                     .getMetadata().getNamespace(), sourceSecret.getMetadata()
@@ -97,6 +96,12 @@ public class CredentialsUtils {
 
     /**
      * Inserts or creates a Jenkins Credential for the given Secret
+     *
+     * @param secret the secret to insert into
+     *
+     * @throws IOException if the credentials could not be added or updated
+     *
+     * @return the id of the secret that has been created or inserted into
      */
     public static synchronized String upsertCredential(Secret secret)
             throws IOException {

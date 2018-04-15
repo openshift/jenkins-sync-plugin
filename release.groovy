@@ -47,4 +47,4 @@ def release(project){
   }
 }
 
-return this;
+return this
