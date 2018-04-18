@@ -140,6 +140,9 @@ public class OpenShiftUtils {
                         .getPlugin("openshift-sync").getVersion() + "/fabric8-"
                 + Version.clientVersion());
         openShiftClient = new DefaultOpenShiftClient(config);
+        DefaultOpenShiftClient defClient = (DefaultOpenShiftClient)openShiftClient;
+        defClient.getHttpClient().dispatcher().setMaxRequestsPerHost(100);
+        defClient.getHttpClient().dispatcher().setMaxRequests(100);
     }
 
     public synchronized static OpenShiftClient getOpenShiftClient() {
