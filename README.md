@@ -47,3 +47,9 @@ Synchronization Polling Frequencies
 * Jenkins Run to OpenShift Build Sync: 5 seconds [BuildSyncRunListener](https://github.com/openshift/jenkins-sync-plugin/blob/master/src/main/java/io/fabric8/jenkins/openshiftsync/BuildSyncRunListener.java)
   
 * OpenShift Resource Relist (backup for missed Watch events): 5 minutes [BaseWatcher](https://github.com/openshift/jenkins-sync-plugin/blob/master/src/main/java/io/fabric8/jenkins/openshiftsync/BaseWatcher.java)
+
+Restrictions with respect to Jenkins Pipelines
+--------------------------------------------------
+
+Pipeline writers will not be able to fully leverage the `build` pipeline step to start a OpenShift Pipeline Strategy build from the Jenksinfile of another OpenShift Pipeline Stragetgy build.
+The "child" Pipeline Strategy builds will start, but the status cannot be properly captured and the "parent" Pipeline Strategy build fails.
