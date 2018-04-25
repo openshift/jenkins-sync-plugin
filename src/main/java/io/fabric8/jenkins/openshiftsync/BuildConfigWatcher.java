@@ -34,6 +34,7 @@ import jenkins.security.NotReallyRoleSensitiveCallable;
 import jenkins.util.Timer;
 
 import org.apache.tools.ant.filters.StringInputStream;
+import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.jenkinsci.plugins.workflow.flow.FlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 
@@ -42,7 +43,6 @@ import javax.xml.transform.stream.StreamSource;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -76,17 +76,17 @@ public class BuildConfigWatcher extends BaseWatcher {
     // and name for BC to properly differentiate; we don't use UUID since
     // when we filter on the ItemListener side the UUID may not be
     // available
-    private static final HashSet<String> deletesInProgress = new HashSet<String>();
+    private static final ConcurrentHashSet<String> deletesInProgress = new ConcurrentHashSet<String>();
 
-    public static synchronized void deleteInProgress(String bcName) {
+    public static void deleteInProgress(String bcName) {
         deletesInProgress.add(bcName);
     }
 
-    public static synchronized boolean isDeleteInProgress(String bcID) {
+    public static boolean isDeleteInProgress(String bcID) {
         return deletesInProgress.contains(bcID);
     }
 
-    public static synchronized void deleteCompleted(String bcID) {
+    public static void deleteCompleted(String bcID) {
         deletesInProgress.remove(bcID);
     }
 
@@ -125,11 +125,9 @@ public class BuildConfigWatcher extends BaseWatcher {
                         } else {
                             resourceVersion = buildConfigs.getMetadata().getResourceVersion();
                         }
-                        synchronized(BuildConfigWatcher.this) {
-                            if (watches.get(namespace) == null) {
-                                logger.info("creating BuildConfig watch for namespace " + namespace + " and resource version " + resourceVersion);
-                                watches.put(namespace, getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace).withResourceVersion(resourceVersion).watch(new WatcherCallback<BuildConfig>(BuildConfigWatcher.this,namespace)));
-                            }
+                        if (watches.get(namespace) == null) {
+                            logger.info("creating BuildConfig watch for namespace " + namespace + " and resource version " + resourceVersion);
+                            addWatch(namespace, getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace).withResourceVersion(resourceVersion).watch(new WatcherCallback<BuildConfig>(BuildConfigWatcher.this,namespace)));
                         }
                     } catch (Exception e) {
                         logger.log(SEVERE, "Failed to load BuildConfigs: " + e, e);
@@ -143,14 +141,14 @@ public class BuildConfigWatcher extends BaseWatcher {
         };
     }
 
-    public synchronized void start() {
+    public void start() {
         initializeBuildConfigToJobMap();
         logger.info("Now handling startup build configs!!");
         super.start();
 
     }
 
-    private synchronized void onInitialBuildConfigs(BuildConfigList buildConfigs) {
+    private void onInitialBuildConfigs(BuildConfigList buildConfigs) {
         if (buildConfigs == null)
             return;
         List<BuildConfig> items = buildConfigs.getItems();
@@ -166,7 +164,7 @@ public class BuildConfigWatcher extends BaseWatcher {
     }
 
     @SuppressFBWarnings("SF_SWITCH_NO_DEFAULT")
-    public synchronized void eventReceived(Action action, BuildConfig buildConfig) {
+    public void eventReceived(Action action, BuildConfig buildConfig) {
         try {
             switch (action) {
             case ADDED:
@@ -360,7 +358,7 @@ public class BuildConfigWatcher extends BaseWatcher {
         }
     }
 
-    private synchronized void modifyEventToJenkinsJob(BuildConfig buildConfig) throws Exception {
+    private void modifyEventToJenkinsJob(BuildConfig buildConfig) throws Exception {
         if (isPipelineStrategyBuildConfig(buildConfig)) {
             upsertJob(buildConfig);
             return;
@@ -412,7 +410,7 @@ public class BuildConfigWatcher extends BaseWatcher {
     // delete events and build delete events that arrive concurrently and in a
     // nondeterministic
     // order
-    private synchronized void deleteEventToJenkinsJob(final BuildConfig buildConfig) throws Exception {
+    private void deleteEventToJenkinsJob(final BuildConfig buildConfig) throws Exception {
         String bcUid = buildConfig.getMetadata().getUid();
         if (bcUid != null && bcUid.length() > 0) {
             // employ intern of the BC UID to facilitate sync'ing on the same

@@ -7,7 +7,6 @@ import jenkins.model.Jenkins;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
@@ -17,7 +16,7 @@ import static org.apache.commons.lang.StringUtils.isNotBlank;
 public class BuildConfigToJobMap {
 
     private final static Logger logger = Logger.getLogger(BuildConfigToJobMap.class.getName());
-    private static Map<String, WorkflowJob> buildConfigToJobMap;
+    private static ConcurrentHashMap<String, WorkflowJob> buildConfigToJobMap;
     
     private BuildConfigToJobMap() {
     }
@@ -42,7 +41,7 @@ public class BuildConfigToJobMap {
         }
     }
 
-    static synchronized WorkflowJob getJobFromBuildConfig(
+    static WorkflowJob getJobFromBuildConfig(
             BuildConfig buildConfig) {
         ObjectMeta meta = buildConfig.getMetadata();
         if (meta == null) {
@@ -51,14 +50,14 @@ public class BuildConfigToJobMap {
         return getJobFromBuildConfigNameNamespace(meta.getName(), meta.getNamespace());
     }
 
-    static synchronized WorkflowJob getJobFromBuildConfigNameNamespace(String name, String namespace) {
+    static WorkflowJob getJobFromBuildConfigNameNamespace(String name, String namespace) {
         if (isBlank(name) || isBlank(namespace)) {
             return null;
         }
         return buildConfigToJobMap.get(OpenShiftUtils.jenkinsJobName(namespace, name));
     }
 
-    static synchronized void putJobWithBuildConfig(WorkflowJob job,
+    static void putJobWithBuildConfig(WorkflowJob job,
             BuildConfig buildConfig) {
         if (buildConfig == null) {
             throw new IllegalArgumentException("BuildConfig cannot be null");
@@ -74,7 +73,7 @@ public class BuildConfigToJobMap {
         putJobWithBuildConfigNameNamespace(job, meta.getName(), meta.getNamespace());
     }
 
-    static synchronized void putJobWithBuildConfigNameNamespace(WorkflowJob job,
+    static void putJobWithBuildConfigNameNamespace(WorkflowJob job,
             String name, String namespace) {
         if (isBlank(name) || isBlank(namespace)) {
             throw new IllegalArgumentException(
@@ -83,7 +82,7 @@ public class BuildConfigToJobMap {
         buildConfigToJobMap.put(OpenShiftUtils.jenkinsJobName(namespace, name), job);
     }
 
-    static synchronized void removeJobWithBuildConfig(BuildConfig buildConfig) {
+    static void removeJobWithBuildConfig(BuildConfig buildConfig) {
         if (buildConfig == null) {
             throw new IllegalArgumentException("BuildConfig cannot be null");
         }
@@ -95,7 +94,7 @@ public class BuildConfigToJobMap {
         removeJobWithBuildConfigNameNamespace(meta.getName(), meta.getNamespace());
     }
 
-    static synchronized void removeJobWithBuildConfigNameNamespace(String name, String namespace) {
+    static void removeJobWithBuildConfigNameNamespace(String name, String namespace) {
         if (isBlank(name) || isBlank(namespace)) {
             throw new IllegalArgumentException(
                     "BuildConfig name/namepsace must not be blank");

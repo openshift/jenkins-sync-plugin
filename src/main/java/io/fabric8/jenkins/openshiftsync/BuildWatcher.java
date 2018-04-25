@@ -125,23 +125,20 @@ public class BuildWatcher extends BaseWatcher {
                             resourceVersion = newBuilds.getMetadata()
                                     .getResourceVersion();
                         }
-                        synchronized(BuildWatcher.this) {
-                            if (watches.get(namespace) == null) {
-                                logger.info("creating Build watch for namespace "
-                                        + namespace
-                                        + " and resource version "
-                                        + resourceVersion);
-                                watches.put(
-                                        namespace,
-                                        getAuthenticatedOpenShiftClient()
-                                                .builds()
-                                                .inNamespace(namespace)
-                                                .withResourceVersion(
-                                                        resourceVersion)
-                                                .watch(new WatcherCallback<Build>(
-                                                        BuildWatcher.this,
-                                                        namespace)));
-                            }
+                        if (watches.get(namespace) == null) {
+                            logger.info("creating Build watch for namespace "
+                                    + namespace
+                                    + " and resource version "
+                                    + resourceVersion);
+
+                            addWatch(namespace, getAuthenticatedOpenShiftClient()
+                              .builds()
+                              .inNamespace(namespace)
+                              .withResourceVersion(
+                                resourceVersion)
+                              .watch(new WatcherCallback<Build>(
+                                BuildWatcher.this,
+                                namespace)));
                         }
                     } catch (Exception e) {
                         logger.log(Level.SEVERE,
@@ -159,7 +156,7 @@ public class BuildWatcher extends BaseWatcher {
     }
 
     @SuppressFBWarnings("SF_SWITCH_NO_DEFAULT")
-    public synchronized void eventReceived(Action action, Build build) {
+    public void eventReceived(Action action, Build build) {
         if (!OpenShiftUtils.isPipelineStrategyBuild(build))
             return;
         try {
@@ -190,7 +187,7 @@ public class BuildWatcher extends BaseWatcher {
         eventReceived(action, build);
     }
 
-    public synchronized static void onInitialBuilds(BuildList buildList) {
+    public static void onInitialBuilds(BuildList buildList) {
         if (buildList == null)
             return;
         List<Build> items = buildList.getItems();
@@ -312,7 +309,7 @@ public class BuildWatcher extends BaseWatcher {
         }
     }
 
-    private static synchronized void modifyEventToJenkinsJobRun(Build build) {
+    private static void modifyEventToJenkinsJobRun(Build build) {
         BuildStatus status = build.getStatus();
         if (status != null && isCancellable(status) && isCancelled(status)) {
             WorkflowJob job = getJobFromBuild(build);
@@ -327,7 +324,7 @@ public class BuildWatcher extends BaseWatcher {
         }
     }
 
-    public static synchronized boolean addEventToJenkinsJobRun(Build build)
+    public static boolean addEventToJenkinsJobRun(Build build)
             throws IOException {
         // should have been caught upstack, but just in case since public method
         if (!OpenShiftUtils.isPipelineStrategyBuild(build))
@@ -407,18 +404,18 @@ public class BuildWatcher extends BaseWatcher {
     // innerDeleteEventToJenkinsJobRun is the actual delete logic at the heart
     // of deleteEventToJenkinsJobRun
     // that is either in a sync block or not based on the presence of a BC uid
-    private static synchronized void innerDeleteEventToJenkinsJobRun(
+    private static void innerDeleteEventToJenkinsJobRun(
             final Build build) throws Exception {
         final WorkflowJob job = getJobFromBuild(build);
         if (job != null) {
-            ACL.impersonate(ACL.SYSTEM,
-                    new NotReallyRoleSensitiveCallable<Void, Exception>() {
-                        @Override
-                        public Void call() throws Exception {
-                            cancelBuild(job, build, true);
-                            return null;
-                        }
-                    });
+          ACL.impersonate(ACL.SYSTEM,
+            new NotReallyRoleSensitiveCallable<Void, Exception>() {
+              @Override
+              public Void call() throws Exception {
+                cancelBuild(job, build, true);
+                return null;
+              }
+            });
         } else {
             // in case build was created and deleted quickly, prior to seeing BC
             // event, clear out from pre-BC cache
@@ -436,7 +433,7 @@ public class BuildWatcher extends BaseWatcher {
     // delete events and build delete events that arrive concurrently and in a
     // nondeterministic
     // order
-    private static synchronized void deleteEventToJenkinsJobRun(
+    private static void deleteEventToJenkinsJobRun(
             final Build build) throws Exception {
         List<OwnerReference> ownerRefs = build.getMetadata()
                 .getOwnerReferences();
@@ -468,7 +465,7 @@ public class BuildWatcher extends BaseWatcher {
    *
    * Deletes all job runs that do not have an associated build in OpenShift
    */
-  private static synchronized void reconcileRunsAndBuilds() {
+  private static void reconcileRunsAndBuilds() {
     logger.info("Reconciling job runs and builds");
 
     List<WorkflowJob> jobs = Jenkins.getActiveInstance().getAllItems(WorkflowJob.class);

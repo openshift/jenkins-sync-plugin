@@ -42,7 +42,7 @@ import static java.util.logging.Level.WARNING;
 
 public class ConfigMapWatcher extends BaseWatcher {
     private final Logger logger = Logger.getLogger(getClass().getName());
-    private Map<String, List<PodTemplate>> trackedConfigMaps;
+    private ConcurrentHashMap<String, List<PodTemplate>> trackedConfigMaps;
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public ConfigMapWatcher(String[] namespaces) {
@@ -82,21 +82,18 @@ public class ConfigMapWatcher extends BaseWatcher {
                             resourceVersion = configMaps.getMetadata()
                                     .getResourceVersion();
                         }
-                        synchronized(ConfigMapWatcher.this) {
-                            if (watches.get(namespace) == null) {
-                                logger.info("creating ConfigMap watch for namespace "
-                                        + namespace
-                                        + " and resource version "
-                                        + resourceVersion);
-                                watches.put(
-                                        namespace,
-                                        getAuthenticatedOpenShiftClient()
-                                        .configMaps()
-                                        .inNamespace(namespace)
-                                        .withResourceVersion(
-                                                resourceVersion)
-                                                .watch(new WatcherCallback<ConfigMap>(ConfigMapWatcher.this,namespace)));
-                            }
+                        if (watches.get(namespace) == null) {
+                            logger.info("creating ConfigMap watch for namespace "
+                                    + namespace
+                                    + " and resource version "
+                                    + resourceVersion);
+                            addWatch(namespace,
+                                    getAuthenticatedOpenShiftClient()
+                                    .configMaps()
+                                    .inNamespace(namespace)
+                                    .withResourceVersion(
+                                            resourceVersion)
+                                            .watch(new WatcherCallback<ConfigMap>(ConfigMapWatcher.this,namespace)));
                         }
                     } catch (Exception e) {
                         logger.log(SEVERE, "Failed to load ConfigMaps: " + e, e);
@@ -106,7 +103,7 @@ public class ConfigMapWatcher extends BaseWatcher {
         };
     }
 
-    public synchronized void start() {
+    public void start() {
         super.start();
         // lets process the initial state
         logger.info("Now handling startup config maps!!");
@@ -198,7 +195,7 @@ public class ConfigMapWatcher extends BaseWatcher {
         eventReceived(action, cfgmap);
     }
 
-    private synchronized void onInitialConfigMaps(ConfigMapList configMaps) {
+    private void onInitialConfigMaps(ConfigMapList configMaps) {
         if (configMaps == null)
             return;
         if (trackedConfigMaps == null) {

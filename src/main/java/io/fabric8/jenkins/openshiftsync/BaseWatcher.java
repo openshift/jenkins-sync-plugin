@@ -33,12 +33,12 @@ public abstract class BaseWatcher {
 
     protected ScheduledFuture relister;
     protected final String[] namespaces;
-    protected Map<String, Watch> watches;
+    protected ConcurrentHashMap<String, Watch> watches;
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public BaseWatcher(String[] namespaces) {
         this.namespaces = namespaces;
-        watches = new ConcurrentHashMap<String, Watch>();
+        watches = new ConcurrentHashMap<>();
     }
 
     public abstract Runnable getStartTimerTask();
@@ -60,7 +60,7 @@ public abstract class BaseWatcher {
                 TimeUnit.MILLISECONDS);
     }
 
-    public synchronized void stop() {
+    public void stop() {
         if (relister != null && !relister.isDone()) {
             relister.cancel(true);
             relister = null;
@@ -68,11 +68,11 @@ public abstract class BaseWatcher {
 
         for (Map.Entry<String, Watch> entry : watches.entrySet()) {
             entry.getValue().close();
+            watches.remove(entry.getKey());
         }
-        watches.clear();
     }
 
-    public synchronized void onClose(KubernetesClientException e, String namespace) {
+    public void onClose(KubernetesClientException e, String namespace) {
         //scans of fabric client confirm this call be called with null
         //we do not want to totally ignore this, as the closing of the
         //watch can effect responsiveness
@@ -99,4 +99,11 @@ public abstract class BaseWatcher {
         return false;
     }
 
+
+    public void addWatch(String key, Watch desiredWatch) {
+      Watch watch = watches.putIfAbsent(key, desiredWatch);
+      if (watch != null) {
+        watch.close();
+      }
+    }
 }

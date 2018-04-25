@@ -81,22 +81,19 @@ public class ImageStreamWatcher extends BaseWatcher {
                             resourceVersion = imageStreams.getMetadata()
                                     .getResourceVersion();
                         }
-                        synchronized(ImageStreamWatcher.this) {
-                            if (watches.get(namespace) == null) {
-                                logger.info("creating ImageStream watch for namespace "
-                                        + namespace
-                                        + " and resource version "
-                                        + resourceVersion);
-                                watches.put(
-                                        namespace,
-                                        getAuthenticatedOpenShiftClient()
-                                                .imageStreams()
-                                                .inNamespace(namespace)
-                                                .withResourceVersion(
-                                                        resourceVersion)
-                                                        .watch(new WatcherCallback<ImageStream>(ImageStreamWatcher.this,
-                                                                namespace)));
-                            }
+                        if (watches.get(namespace) == null) {
+                            logger.info("creating ImageStream watch for namespace "
+                                    + namespace
+                                    + " and resource version "
+                                    + resourceVersion);
+                            addWatch(namespace,
+                                    getAuthenticatedOpenShiftClient()
+                                            .imageStreams()
+                                            .inNamespace(namespace)
+                                            .withResourceVersion(
+                                                    resourceVersion)
+                                                    .watch(new WatcherCallback<ImageStream>(ImageStreamWatcher.this,
+                                                            namespace)));
                         }
                     } catch (Exception e) {
                         logger.log(SEVERE, "Failed to load ImageStreams: " + e,
@@ -107,7 +104,7 @@ public class ImageStreamWatcher extends BaseWatcher {
         };
     }
 
-    public synchronized void start() {
+    public void start() {
         // lets process the initial state
         logger.info("Now handling startup image streams!!");
         super.start();
