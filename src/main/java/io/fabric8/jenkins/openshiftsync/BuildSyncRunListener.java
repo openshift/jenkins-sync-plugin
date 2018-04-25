@@ -58,8 +58,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
@@ -92,7 +91,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
     private long delayPollPeriodMs = 1000; // 1 seconds
     private static final long maxDelay = 30000;
 
-    private transient Set<Run> runsToPoll = new CopyOnWriteArraySet<>();
+    private transient ConcurrentLinkedQueue<Run> runsToPoll = new ConcurrentLinkedQueue<>();
 
     private transient AtomicBoolean timerStarted = new AtomicBoolean(false);
 
@@ -130,7 +129,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
     }
 
     @Override
-    public synchronized void onStarted(Run run, TaskListener listener) {
+    public void onStarted(Run run, TaskListener listener) {
         if (shouldPollRun(run)) {
             try {
                 BuildCause cause = (BuildCause) run.getCause(BuildCause.class);
@@ -166,7 +165,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
     }
 
     @Override
-    public synchronized void onCompleted(Run run, @Nonnull TaskListener listener) {
+    public void onCompleted(Run run, @Nonnull TaskListener listener) {
         if (shouldPollRun(run)) {
             runsToPoll.remove(run);
             pollRun(run);
@@ -177,7 +176,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
     }
 
     @Override
-    public synchronized void onDeleted(Run run) {
+    public void onDeleted(Run run) {
         if (shouldPollRun(run)) {
             runsToPoll.remove(run);
             pollRun(run);
@@ -188,7 +187,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
     }
 
     @Override
-    public synchronized void onFinalized(Run run) {
+    public void onFinalized(Run run) {
         if (shouldPollRun(run)) {
             runsToPoll.remove(run);
             pollRun(run);
@@ -197,13 +196,13 @@ public class BuildSyncRunListener extends RunListener<Run> {
         super.onFinalized(run);
     }
 
-    protected synchronized void pollLoop() {
-        for (Run run : runsToPoll) {
-            pollRun(run);
+    protected void pollLoop() {
+        while (!runsToPoll.isEmpty()) {
+            pollRun(runsToPoll.poll());
         }
     }
 
-    protected synchronized void pollRun(Run run) {
+    protected void pollRun(Run run) {
         if (!(run instanceof WorkflowRun)) {
             throw new IllegalStateException("Cannot poll a non-workflow run");
         }

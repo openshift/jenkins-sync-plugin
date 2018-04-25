@@ -36,14 +36,14 @@ import static java.util.logging.Level.SEVERE;
  * Jenkins
  */
 public class SecretWatcher extends BaseWatcher {
-    private Map<String, String> trackedSecrets;
+    private ConcurrentHashMap<String, String> trackedSecrets;
 
     private final Logger logger = Logger.getLogger(getClass().getName());
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public SecretWatcher(String[] namespaces) {
         super(namespaces);
-        this.trackedSecrets = new ConcurrentHashMap<String, String>();
+        this.trackedSecrets = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -80,23 +80,21 @@ public class SecretWatcher extends BaseWatcher {
                             resourceVersion = secrets.getMetadata()
                                     .getResourceVersion();
                         }
-                        synchronized(SecretWatcher.this) {
-                            if (watches.get(namespace) == null) {
-                                logger.info("creating Secret watch for namespace "
-                                        + namespace + " and resource version"
-                                        + resourceVersion);
-                                watches.put(
-                                        namespace,
-                                        getAuthenticatedOpenShiftClient()
-                                        .secrets()
-                                        .inNamespace(namespace)
-                                        .withLabel(Constants.OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC,
-                                                Constants.VALUE_SECRET_SYNC)
-                                                .withResourceVersion(
-                                                        resourceVersion)
-                                                        .watch(new WatcherCallback<Secret>(SecretWatcher.this,
-                                                                namespace)));
-                            }
+                        if (watches.get(namespace) == null) {
+                            logger.info("creating Secret watch for namespace "
+                                    + namespace + " and resource version"
+                                    + resourceVersion);
+                            watches.put(
+                                    namespace,
+                                    getAuthenticatedOpenShiftClient()
+                                    .secrets()
+                                    .inNamespace(namespace)
+                                    .withLabel(Constants.OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC,
+                                            Constants.VALUE_SECRET_SYNC)
+                                            .withResourceVersion(
+                                                    resourceVersion)
+                                                    .watch(new WatcherCallback<Secret>(SecretWatcher.this,
+                                                            namespace)));
                         }
                     } catch (Exception e) {
                         logger.log(SEVERE, "Failed to load Secrets: " + e, e);
@@ -107,13 +105,13 @@ public class SecretWatcher extends BaseWatcher {
         };
     }
 
-    public synchronized void start() {
+    public void start() {
         // lets process the initial state
         super.start();
         logger.info("Now handling startup secrets!!");
     }
 
-    private synchronized void onInitialSecrets(SecretList secrets) {
+    private void onInitialSecrets(SecretList secrets) {
         if (secrets == null)
             return;
         if (trackedSecrets == null)
@@ -135,7 +133,7 @@ public class SecretWatcher extends BaseWatcher {
     }
 
     @SuppressFBWarnings("SF_SWITCH_NO_DEFAULT")
-    public synchronized void eventReceived(Action action, Secret secret) {
+    public void eventReceived(Action action, Secret secret) {
         try {
             switch (action) {
             case ADDED:
