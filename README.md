@@ -73,4 +73,5 @@ Restrictions
 
 * With respect to Jenkins Pipelines, pipeline writers will not be able to fully leverage the `build` pipeline step to start a OpenShift Pipeline Strategy build from the Jenksinfile of another OpenShift Pipeline Stragetgy build.
 The "child" Pipeline Strategy builds will start, but the status cannot be properly captured and the "parent" Pipeline Strategy build fails.
-* When considering the monitoring a list of namespaces, be aware that currently there is not coordination between multiple instances of this plugin monitoring the same namespace.  Unpredictable results, such as duplicate, concurrent attempts at initiating OpenShift Pipeline Strategy Builds or initiating Jenkins Job runs that correspond to OpenShift Pipeline Strategy Builds, can result.
+* Do not run multiple jenkins instances running the sync plugin and monitoring the same namespace(s).  There is no coordination between multiple instances of this plugin monitoring the same namespace.  Unpredictable results, such as duplicate, concurrent attempts at initiating OpenShift Pipeline Strategy Builds or initiating Jenkins Job runs that correspond to OpenShift Pipeline Strategy Builds, can result.
+
