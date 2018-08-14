@@ -68,8 +68,9 @@ Other configuration
 * By default, the project running Jenkins is monitored, but additional projects can be monitored by adding them to the Namespace list in the "Manage Jenkins" -> "Configure System" section for this plugin.  NOTE:  the service account associated with the Jenkins deployment must have the `edit` role for each project monitored
 * By default, a Jenkins folder will be created for each project monitored when any Pipeline Strategy build configs are created.  This behavior can be turned off from the "Manage Jenkins" -> "Configure System" section for this plugin.  If turned off, the Jenkins job will not be placed in a folder, and the name will be a combination of the project and build config name.     
 
-Restrictions with respect to Jenkins Pipelines
+Restrictions
 --------------------------------------------------
 
-Pipeline writers will not be able to fully leverage the `build` pipeline step to start a OpenShift Pipeline Strategy build from the Jenksinfile of another OpenShift Pipeline Stragetgy build.
+* With respect to Jenkins Pipelines, pipeline writers will not be able to fully leverage the `build` pipeline step to start a OpenShift Pipeline Strategy build from the Jenksinfile of another OpenShift Pipeline Stragetgy build.
 The "child" Pipeline Strategy builds will start, but the status cannot be properly captured and the "parent" Pipeline Strategy build fails.
+* When considering the monitoring a list of namespaces, be aware that currently there is not coordination between multiple instances of this plugin monitoring the same namespace.  Unpredictable results, such as duplicate, concurrent attempts at initiating OpenShift Pipeline Strategy Builds or initiating Jenkins Job runs that correspond to OpenShift Pipeline Strategy Builds, can result.
