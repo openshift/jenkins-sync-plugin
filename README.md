@@ -18,7 +18,7 @@ the Jenkins Credentials Plugin.
     * Opaque/generic secrets where the data has a "ssh-privatekey" map to Jenkins SSH User credentials
     * Opaque/generic secrets where the data has a "secrettext" key map to Jenkins Secret Text credentials
 * For a Jenkins Secret File credential, the opaque/generic secret requires the 'filename' attribute. See the example below:
-
+asdfasdfasdf
 ```bash
 # Create the secret
 oc create secret generic mysecretfile --from-file=filename=mysecret.txt
