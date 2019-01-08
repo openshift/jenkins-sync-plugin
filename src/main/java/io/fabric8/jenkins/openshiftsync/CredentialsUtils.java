@@ -278,6 +278,14 @@ public class CredentialsUtils {
     }
 
     private static Credentials newOpenshiftTokenCredentials(String secretName, String secretText) {
+      if (secretName == null || secretName.length() == 0 || secretText == null || secretText.length() == 0) {
+        logger.log(Level.WARNING,
+          "Invalid secret data, secretName: " + secretName + " secretText is null: " + (secretText == null)
+            + " secretText is empty: " + (secretText != null ? secretText.length() == 0 : false));
+        return null;
+
+      }
+
       return new OpenShiftTokenCredentials(CredentialsScope.GLOBAL, secretName, secretName,
         hudson.util.Secret.fromString(new String(Base64.decode(secretText), StandardCharsets.UTF_8)));
     }
