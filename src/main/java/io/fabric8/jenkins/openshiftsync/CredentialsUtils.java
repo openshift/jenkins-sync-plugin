@@ -30,6 +30,8 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.openshift.jenkins.plugins.OpenShiftTokenCredentials;
+
 import static hudson.Util.fixNull;
 import static io.fabric8.jenkins.openshiftsync.Constants.*;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
@@ -255,6 +257,10 @@ public class CredentialsUtils {
             if (isNotBlank(secretTextData)) {
                 return newSecretTextCredential(secretName, secretTextData);
             }
+            String openshiftTokenData = data.get(OPENSHIFT_SECRETS_DATA_CLIENT_TOKEN);
+            if (isNotBlank(openshiftTokenData)) {
+              return newOpenshiftTokenCredentials(secretName, openshiftTokenData);
+            }
 
             return arbitraryKeyValueTextCredential(data, secretName);
 
@@ -269,6 +275,11 @@ public class CredentialsUtils {
             // default to OPENSHIFT_SECRETS_DATA_SECRET_TEXT in this case
             return arbitraryKeyValueTextCredential(data, secretName);
         }
+    }
+
+    private static Credentials newOpenshiftTokenCredentials(String secretName, String secretText) {
+      return new OpenShiftTokenCredentials(CredentialsScope.GLOBAL, secretName, secretName,
+        hudson.util.Secret.fromString(new String(Base64.decode(secretText), StandardCharsets.UTF_8)));
     }
 
     private static Credentials newSecretFileCredential(String secretName, String fileData) {

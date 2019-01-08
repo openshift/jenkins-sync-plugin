@@ -50,6 +50,7 @@ public class Constants {
     public static final String OPENSHIFT_SECRETS_TYPE_BASICAUTH = "kubernetes.io/basic-auth";
     public static final String OPENSHIFT_SECRETS_TYPE_OPAQUE = "Opaque";
     public static final String OPENSHIFT_BUILD_STATUS_FIELD = "status";
+    public static final String OPENSHIFT_SECRETS_DATA_CLIENT_TOKEN = "openshift-client-token";
 	
     public static final String OPENSHIFT_PROJECT_ENV_VAR_NAME = "PROJECT_NAME";
     public static final String OPENSHIFT_PROJECT_FILE = "/run/secrets/kubernetes.io/serviceaccount/namespace";
