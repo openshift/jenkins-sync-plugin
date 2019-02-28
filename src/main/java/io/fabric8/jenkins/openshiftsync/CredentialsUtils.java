@@ -58,7 +58,8 @@ public class CredentialsUtils {
         String credID = null;
         if (sourceSecret != null) {
             credID = upsertCredential(sourceSecret, sourceSecret.getMetadata().getNamespace(),
-                    sourceSecret.getMetadata().getName());
+                    sourceSecret.getMetadata().getName(),
+                    sourceSecret.getMetadata().getAnnotations().get(Annotations.SECRET_NAME));
             if (credID != null)
                 BuildConfigSecretToCredentialsMap.linkBCSecretToCredential(NamespaceName.create(buildConfig).toString(),
                         credID);
@@ -96,19 +97,19 @@ public class CredentialsUtils {
         if (secret != null) {
             ObjectMeta metadata = secret.getMetadata();
             if (metadata != null) {
-                return upsertCredential(secret, metadata.getNamespace(), metadata.getName());
+                return upsertCredential(secret, metadata.getNamespace(), metadata.getName(), metadata.getAnnotations().get(Annotations.SECRET_NAME));
             }
         }
         return null;
     }
 
-    private static String upsertCredential(Secret secret, String namespace, String secretName) throws IOException {
+    private static String upsertCredential(Secret secret, String namespace, String secretName, String customSecretName) throws IOException {
         String id = null;
         if (secret != null) {
             Credentials creds = secretToCredentials(secret);
             if (creds == null)
                 return null;
-            id = secretName(namespace, secretName);
+            id = secretName(namespace, secretName, customSecretName);
             Credentials existingCreds = lookupCredentials(id);
             final SecurityContext previousContext = ACL.impersonate(ACL.SYSTEM);
             try {
@@ -162,7 +163,7 @@ public class CredentialsUtils {
 
     public static void deleteCredential(Secret secret) throws IOException {
         if (secret != null) {
-            String id = secretName(secret.getMetadata().getNamespace(), secret.getMetadata().getName());
+            String id = secretName(secret.getMetadata().getNamespace(), secret.getMetadata().getName(), secret.getMetadata().getAnnotations().get(Annotations.SECRET_NAME));
             deleteCredential(id, NamespaceName.create(secret), secret.getMetadata().getResourceVersion());
         }
     }
@@ -197,8 +198,8 @@ public class CredentialsUtils {
                         CredentialsMatchers.withId(id));
     }
 
-    private static String secretName(String namespace, String name) {
-        return namespace + "-" + name;
+    private static String secretName(String namespace, String name, String customName) {
+        return (customName == null) ? namespace + "-" + name : customName;
     }
 
     private static Credentials arbitraryKeyValueTextCredential(Map<String, String> data, String secretName) {
@@ -225,6 +226,8 @@ public class CredentialsUtils {
     private static Credentials secretToCredentials(Secret secret) {
         String namespace = secret.getMetadata().getNamespace();
         String name = secret.getMetadata().getName();
+        String customName = secret.getMetadata().getAnnotations().get(Annotations.SECRET_NAME);
+
         Map<String, String> data = secret.getData();
 
         if (data == null) {
@@ -233,7 +236,7 @@ public class CredentialsUtils {
             return null;
         }
 
-        final String secretName = secretName(namespace, name);
+        final String secretName = secretName(namespace, name, customName);
         switch (secret.getType()) {
         case OPENSHIFT_SECRETS_TYPE_OPAQUE:
             String usernameData = data.get(OPENSHIFT_SECRETS_DATA_USERNAME);
