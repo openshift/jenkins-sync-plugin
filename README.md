@@ -11,6 +11,7 @@ the Jenkins Credentials Plugin.
 * changes in a Jenkins Build Run thats associated with a Jenkins Job gets replicated to an OpenShift Build object (which is created if necessary if the build was triggered via Jenkins)
 * changes in OpenShift ConfigMap resources are examined for XML documents that correspond to Pod Template configuration for the Kubernetes Cloud plugin at http://github.com/jenkinsci/kubernetes-plugin and change the configuration of the Kubernetes Cloud plugin running in Jenkins to add, edit, or remove Pod Templates based on what exists in the ConfigMap; also note, if the <image></image> setting of the Pod Template starts with "imagestreamtag:", then this plugin will look up the ImageStreamTag for that entry (stripping "imagestreamtag:" first) and if found, replace the entry with the ImageStreamTag's Docker image reference.
 * changes to OpenShift ImageStream resources with the label "role" set to "jenkins-slave" and ImageStreamTag resources with the annotation "role" set to "jenkins-slave" are considered images to used with Pod Templates for the Kubernetes Cloud plugin, where the Pod Templates are added, modified, or deleted from the Kubernetes cloud plugin as corresponding ImageStreams and ImageStreamTags are added, modified, or deleted, or have the "role=jenkins-slave" setting changed.
+* changes to Openshift Secrets with the annotation "jenkins.openshift.io/secret.name" set to any custom name for the secret will result in the name of the Secret being overridden provided that, no other secret has the same identifier. 
 * changes to OpenShift Secrets with the label "credential.sync.jenkins.openshift.io" set to "true" will result in those Secrets getting converted into Jenkins Credentials that are registered with the Jenkins Credentials Plugin.  Mappings occur as follows:
     * "kubernetes.io/basic-auth" map to Jenkins Username / Password credentials
     * "kubernetes.io/ssh-auth" map to Jenkins SSH User credentials
@@ -18,7 +19,6 @@ the Jenkins Credentials Plugin.
     * Opaque/generic secrets where the data has a "ssh-privatekey" map to Jenkins SSH User credentials
     * Opaque/generic secrets where the data has a "secrettext" key map to Jenkins Secret Text credentials
     * Opaque/generic secrets where the data has a "openshift-client-token" key map to Jenkins OpenShift Client Plugin Token credentials
-
 * For a Jenkins Secret File credential, the opaque/generic secret requires the 'filename' attribute. See the example below:
 
 ```bash
