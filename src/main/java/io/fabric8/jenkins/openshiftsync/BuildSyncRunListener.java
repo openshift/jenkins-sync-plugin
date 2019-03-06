@@ -332,7 +332,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
         }
 
         Map<String, BlueRunResult> blueRunResults = new HashMap<String, BlueRunResult>();
-        if (blueRun != null) {
+        if (blueRun != null && blueRun.getNodes() != null) {
             Iterator<BluePipelineNode> iter = blueRun.getNodes().iterator();
             while (iter.hasNext()) {
                 BluePipelineNode node = iter.next();
