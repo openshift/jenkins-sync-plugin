@@ -28,7 +28,6 @@ import jenkins.model.Jenkins;
 import jenkins.security.NotReallyRoleSensitiveCallable;
 
 import org.apache.commons.lang.StringUtils;
-import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 
@@ -40,6 +39,7 @@ import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -66,9 +66,6 @@ public class BuildWatcher extends BaseWatcher {
     private static final Logger logger = Logger.getLogger(BuildWatcher.class
             .getName());
 
-    // the fabric8 classes like Build have equal/hashcode annotations that
-    // should allow
-    // us to index via the objects themselves;
     // now that listing interval is 5 minutes (used to be 10 seconds), we have
     // seen
     // timing windows where if the build watch events come before build config
@@ -76,7 +73,10 @@ public class BuildWatcher extends BaseWatcher {
     // when both are created in a simultaneous fashion, there is an up to 5
     // minute delay
     // before the job run gets kicked off
-    private static final ConcurrentHashSet<Build> buildsWithNoBCList = new ConcurrentHashSet<>();
+    // started seeing duplicate builds getting kicked off so quit depending on
+    // so moved off of concurrent hash set to concurrent hash map using 
+    // namepace/name key
+    private static final ConcurrentHashMap<String,Build> buildsWithNoBCList = new ConcurrentHashMap<String,Build>();
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public BuildWatcher(String[] namespaces) {
@@ -355,7 +355,7 @@ public class BuildWatcher extends BaseWatcher {
         if (!OpenShiftUtils.isPipelineStrategyBuild(build))
             return;
         try {
-          buildsWithNoBCList.add(build);
+          buildsWithNoBCList.put(build.getMetadata().getNamespace()+build.getMetadata().getName(), build);
         } catch (ConcurrentModificationException | IllegalArgumentException |
           UnsupportedOperationException | NullPointerException e) {
           logger.log(Level.WARNING,"Failed to add item " +
@@ -364,14 +364,14 @@ public class BuildWatcher extends BaseWatcher {
     }
 
     private static void removeBuildFromNoBCList(Build build) {
-          buildsWithNoBCList.remove(build);
+          buildsWithNoBCList.remove(build.getMetadata().getNamespace()+build.getMetadata().getName());
     }
 
     // trigger any builds whose watch events arrived before the
     // corresponding build config watch events
-    public static void flushBuildsWithNoBCList() {
+    public synchronized static void flushBuildsWithNoBCList() {
         boolean anyRemoveFailures = false;
-        for (Build build : buildsWithNoBCList) {
+        for (Build build : buildsWithNoBCList.values()) {
           WorkflowJob job = getJobFromBuild(build);
           if (job != null) {
             try {
