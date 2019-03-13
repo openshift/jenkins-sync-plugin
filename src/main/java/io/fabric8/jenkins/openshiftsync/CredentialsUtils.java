@@ -58,8 +58,7 @@ public class CredentialsUtils {
         String credID = null;
         if (sourceSecret != null) {
             credID = upsertCredential(sourceSecret, sourceSecret.getMetadata().getNamespace(),
-                    sourceSecret.getMetadata().getName(),
-                    sourceSecret.getMetadata().getAnnotations().get(Annotations.SECRET_NAME));
+                    sourceSecret.getMetadata().getName());
             if (credID != null)
                 BuildConfigSecretToCredentialsMap.linkBCSecretToCredential(NamespaceName.create(buildConfig).toString(),
                         credID);
@@ -89,6 +88,17 @@ public class CredentialsUtils {
             deleteCredential(sourceSecret);
         }
     }
+    
+    private static String getCustomName(Secret secret) {
+        ObjectMeta metadata = secret.getMetadata();
+        if (metadata != null) {
+            Map<String,String> annotations = metadata.getAnnotations();
+            if (annotations != null) {
+                return annotations.get(Annotations.SECRET_NAME);
+            }
+        }
+        return null;
+    }
 
     /**
      * Inserts or creates a Jenkins Credential for the given Secret
@@ -97,14 +107,15 @@ public class CredentialsUtils {
         if (secret != null) {
             ObjectMeta metadata = secret.getMetadata();
             if (metadata != null) {
-                return upsertCredential(secret, metadata.getNamespace(), metadata.getName(), metadata.getAnnotations().get(Annotations.SECRET_NAME));
+                return upsertCredential(secret, metadata.getNamespace(), metadata.getName());
             }
         }
         return null;
     }
 
-    private static String upsertCredential(Secret secret, String namespace, String secretName, String customSecretName) throws IOException {
+    private static String upsertCredential(Secret secret, String namespace, String secretName) throws IOException {
         String id = null;
+        String customSecretName = getCustomName(secret);
         if (secret != null) {
             Credentials creds = secretToCredentials(secret);
             if (creds == null)
@@ -163,7 +174,7 @@ public class CredentialsUtils {
 
     public static void deleteCredential(Secret secret) throws IOException {
         if (secret != null) {
-            String id = secretName(secret.getMetadata().getNamespace(), secret.getMetadata().getName(), secret.getMetadata().getAnnotations().get(Annotations.SECRET_NAME));
+            String id = secretName(secret.getMetadata().getNamespace(), secret.getMetadata().getName(), getCustomName(secret));
             deleteCredential(id, NamespaceName.create(secret), secret.getMetadata().getResourceVersion());
         }
     }
@@ -226,7 +237,6 @@ public class CredentialsUtils {
     private static Credentials secretToCredentials(Secret secret) {
         String namespace = secret.getMetadata().getNamespace();
         String name = secret.getMetadata().getName();
-        String customName = secret.getMetadata().getAnnotations().get(Annotations.SECRET_NAME);
 
         Map<String, String> data = secret.getData();
 
@@ -236,7 +246,7 @@ public class CredentialsUtils {
             return null;
         }
 
-        final String secretName = secretName(namespace, name, customName);
+        final String secretName = secretName(namespace, name, getCustomName(secret));
         switch (secret.getType()) {
         case OPENSHIFT_SECRETS_TYPE_OPAQUE:
             String usernameData = data.get(OPENSHIFT_SECRETS_DATA_USERNAME);
