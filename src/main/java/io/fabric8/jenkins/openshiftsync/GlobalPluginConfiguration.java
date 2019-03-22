@@ -246,7 +246,7 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
 	}
 
 	private synchronized void configChange() {
-	    logger.info("OpenShift Sync Plugin processing a newly supplied configuration");
+	    /*logger.info("OpenShift Sync Plugin processing a newly supplied configuration");
         if (buildConfigWatcher != null) {
             buildConfigWatcher.stop();
         }
@@ -321,6 +321,6 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
 			} else {
 				logger.log(Level.SEVERE, "Failed to configure OpenShift Jenkins Sync Plugin: " + e);
 			}
-		}
+		}*/
 	}
 }
