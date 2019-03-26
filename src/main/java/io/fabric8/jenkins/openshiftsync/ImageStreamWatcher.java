@@ -261,15 +261,22 @@ public class ImageStreamWatcher extends BaseWatcher {
             } catch (Throwable t) {
                 logger.log(Level.FINE, "podTemplates", t);
             }
-            // for IST, can't set labels, so check annotations
-            if (ist != null
-                    && hasSlaveLabelOrAnnotation(ist.getMetadata()
-                            .getAnnotations())) {
-                // note, pod names cannot have colons
-                results.add(this.podTemplateFromData(ist.getMetadata()
-                        .getName().replaceAll(":", "."), ist.getImage()
+            // for IST, can't set labels directly, but can inherit, so check annotations (if IST directly
+            // updated) and then labels (if inherited from imagestream)
+            if (ist != null) {
+                if (hasSlaveLabelOrAnnotation(ist.getMetadata().getAnnotations())) {
+                    results.add(this.podTemplateFromData(ist.getMetadata()
+                        .getName(), ist.getImage()
                         .getDockerImageReference(), ist.getMetadata()
                         .getAnnotations()));
+                } else {
+                    if (hasSlaveLabelOrAnnotation(ist.getMetadata().getLabels())) {
+                        results.add(this.podTemplateFromData(ist.getMetadata()
+                                .getName(), ist.getImage()
+                                .getDockerImageReference(), ist.getMetadata()
+                                .getLabels()));
+                    }
+                }
             }
         }
         return results;
@@ -277,6 +284,8 @@ public class ImageStreamWatcher extends BaseWatcher {
 
     private PodTemplate podTemplateFromData(String name, String image,
             Map<String, String> map) {
+        // node, pod names cannot have colons
+        name = name.replaceAll(":", ".");
         String label = null;
         if (map != null && map.containsKey("slave-label")) {
             label = map.get("slave-label");
