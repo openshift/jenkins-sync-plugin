@@ -77,3 +77,8 @@ Restrictions
 The "child" Pipeline Strategy builds will start, but the status cannot be properly captured and the "parent" Pipeline Strategy build fails.
 * Do not run multiple jenkins instances running the sync plugin and monitoring the same namespace(s).  There is no coordination between multiple instances of this plugin monitoring the same namespace.  Unpredictable results, such as duplicate, concurrent attempts at initiating OpenShift Pipeline Strategy Builds or initiating Jenkins Job runs that correspond to OpenShift Pipeline Strategy Builds, can result.
 
+Build Config Environment Variable to Jenkins Job Parameter Mapping
+------------------------------------------------------------------
+
+See [the OKD documentation](https://docs.okd.io/latest/dev_guide/builds/build_strategies.html#jenkins-pipeline-strategy-environment) for details.
+
