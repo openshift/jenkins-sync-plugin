@@ -231,7 +231,7 @@ public class CredentialsUtils {
 
             return null;
         }
-        return newSecretTextCredential(secretName, text);
+        return newSecretTextCredential(secretName, new String(Base64.encode(text.getBytes())));
     }
 
     private static Credentials secretToCredentials(Secret secret) {
