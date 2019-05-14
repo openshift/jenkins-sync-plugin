@@ -38,14 +38,10 @@ import static java.util.logging.Level.WARNING;
 
 public class ImageStreamWatcher extends BaseWatcher {
     private final Logger logger = Logger.getLogger(getClass().getName());
-    private final List<String> predefinedOpenShiftSlaves;
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public ImageStreamWatcher(String[] namespaces) {
         super(namespaces);
-        this.predefinedOpenShiftSlaves = new ArrayList<String>();
-        this.predefinedOpenShiftSlaves.add("maven");
-        this.predefinedOpenShiftSlaves.add("nodejs");
     }
 
     @Override
@@ -113,82 +109,20 @@ public class ImageStreamWatcher extends BaseWatcher {
     public void eventReceived(Action action, ImageStream imageStream) {
         try {
             List<PodTemplate> slavesFromIS = podTemplates(imageStream);
+            String uid = imageStream.getMetadata().getUid();
             String isname = imageStream.getMetadata().getName();
+            String namespace = imageStream.getMetadata().getNamespace();
             switch (action) {
             case ADDED:
-                for (PodTemplate entry : slavesFromIS) {
-                    // timer might beat watch event - put call is technically
-                    // fine, but
-                    // not addPodTemplate given k8s plugin issues;
-                	// also, this check includes seeing if the image 
-                	// has changed
-                    if (JenkinsUtils.hasPodTemplate(entry))
-                        continue;
-                    if (this.predefinedOpenShiftSlaves
-                            .contains(entry.getName()))
-                        continue;
-                    JenkinsUtils.addPodTemplate(entry);
-                }
+                processSlavesForAddEvent(slavesFromIS, isType, uid, isname, namespace);
                 break;
 
             case MODIFIED:
-                // add/replace entries from latest IS incarnation
-                for (PodTemplate entry : slavesFromIS) {
-                    if (this.predefinedOpenShiftSlaves
-                            .contains(entry.getName()))
-                        continue;
-                	// this check includes seeing if the image 
-                	// has changed, in case a scheduled import 
-                    // has changed the image streams metadata, but 
-                    // not the image itself
-                    if (JenkinsUtils.hasPodTemplate(entry))
-                        continue;
-                    JenkinsUtils.addPodTemplate(entry);
-                }
-                // go back and remove tracked items that no longer are marked
-                // slaves
-                Iterator<PodTemplate> iter = JenkinsUtils.getPodTemplates()
-                        .iterator();
-                while (iter.hasNext()) {
-                    PodTemplate podTemplate = iter.next();
-                    // either actual is or an IST, where and IST starts with
-                    // the IS name followed by "." (since we have to replace
-                    // ":" with "." elsewhere
-                    if (!podTemplate.getName().equals(isname) && 
-                        !podTemplate.getName().startsWith(isname + "."))
-                        continue;
-                    if (this.predefinedOpenShiftSlaves.contains(podTemplate
-                            .getName()))
-                        continue;
-                    boolean keep = false;
-                    // if an IST based slave, see that particular tag is still
-                    // in list
-                    for (PodTemplate entry : slavesFromIS) {
-                        if (entry.getName().equals(podTemplate.getName())) {
-                            keep = true;
-                            break;
-                        }
-                    }
-                    if (!keep)
-                        JenkinsUtils.removePodTemplate(podTemplate);
-                }
+                processSlavesForModifyEvent(slavesFromIS, isType, uid, isname, namespace);
                 break;
 
             case DELETED:
-                iter = JenkinsUtils.getPodTemplates().iterator();
-                while (iter.hasNext()) {
-                    PodTemplate podTemplate = iter.next();
-                    // either actual is or an IST, where and IST starts with
-                    // the IS name followed by "." (since we have to replace
-                    // ":" with "." elsewhere
-                    if (!podTemplate.getName().equals(isname) &&
-                        !podTemplate.getName().startsWith(isname + "."))
-                        continue;
-                    if (this.predefinedOpenShiftSlaves.contains(podTemplate
-                            .getName()))
-                        continue;
-                    JenkinsUtils.removePodTemplate(podTemplate);
-                }
+                processSlavesForDeleteEvent(slavesFromIS, isType, uid, isname, namespace);
                 break;
 
             case ERROR:

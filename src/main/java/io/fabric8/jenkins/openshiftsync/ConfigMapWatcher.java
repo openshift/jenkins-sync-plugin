@@ -42,12 +42,10 @@ import static java.util.logging.Level.WARNING;
 
 public class ConfigMapWatcher extends BaseWatcher {
     private final Logger logger = Logger.getLogger(getClass().getName());
-    private ConcurrentHashMap<String, List<PodTemplate>> trackedConfigMaps;
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public ConfigMapWatcher(String[] namespaces) {
         super(namespaces);
-        this.trackedConfigMaps = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -111,72 +109,26 @@ public class ConfigMapWatcher extends BaseWatcher {
 
     public void eventReceived(Action action, ConfigMap configMap) {
         try {
+            List<PodTemplate> slavesFromCM = podTemplatesFromConfigMap(configMap);
+            boolean hasSlaves = slavesFromCM.size() > 0;
+            String uid = configMap.getMetadata().getUid();
+            String cmname = configMap.getMetadata().getName();
+            String namespace = configMap.getMetadata().getNamespace();
             switch (action) {
             case ADDED:
-                if (containsSlave(configMap)) {
-                    List<PodTemplate> templates = podTemplatesFromConfigMap(configMap);
-                    trackedConfigMaps.put(configMap.getMetadata().getUid(),
-                            templates);
-                    for (PodTemplate podTemplate : templates) {
-                        JenkinsUtils.addPodTemplate(podTemplate);
-                    }
+                if (hasSlaves) {
+                    processSlavesForAddEvent(slavesFromCM, cmType, uid, cmname, namespace);
                 }
                 break;
 
             case MODIFIED:
-                boolean alreadyTracked = trackedConfigMaps
-                        .containsKey(configMap.getMetadata().getUid());
-
-                if (alreadyTracked) {
-                    if (containsSlave(configMap)) {
-                        // Since the user could have change the immutable image
-                        // that a PodTemplate uses, we just
-                        // recreate the PodTemplate altogether. This makes it so
-                        // that any changes from within
-                        // Jenkins is undone.
-                        for (PodTemplate podTemplate : trackedConfigMaps
-                                .get(configMap.getMetadata().getUid())) {
-                            JenkinsUtils.removePodTemplate(podTemplate);
-                        }
-
-                        for (PodTemplate podTemplate : podTemplatesFromConfigMap(configMap)) {
-                            JenkinsUtils.addPodTemplate(podTemplate);
-                        }
-                    } else {
-                        // The user modified the configMap to no longer be a
-                        // jenkins-slave.
-                        for (PodTemplate podTemplate : trackedConfigMaps
-                                .get(configMap.getMetadata().getUid())) {
-                            JenkinsUtils.removePodTemplate(podTemplate);
-                        }
-
-                        trackedConfigMaps.remove(configMap.getMetadata()
-                                .getUid());
-                    }
-                } else {
-                    if (containsSlave(configMap)) {
-                        // The user modified the configMap to be a jenkins-slave
-
-                        List<PodTemplate> templates = podTemplatesFromConfigMap(configMap);
-                        trackedConfigMaps.put(configMap.getMetadata().getUid(),
-                                templates);
-                        for (PodTemplate podTemplate : templates) {
-                            JenkinsUtils.addPodTemplate(podTemplate);
-                        }
-                    }
-                }
+                processSlavesForModifyEvent(slavesFromCM, cmType, uid, cmname, namespace);
                 break;
 
             case DELETED:
-                if (trackedConfigMaps.containsKey(configMap.getMetadata()
-                        .getUid())) {
-                    for (PodTemplate podTemplate : trackedConfigMaps
-                            .get(configMap.getMetadata().getUid())) {
-                        JenkinsUtils.removePodTemplate(podTemplate);
-                    }
-                    trackedConfigMaps.remove(configMap.getMetadata().getUid());
-                }
+                this.processSlavesForDeleteEvent(slavesFromCM, cmType, uid, cmname, namespace);
                 break;
+
             case ERROR:
                 logger.warning("watch for configMap " + configMap.getMetadata().getName() + " received error event ");
                 break;
@@ -198,8 +150,8 @@ public class ConfigMapWatcher extends BaseWatcher {
     private void onInitialConfigMaps(ConfigMapList configMaps) {
         if (configMaps == null)
             return;
-        if (trackedConfigMaps == null) {
-            trackedConfigMaps = new ConcurrentHashMap<>(configMaps.getItems()
+        if (trackedPodTemplates == null) {
+            trackedPodTemplates = new ConcurrentHashMap<>(configMaps.getItems()
                     .size());
         }
         List<ConfigMap> items = configMaps.getItems();
@@ -207,10 +159,10 @@ public class ConfigMapWatcher extends BaseWatcher {
             for (ConfigMap configMap : items) {
                 try {
                     if (containsSlave(configMap)
-                            && !trackedConfigMaps.containsKey(configMap
+                            && !trackedPodTemplates.containsKey(configMap
                                     .getMetadata().getUid())) {
                         List<PodTemplate> templates = podTemplatesFromConfigMap(configMap);
-                        trackedConfigMaps.put(configMap.getMetadata().getUid(),
+                        trackedPodTemplates.put(configMap.getMetadata().getUid(),
                                 templates);
                         for (PodTemplate podTemplate : templates) {
                             JenkinsUtils.addPodTemplate(podTemplate);
@@ -244,6 +196,10 @@ public class ConfigMapWatcher extends BaseWatcher {
     public List<PodTemplate> podTemplatesFromConfigMap(ConfigMap configMap) {
         List<PodTemplate> results = new ArrayList<>();
         Map<String, String> data = configMap.getData();
+        
+        if (!containsSlave(configMap)) {
+            return results;
+        }
 
         XStream2 xStream2 = new XStream2();
 
