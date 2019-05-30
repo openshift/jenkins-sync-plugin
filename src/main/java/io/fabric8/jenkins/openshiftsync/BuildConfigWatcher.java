@@ -17,29 +17,21 @@ package io.fabric8.jenkins.openshiftsync;
 
 import com.cloudbees.hudson.plugins.folder.Folder;
 
-import com.sun.corba.se.spi.orbutil.threadpool.Work;
-import edu.umd.cs.findbugs.annotations.NonNull;
+import com.cloudbees.hudson.plugins.folder.computed.FolderComputation;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.BulkChange;
 import hudson.model.ItemGroup;
 import hudson.model.Job;
 import hudson.model.ParameterDefinition;
-import hudson.model.TaskListener;
-import hudson.plugins.git.*;
-import hudson.plugins.git.extensions.GitSCMExtension;
-import hudson.scm.SCM;
 import hudson.security.ACL;
 import hudson.triggers.SafeTimerTask;
 import hudson.util.XStream2;
 import io.fabric8.kubernetes.client.Watcher.Action;
 import io.fabric8.openshift.api.model.*;
-import jenkins.branch.Branch;
-import jenkins.branch.BranchProjectFactory;
-import jenkins.branch.BranchPropertyStrategy;
 import jenkins.branch.BranchSource;
+import jenkins.branch.MultiBranchProject.*;
 import jenkins.model.Jenkins;
 import jenkins.plugins.git.GitSCMSource;
-import jenkins.scm.api.*;
 import jenkins.security.NotReallyRoleSensitiveCallable;
 import jenkins.util.Timer;
 
@@ -47,11 +39,10 @@ import org.apache.tools.ant.filters.StringInputStream;
 import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.jenkinsci.plugins.workflow.flow.FlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
+import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 
-import javax.print.attribute.standard.JobName;
-import java.io.IOException;
 import java.io.InputStream;
-import java.util.Collections;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -68,11 +59,9 @@ import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL;
 import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL_LATEST_ONLY;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_BUILD_STATUS_FIELD;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_LABELS_BUILD_CONFIG_NAME;
-import static io.fabric8.jenkins.openshiftsync.CredentialsUtils.updateSourceCredentials;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.updateJob;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.*;
 import static java.util.logging.Level.SEVERE;
-import static org.apache.commons.lang.StringUtils.isNotBlank;
 
 /**
  * Watches {@link BuildConfig} objects in OpenShift and for WorkflowJobs we
@@ -260,49 +249,121 @@ public class BuildConfigWatcher extends BaseWatcher {
                         String jobName = jenkinsJobName(buildConfig);
                         String jobFullName = jenkinsJobFullName(buildConfig);
 
+                        // check if the annotation for enabling multibranch exists
                         if (enableMultibranchSync){
-                          parent = getFullNameParent(activeInstance, jobFullName, getNamespace(buildConfig));
-                          System.out.println("_________________ Multibranch sync enabled _____________________");
-                          BuildConfigToMultiBranchMapper multibranchProject = new BuildConfigToMultiBranchMapper(parent, jobName);
+                            logger.fine("INFO: Multibranch Sync enabled for buildConfig "+buildConfig.getMetadata().getName());
+                            parent = getFullNameParent(activeInstance, jobFullName, getNamespace(buildConfig));
+                            BuildConfigToMultiBranchMapper multibranchProject = new BuildConfigToMultiBranchMapper(parent, jobName);
 
-                          BulkChange bk = new BulkChange(multibranchProject);
-                          if (multibranchProject == null){
-                            System.out.println("_____________ Multibranch Project returning as NULL ___________");
-                          }
+                            // BulkChange on multibranchProject
+                            BulkChange bkMultibranchProject = new BulkChange(multibranchProject);
 
-                          multibranchProject.setDisplayName(jobFullName);
-                          multibranchProject.setDescription("Multibranch Project for BuildConfig "+jobName);
+                            multibranchProject.setDisplayName(jobFullName);
+                            multibranchProject.setDescription("Multibranch Project for BuildConfig "+jobName);
+                            InputStream mbStream = new StringInputStream(new XStream2().toXML(multibranchProject));
 
-                          InputStream mbStream = new StringInputStream(new XStream2().toXML(multibranchProject));
-                          System.out.println("______________ Jobs ____________ "+multibranchProject.getAllJobs());
+                            //Find Jenkinsfile Path
+                            BuildSource buildSource = buildConfig.getSpec().getSource();
+                            BuildStrategy buildStrategy = buildConfig.getSpec().getStrategy();
+                            String gitUri = buildSource.getGit().getUri();
+                            String jenkinsfilePath = buildStrategy.getJenkinsPipelineStrategy().getJenkinsfilePath();
+                            jenkinsfilePath = jenkinsfilePath == null ? "Jenkinsfile" : jenkinsfilePath;
+                            String contextDir = buildSource.getContextDir();
+                            if (contextDir != null){
+                                jenkinsfilePath = contextDir + "/"+ jenkinsfilePath;
+                            }
 
-                          BuildConfigSpec spec = buildConfig.getSpec();
-                          String gitUri = spec.getSource().getGit().getUri();
-                          String jenkinsfilePath = spec.getStrategy().getJenkinsPipelineStrategy().getJenkinsfilePath();
+                            GitSCMSource gitSCMSource = new GitSCMSource(null, gitUri, "", "*", "", false);
+                            BranchSource branchSource = new BranchSource(gitSCMSource);
+                            multibranchProject.getSourcesList().add(branchSource);
 
-                          GitSCMSource gitSCMSource = new GitSCMSource(null, gitUri, "", "*", "", false);
-                          BranchSource branchSource = new BranchSource(gitSCMSource);
-                          multibranchProject.getSourcesList().add(branchSource);
+                            BuildBranchProjectFactory branchProjectFactory = multibranchProject.newProjectFactory();
 
-                          BuildBranchProjectFactory branchProjectFactory = multibranchProject.newProjectFactory();
-                          BulkChange bbk = new BulkChange(branchProjectFactory);
-                          branchProjectFactory.setScriptPath(jenkinsfilePath);
-                          branchProjectFactory.setOwner(multibranchProject);
-                          System.out.println("_______________ Branch Factory _______________"+branchProjectFactory.getScriptPath());
-                          bbk.commit();
+                            // BulkChange on Project Factory
+                            BulkChange bkBranchProjectFactory = new BulkChange(branchProjectFactory);
+                            branchProjectFactory.setScriptPath(jenkinsfilePath);
+                            branchProjectFactory.setOwner(multibranchProject);
+                            bkBranchProjectFactory.commit(); // Commit BulkChange on Branch Project Factory
 
-                          System.out.println("_______________ CONFIG FILE _______________"+multibranchProject.getConfigFile());
+                            Folder folder = (Folder) parent;
+                            try {
+                                folder.createProjectFromXML(jobName, mbStream).save();
+                            } catch (Exception e) {
+                            }
 
-                          Folder folder = (Folder) parent;
-                          try {
-                            folder.createProjectFromXML(jobName, mbStream).save();
-                          } catch (Exception e) {
-                            System.out.println("_________ Exception __________ "+e);
-                          }
+                            BranchIndexing branchIndex = multibranchProject.getIndexing();
+                            branchIndex.run();
 
-                          bk.commit();
-                          System.out.println("_____________  " + multibranchProject.getSourcesList() + " ___________");
-                          return null;
+                            multibranchProject = (BuildConfigToMultiBranchMapper) branchIndex.getParent();
+
+                            Collection<WorkflowJob> branchJobs = multibranchProject.getItems();
+                            for (int i = 0 ; i < branchJobs.size(); i++){
+                                WorkflowJob branchJob = (WorkflowJob) branchJobs.toArray()[i];
+                                BulkChange bkBranchJob = new BulkChange(branchJob);
+
+                                FlowDefinition flowFromBuildConfig = mapBuildConfigToFlow(buildConfig);
+                                if (flowFromBuildConfig == null) {
+                                  return null;
+                                }
+
+                                branchJob.setDefinition(flowFromBuildConfig);
+
+                                String existingBuildRunPolicy = null;
+
+                                BuildConfigProjectProperty buildConfigProjectProperty = branchJob.getProperty(BuildConfigProjectProperty.class);
+
+                                if (buildConfigProjectProperty != null) {
+                                    existingBuildRunPolicy = buildConfigProjectProperty.getBuildRunPolicy();
+                                    long updatedBCResourceVersion = parseResourceVersion(buildConfig);
+                                    long oldBCResourceVersion = parseResourceVersion(buildConfigProjectProperty.getResourceVersion());
+                                    BuildConfigProjectProperty newProperty = new BuildConfigProjectProperty(buildConfig);
+                                    if (updatedBCResourceVersion <= oldBCResourceVersion && newProperty.getUid().equals(buildConfigProjectProperty.getUid()) && newProperty.getNamespace().equals(buildConfigProjectProperty.getNamespace())
+                                      && newProperty.getName().equals(buildConfigProjectProperty.getName()) && newProperty.getBuildRunPolicy().equals(buildConfigProjectProperty.getBuildRunPolicy())) {
+                                      return null;
+                                    }
+                                    buildConfigProjectProperty.setUid(newProperty.getUid());
+                                    buildConfigProjectProperty.setNamespace(newProperty.getNamespace());
+                                    buildConfigProjectProperty.setName(newProperty.getName());
+                                    buildConfigProjectProperty.setResourceVersion(newProperty.getResourceVersion());
+                                    buildConfigProjectProperty.setBuildRunPolicy(newProperty.getBuildRunPolicy());
+                                } else {
+                                    branchJob.addProperty(new BuildConfigProjectProperty(buildConfig));
+                                }
+
+                                // (re)populate job param list with any envs
+                                // from the build config
+                                Map<String, ParameterDefinition> paramMap = JenkinsUtils.addJobParamForBuildEnvs(branchJob, buildConfig.getSpec().getStrategy().getJenkinsPipelineStrategy(), true);
+
+                                branchJob.setConcurrentBuild(!(buildConfig.getSpec().getRunPolicy().equals(SERIAL) || buildConfig.getSpec().getRunPolicy().equals(SERIAL_LATEST_ONLY)));
+
+                                InputStream branchJobStream = new StringInputStream(new XStream2().toXML(branchJob));
+
+                                updateJob(branchJob, branchJobStream, existingBuildRunPolicy, buildConfigProjectProperty);
+                                logger.info("Updated job " + jobName + " from BuildConfig " + NamespaceName.create(buildConfig) + " with revision: " + buildConfig.getMetadata().getResourceVersion());
+
+                                bkBranchJob.commit();
+
+                                String fullName = branchJob.getFullName();
+                                WorkflowJob workflowJob = activeInstance.getItemByFullName(fullName, WorkflowJob.class);
+                                if (workflowJob == null && parent instanceof Folder) {
+                                  // we should never need this but just in
+                                  // case there's an
+                                  // odd timing issue or something...
+                                  Folder f = (Folder) parent;
+                                  f.add(branchJob, jobName);
+                                  workflowJob = activeInstance.getItemByFullName(fullName, WorkflowJob.class);
+                                }
+                                if (workflowJob == null) {
+                                  logger.warning("Could not find created job " + fullName + " for BuildConfig: " + getNamespace(buildConfig) + "/" + getName(buildConfig));
+                                } else {
+                                  JenkinsUtils.verifyEnvVars(paramMap, workflowJob, buildConfig);
+                                  putJobWithBuildConfig(workflowJob, buildConfig);
+                                }
+                            }
+
+                            bkMultibranchProject.commit(); // Commit BulkChange on multibranchProject
+
+                            return null;
                         }
 
                         WorkflowJob job = getJobFromBuildConfig(buildConfig);
@@ -334,6 +395,24 @@ public class BuildConfigWatcher extends BaseWatcher {
                         String existingBuildRunPolicy = null;
 
                         BuildConfigProjectProperty buildConfigProjectProperty = job.getProperty(BuildConfigProjectProperty.class);
+
+                        if (buildConfigProjectProperty != null) {
+                            existingBuildRunPolicy = buildConfigProjectProperty.getBuildRunPolicy();
+                            long updatedBCResourceVersion = parseResourceVersion(buildConfig);
+                            long oldBCResourceVersion = parseResourceVersion(buildConfigProjectProperty.getResourceVersion());
+                            BuildConfigProjectProperty newProperty = new BuildConfigProjectProperty(buildConfig);
+                            if (updatedBCResourceVersion <= oldBCResourceVersion && newProperty.getUid().equals(buildConfigProjectProperty.getUid()) && newProperty.getNamespace().equals(buildConfigProjectProperty.getNamespace())
+                                && newProperty.getName().equals(buildConfigProjectProperty.getName()) && newProperty.getBuildRunPolicy().equals(buildConfigProjectProperty.getBuildRunPolicy())) {
+                                return null;
+                            }
+                            buildConfigProjectProperty.setUid(newProperty.getUid());
+                            buildConfigProjectProperty.setNamespace(newProperty.getNamespace());
+                            buildConfigProjectProperty.setName(newProperty.getName());
+                            buildConfigProjectProperty.setResourceVersion(newProperty.getResourceVersion());
+                            buildConfigProjectProperty.setBuildRunPolicy(newProperty.getBuildRunPolicy());
+                        } else {
+                            job.addProperty(new BuildConfigProjectProperty(buildConfig));
+                        }
 
                         // (re)populate job param list with any envs
                         // from the build config
