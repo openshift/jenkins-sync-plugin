@@ -142,7 +142,7 @@ public class ImageStreamWatcher extends BaseWatcher {
         eventReceived(action, imageStream);
     }
 
-    private synchronized void onInitialImageStream(ImageStreamList imageStreams) {
+    private void onInitialImageStream(ImageStreamList imageStreams) {
         if (imageStreams == null)
             return;
         List<ImageStream> items = imageStreams.getItems();

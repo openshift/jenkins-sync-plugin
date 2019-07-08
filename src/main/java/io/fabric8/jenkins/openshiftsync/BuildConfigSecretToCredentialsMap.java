@@ -25,11 +25,11 @@ public class BuildConfigSecretToCredentialsMap {
     private BuildConfigSecretToCredentialsMap() {
     }
     
-    static synchronized void linkBCSecretToCredential(String bc, String credential) {
+    static void linkBCSecretToCredential(String bc, String credential) {
         buildConfigSecretToCredentialMap.put(bc, credential);
     }
     
-    static synchronized String unlinkBCSecretToCrendential(String bc) {
+    static String unlinkBCSecretToCrendential(String bc) {
         return buildConfigSecretToCredentialMap.remove(bc);
     }
 

@@ -41,7 +41,7 @@ public class CredentialsUtils {
 
     private final static Logger logger = Logger.getLogger(CredentialsUtils.class.getName());
 
-    public static synchronized Secret getSourceCredentials(BuildConfig buildConfig) {
+    public static Secret getSourceCredentials(BuildConfig buildConfig) {
         if (buildConfig.getSpec() != null && buildConfig.getSpec().getSource() != null
                 && buildConfig.getSpec().getSource().getSourceSecret() != null
                 && !buildConfig.getSpec().getSource().getSourceSecret().getName().isEmpty()) {
@@ -53,7 +53,7 @@ public class CredentialsUtils {
         return null;
     }
 
-    public static synchronized String updateSourceCredentials(BuildConfig buildConfig) throws IOException {
+    public static String updateSourceCredentials(BuildConfig buildConfig) throws IOException {
         Secret sourceSecret = getSourceCredentials(buildConfig);
         String credID = null;
         if (sourceSecret != null) {
@@ -75,7 +75,7 @@ public class CredentialsUtils {
         return credID;
     }
 
-    public static synchronized void deleteSourceCredentials(BuildConfig buildConfig) throws IOException {
+    public static void deleteSourceCredentials(BuildConfig buildConfig) throws IOException {
         Secret sourceSecret = getSourceCredentials(buildConfig);
         if (sourceSecret != null) {
             String labelValue = sourceSecret.getMetadata().getLabels()
@@ -103,7 +103,7 @@ public class CredentialsUtils {
     /**
      * Inserts or creates a Jenkins Credential for the given Secret
      */
-    public static synchronized String upsertCredential(Secret secret) throws IOException {
+    public static String upsertCredential(Secret secret) throws IOException {
         if (secret != null) {
             ObjectMeta metadata = secret.getMetadata();
             if (metadata != null) {

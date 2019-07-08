@@ -515,22 +515,22 @@ public class JenkinsUtils {
 		return getRun(job, build) != null;
 	}
 
-	public synchronized static void cancelBuild(WorkflowJob job, Build build) {
+	public static void cancelBuild(WorkflowJob job, Build build) {
 		cancelBuild(job, build, false);
 	}
 
-	public synchronized static void cancelBuild(WorkflowJob job, Build build, boolean deleted) {
-		if (!cancelQueuedBuild(job, build)) {
-      cancelRunningBuild(job, build);
-		}
-		if (deleted) {
-			return;
-		}
-		try {
-			updateOpenShiftBuildPhase(build, CANCELLED);
-		} catch (Exception e) {
-			throw e;
-		}
+	public static void cancelBuild(WorkflowJob job, Build build, boolean deleted) {
+        if (!cancelQueuedBuild(job, build)) {
+            cancelRunningBuild(job, build);
+        }
+        if (deleted) {
+            return;
+        }
+        try {
+            updateOpenShiftBuildPhase(build, CANCELLED);
+        } catch (Exception e) {
+            throw e;
+        }
 	}
 
 	private static WorkflowRun getRun(WorkflowJob job, Build build) {
@@ -561,7 +561,7 @@ public class JenkinsUtils {
 		return null;
 	}
 
-	public synchronized static void deleteRun(WorkflowRun run) {
+	public static void deleteRun(WorkflowRun run) {
 			try {
 			  LOGGER.info("Deleting run: " + run.toString());
 				run.delete();
@@ -570,7 +570,7 @@ public class JenkinsUtils {
 			}
 	}
 
-  public synchronized static void deleteRun(WorkflowJob job, Build build) {
+  public static void deleteRun(WorkflowJob job, Build build) {
       WorkflowRun run = getRun(job, build);
       deleteRun(run);
   }
@@ -905,7 +905,7 @@ public class JenkinsUtils {
 		}
 	}
 
-	public static List<PodTemplate> getPodTemplates() {
+	public static synchronized List<PodTemplate> getPodTemplates() {
 		KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
 		if (kubeCloud != null) {
 			// create copy of list for more flexiblity in loops
@@ -917,7 +917,7 @@ public class JenkinsUtils {
 		}
 	}
 
-	public static boolean hasPodTemplate(PodTemplate incomingPod) {
+	public static synchronized boolean hasPodTemplate(PodTemplate incomingPod) {
 		String name = incomingPod.getName();
 		if (name == null)
 			return false;
@@ -935,7 +935,7 @@ public class JenkinsUtils {
 		return false;
 	}
 
-	public static void addPodTemplate(PodTemplate podTemplate) {
+	public static synchronized void addPodTemplate(PodTemplate podTemplate) {
 		// clear out existing template with same name; k8s plugin maintains
 		// list, not map
 		removePodTemplate(podTemplate);

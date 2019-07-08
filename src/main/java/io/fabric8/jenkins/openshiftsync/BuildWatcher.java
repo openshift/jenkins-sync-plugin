@@ -369,35 +369,45 @@ public class BuildWatcher extends BaseWatcher {
 
     // trigger any builds whose watch events arrived before the
     // corresponding build config watch events
-    public synchronized static void flushBuildsWithNoBCList() {
-        boolean anyRemoveFailures = false;
-        for (Build build : buildsWithNoBCList.values()) {
-          WorkflowJob job = getJobFromBuild(build);
-          if (job != null) {
-            try {
-              logger.info("triggering job run for previously skipped build "
-                + build.getMetadata().getName());
-              triggerJob(job, build);
-            } catch (IOException e) {
-              logger.log(Level.WARNING, "flushBuildsWithNoBCList", e);
-            }
-            try {
-              removeBuildFromNoBCList(build);
-            } catch (Throwable t) {
-                // TODO
-                // concurrent mod exceptions are not suppose to occur
-                // with concurrent hash set; this try/catch with log 
-                // and the anyRemoveFailures post processing is a bit
-                // of safety paranoia until this proves to be true
-                // over extended usage ... probably can remove at some
-                // point
-                anyRemoveFailures = true;
-                logger.log(Level.WARNING, "flushBuildsWithNoBCList", t);
-            }
-          }
+    public static void flushBuildsWithNoBCList() {
+        
+        ConcurrentHashMap<String,Build> clone = null;
+        synchronized(buildsWithNoBCList) {
+            clone = new ConcurrentHashMap<String,Build>(buildsWithNoBCList);
         }
-        if (anyRemoveFailures && buildsWithNoBCList.size() > 0) {
-            buildsWithNoBCList.clear();
+        boolean anyRemoveFailures = false;
+        for (Build build : clone.values()) {
+            WorkflowJob job = getJobFromBuild(build);
+            if (job != null) {
+                try {
+                    logger.info("triggering job run for previously skipped build " + build.getMetadata().getName());
+                    triggerJob(job, build);
+                } catch (IOException e) {
+                    logger.log(Level.WARNING, "flushBuildsWithNoBCList", e);
+                }
+                try {
+                    synchronized(buildsWithNoBCList) {
+                        removeBuildFromNoBCList(build);
+                    }
+                } catch (Throwable t) {
+                    // TODO
+                    // concurrent mod exceptions are not suppose to occur
+                    // with concurrent hash set; this try/catch with log
+                    // and the anyRemoveFailures post processing is a bit
+                    // of safety paranoia until this proves to be true
+                    // over extended usage ... probably can remove at some
+                    // point
+                    anyRemoveFailures = true;
+                    logger.log(Level.WARNING, "flushBuildsWithNoBCList", t);
+                }
+            }
+            
+            synchronized(buildsWithNoBCList) {
+                if (anyRemoveFailures && buildsWithNoBCList.size() > 0) {
+                    buildsWithNoBCList.clear();
+                }            
+                
+            }
         }
     }
 
