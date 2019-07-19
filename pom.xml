@@ -42,9 +42,9 @@
          ~ hpi-plugin.version: The HPI Maven Plugin version used by the plugin..
          ~ stapler-plugin.version: The Stapler Maven plugin version required by the plugin.
     -->
-    <openshift-client.version>3.1.11</openshift-client.version>
+    <openshift-client.version>4.3.1</openshift-client.version>
     <log.level>INFO</log.level>
-    <findbugs-maven-plugin.version>3.0.1</findbugs-maven-plugin.version>
+    <findbugs-maven-plugin.version>3.0.4</findbugs-maven-plugin.version>
     <findbugs.failOnError>false</findbugs.failOnError>
   </properties>
 
