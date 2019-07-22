@@ -241,6 +241,10 @@ public class OpenShiftUtils {
         return namespace + "-" + buildConfigName;
     }
 
+    public static String jenkinsJobName(String namespace, String buildConfigName, String branchName) {
+        return namespace + "-" + buildConfigName + "-" + branchName;
+    }
+
     /**
      * Finds the full jenkins job path including folders for the given
      * {@link BuildConfig}.

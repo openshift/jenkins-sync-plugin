@@ -52,6 +52,7 @@ import java.util.logging.Logger;
 import static io.fabric8.jenkins.openshiftsync.Annotations.*;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.initializeBuildConfigToJobMap;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigToMultibranchJobsMap.initializeBuildConfigToMultibranchJobsMap;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.putJobWithBuildConfig;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.removeJobWithBuildConfig;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMapper.mapBuildConfigToFlow;
@@ -143,6 +144,7 @@ public class BuildConfigWatcher extends BaseWatcher {
 
     public void start() {
         initializeBuildConfigToJobMap();
+        initializeBuildConfigToMultibranchJobsMap();
         logger.info("Now handling startup build configs!!");
         super.start();
 
@@ -360,7 +362,6 @@ public class BuildConfigWatcher extends BaseWatcher {
                                   putJobWithBuildConfig(workflowJob, buildConfig);
                                 }
                             }
-
                             bkMultibranchProject.commit(); // Commit BulkChange on multibranchProject
 
                             return null;
