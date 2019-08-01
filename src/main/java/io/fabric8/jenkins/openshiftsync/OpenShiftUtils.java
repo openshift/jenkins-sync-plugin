@@ -264,6 +264,10 @@ public class OpenShiftUtils {
     /**
      * Returns the parent for the given item full name or default to the active
      * jenkins if it does not exist
+     * @param activeJenkins the active Jenkins instance
+     * @param fullName the full name of the instance
+     * @param namespace the namespace where the instance runs
+     * @return and ItemGroup representing the full parent
      */
     public static ItemGroup getFullNameParent(Jenkins activeJenkins,
             String fullName, String namespace) {
