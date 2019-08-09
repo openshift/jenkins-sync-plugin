@@ -15,19 +15,64 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
+import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.putJobWithBuildConfig;
+import static io.fabric8.jenkins.openshiftsync.BuildPhases.CANCELLED;
+import static io.fabric8.jenkins.openshiftsync.BuildPhases.PENDING;
+import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL;
+import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL_LATEST_ONLY;
+import static io.fabric8.jenkins.openshiftsync.BuildWatcher.addEventToJenkinsJobRun;
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_BUILD_NUMBER;
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_BUILD_STATUS_FIELD;
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_LABELS_BUILD_CONFIG_NAME;
+import static io.fabric8.jenkins.openshiftsync.CredentialsUtils.updateSourceCredentials;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isCancelled;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.updateOpenShiftBuildPhase;
+import static java.util.Collections.sort;
+import static java.util.logging.Level.SEVERE;
+import static java.util.logging.Level.WARNING;
+import static org.apache.commons.lang.StringUtils.isBlank;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import javax.xml.transform.Source;
+import javax.xml.transform.stream.StreamSource;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.tools.ant.filters.StringInputStream;
+import org.csanchez.jenkins.plugins.kubernetes.KubernetesCloud;
+import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
+import org.csanchez.jenkins.plugins.kubernetes.PodVolumes;
+import org.eclipse.jgit.transport.URIish;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
+import org.jenkinsci.plugins.workflow.job.WorkflowRun;
+
+import com.cloudbees.plugins.credentials.CredentialsParameterDefinition;
+
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.AbortException;
-import hudson.BulkChange;
 import hudson.model.Action;
-import hudson.model.ParameterDefinition;
-import hudson.model.ParameterValue;
 import hudson.model.BooleanParameterDefinition;
 import hudson.model.Cause;
 import hudson.model.CauseAction;
 import hudson.model.ChoiceParameterDefinition;
 import hudson.model.FileParameterDefinition;
-import hudson.model.ItemGroup;
 import hudson.model.Job;
+import hudson.model.ParameterDefinition;
+import hudson.model.ParameterValue;
 import hudson.model.ParametersAction;
 import hudson.model.ParametersDefinitionProperty;
 import hudson.model.PasswordParameterDefinition;
@@ -47,6 +92,7 @@ import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildBuilder;
 import io.fabric8.openshift.api.model.BuildConfig;
+import io.fabric8.openshift.api.model.BuildSpec;
 import io.fabric8.openshift.api.model.GitBuildSource;
 import io.fabric8.openshift.api.model.GitSourceRevision;
 import io.fabric8.openshift.api.model.JenkinsPipelineBuildStrategy;
@@ -54,69 +100,6 @@ import io.fabric8.openshift.api.model.SourceRevision;
 import jenkins.model.Jenkins;
 import jenkins.security.NotReallyRoleSensitiveCallable;
 import jenkins.util.Timer;
-
-import org.apache.commons.lang.StringUtils;
-import org.apache.tools.ant.filters.StringInputStream;
-import org.csanchez.jenkins.plugins.kubernetes.KubernetesCloud;
-import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
-import org.csanchez.jenkins.plugins.kubernetes.PodVolumes;
-import org.eclipse.jgit.transport.URIish;
-import org.jenkinsci.plugins.workflow.flow.FlowDefinition;
-import org.jenkinsci.plugins.workflow.job.WorkflowJob;
-import org.jenkinsci.plugins.workflow.job.WorkflowRun;
-
-import com.cloudbees.hudson.plugins.folder.Folder;
-import com.cloudbees.plugins.credentials.CredentialsParameterDefinition;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.LinkedHashMap;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import javax.xml.transform.Source;
-import javax.xml.transform.stream.StreamSource;
-
-import static io.fabric8.jenkins.openshiftsync.Annotations.DISABLE_SYNC_CREATE;
-import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
-import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.putJobWithBuildConfig;
-import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMapper.mapBuildConfigToFlow;
-import static io.fabric8.jenkins.openshiftsync.BuildPhases.CANCELLED;
-import static io.fabric8.jenkins.openshiftsync.BuildPhases.PENDING;
-import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL;
-import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL_LATEST_ONLY;
-import static io.fabric8.jenkins.openshiftsync.BuildWatcher.addEventToJenkinsJobRun;
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_BUILD_NUMBER;
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_BUILD_STATUS_FIELD;
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_LABELS_BUILD_CONFIG_NAME;
-import static io.fabric8.jenkins.openshiftsync.CredentialsUtils.updateSourceCredentials;
-import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.maybeScheduleNext;
-import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.updateJob;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAnnotation;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getFullNameParent;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getName;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getNamespace;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isCancellable;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isCancelled;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isNew;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.jenkinsJobDisplayName;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.jenkinsJobFullName;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.jenkinsJobName;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.parseResourceVersion;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.updateOpenShiftBuildPhase;
-import static java.util.Collections.sort;
-import static java.util.logging.Level.SEVERE;
-import static java.util.logging.Level.WARNING;
-import static org.apache.commons.lang.StringUtils.isBlank;
 
 /**
  */
@@ -375,65 +358,65 @@ public class JenkinsUtils {
 		return buildActions;
 	}
 
-    public static boolean triggerJob(WorkflowJob job, Build build)
-            throws IOException {
-        if (isAlreadyTriggered(job, build)) {
-            return false;
-        }
-
+	  /**
+     * @param job   to trigger
+     * @param build linked to it
+     * @return true if "job" has been triggered
+     * @throws IOException if job cannot be persisted
+     */
+    public static boolean triggerJob(WorkflowJob job, Build build) throws IOException {
         String buildConfigName = build.getStatus().getConfig().getName();
         if (isBlank(buildConfigName)) {
             return false;
         }
 
-        BuildConfigProjectProperty bcProp = job
-                .getProperty(BuildConfigProjectProperty.class);
-        if (bcProp == null || bcProp.getBuildRunPolicy() == null) {
-            LOGGER.warning("aborting trigger of build " + build
-                    + "because of missing bc project property or run policy");
-            return false;
-        }
-
-        switch (bcProp.getBuildRunPolicy()) {
-        case SERIAL_LATEST_ONLY:
-            cancelQueuedBuilds(job, bcProp.getUid());
-            if (job.isBuilding()) {
-                return false;
-            }
-            break;
-        case SERIAL:
-            if (job.isInQueue() || job.isBuilding()) {
-                return false;
-            }
-            break;
-        default:
-        }
-
         ObjectMeta meta = build.getMetadata();
         String namespace = meta.getNamespace();
-        BuildConfig buildConfig = getAuthenticatedOpenShiftClient()
-                .buildConfigs().inNamespace(namespace)
+        BuildConfig buildConfig = getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace)
                 .withName(buildConfigName).get();
         if (buildConfig == null) {
             return false;
         }
-
         // sync on intern of name should guarantee sync on same actual obj
         synchronized (buildConfig.getMetadata().getUid().intern()) {
+            if (isAlreadyTriggered(job, build)) {
+                return false;
+            }
+
+            BuildConfigProjectProperty buildConfigProject = job.getProperty(BuildConfigProjectProperty.class);
+            if (buildConfigProject == null || buildConfigProject.getBuildRunPolicy() == null) {
+                LOGGER.warning(
+                        "aborting trigger of build " + build + "because of missing bc project property or run policy");
+                return false;
+            }
+
+            switch (buildConfigProject.getBuildRunPolicy()) {
+            case SERIAL_LATEST_ONLY:
+                cancelQueuedBuilds(job, buildConfigProject.getUid());
+                if (job.isBuilding()) {
+                    return false;
+                }
+                break;
+            case SERIAL:
+                if (job.isInQueue() || job.isBuilding()) {
+                    return false;
+                }
+                break;
+            default:
+            }
+
             updateSourceCredentials(buildConfig);
 
-            // We need to ensure that we do not remove
-            // existing Causes from a Run since other
-            // plugins may rely on them.
+            // We need to ensure that we do not remove existing Causes from a Run since
+            // other plugins may rely on them.
             List<Cause> newCauses = new ArrayList<>();
-            newCauses.add(new BuildCause(build, bcProp.getUid()));
-            CauseAction originalCauseAction = BuildToActionMapper
-                    .removeCauseAction(build.getMetadata().getName());
+            newCauses.add(new BuildCause(build, buildConfigProject.getUid()));
+            CauseAction originalCauseAction = BuildToActionMapper.removeCauseAction(build.getMetadata().getName());
             if (originalCauseAction != null) {
                 if (LOGGER.isLoggable(Level.FINE)) {
                     LOGGER.fine("Adding existing causes...");
                     for (Cause c : originalCauseAction.getCauses()) {
-                        LOGGER.fine("orginal cause: " + c.getShortDescription());
+                        LOGGER.fine("original cause: " + c.getShortDescription());
                     }
                 }
                 newCauses.addAll(originalCauseAction.getCauses());
@@ -448,20 +431,18 @@ public class JenkinsUtils {
             CauseAction bCauseAction = new CauseAction(newCauses);
             buildActions.add(bCauseAction);
 
-            GitBuildSource gitBuildSource = build.getSpec().getSource()
-                    .getGit();
-            SourceRevision sourceRevision = build.getSpec().getRevision();
+            BuildSpec spec = build.getSpec();
+            GitBuildSource gitBuildSource = spec.getSource().getGit();
+            SourceRevision sourceRevision = spec.getRevision();
 
             if (gitBuildSource != null && sourceRevision != null) {
                 GitSourceRevision gitSourceRevision = sourceRevision.getGit();
                 if (gitSourceRevision != null) {
                     try {
                         URIish repoURL = new URIish(gitBuildSource.getUri());
-                        buildActions.add(new RevisionParameterAction(
-                                gitSourceRevision.getCommit(), repoURL));
+                        buildActions.add(new RevisionParameterAction(gitSourceRevision.getCommit(), repoURL));
                     } catch (URISyntaxException e) {
-                        LOGGER.log(SEVERE, "Failed to parse git repo URL"
-                                + gitBuildSource.getUri(), e);
+                        LOGGER.log(SEVERE, "Failed to parse git repo URL" + gitBuildSource.getUri(), e);
                     }
                 }
             }
@@ -470,12 +451,10 @@ public class JenkinsUtils {
                     .removeParameterAction(build.getMetadata().getName());
             // grab envs from actual build in case user overrode default values
             // via `oc start-build -e`
-            JenkinsPipelineBuildStrategy strat = build.getSpec().getStrategy()
-                    .getJenkinsPipelineStrategy();
+            JenkinsPipelineBuildStrategy strat = spec.getStrategy().getJenkinsPipelineStrategy();
             // only add new param defs for build envs which are not in build
             // config envs
-            Map<String, ParameterDefinition> paramMap = addJobParamForBuildEnvs(
-                    job, strat, false);
+            Map<String, ParameterDefinition> paramMap = addJobParamForBuildEnvs(job, strat, false);
             verifyEnvVars(paramMap, job, buildConfig);
             if (userProvidedParams == null) {
                 LOGGER.fine("setting all job run params since this was either started via oc, or started from the UI "
@@ -485,16 +464,12 @@ public class JenkinsUtils {
                 buildActions = setJobRunParamsFromEnv(job, strat, buildActions);
             } else {
                 LOGGER.fine("setting job run params and since this is manually started from jenkins applying user "
-                        + "provided parameters "
-                        + userProvidedParams
-                        + " along with any from bc's env vars");
-                buildActions = setJobRunParamsFromEnvAndUIParams(job, strat,
-                        buildActions, userProvidedParams);
+                        + "provided parameters " + userProvidedParams + " along with any from bc's env vars");
+                buildActions = setJobRunParamsFromEnvAndUIParams(job, strat, buildActions, userProvidedParams);
             }
             putJobWithBuildConfig(job, buildConfig);
 
-            if (job.scheduleBuild2(0,
-                    buildActions.toArray(new Action[buildActions.size()])) != null) {
+            if (job.scheduleBuild2(0, buildActions.toArray(new Action[buildActions.size()])) != null) {
                 updateOpenShiftBuildPhase(build, PENDING);
                 // If builds are queued too quickly, Jenkins can add the cause
                 // to the previous queued build so let's add a tiny
@@ -510,7 +485,7 @@ public class JenkinsUtils {
             return false;
         }
     }
-
+    
 	private static boolean isAlreadyTriggered(WorkflowJob job, Build build) {
 		return getRun(job, build) != null;
 	}
