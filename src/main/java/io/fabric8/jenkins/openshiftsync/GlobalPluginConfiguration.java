@@ -22,8 +22,6 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.logging.Level.SEVERE;
 import static jenkins.model.Jenkins.ADMINISTER;
 
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.commons.lang.StringUtils;
@@ -34,8 +32,6 @@ import com.cloudbees.plugins.credentials.common.StandardListBoxModel;
 
 import hudson.Extension;
 import hudson.Util;
-import hudson.init.InitMilestone;
-import hudson.triggers.SafeTimerTask;
 import hudson.util.ListBoxModel;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import jenkins.model.GlobalConfiguration;
@@ -110,6 +106,23 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
         configChange();
         save();
         return true;
+    }
+
+    // https://wiki.jenkins-ci.org/display/JENKINS/Credentials+Plugin
+    // http://javadoc.jenkins-ci.org/credentials/com/cloudbees/plugins/credentials/common/AbstractIdCredentialsListBoxModel.html
+    // https://github.com/jenkinsci/kubernetes-plugin/blob/master/src/main/java/org/csanchez/jenkins/plugins/kubernetes/KubernetesCloud.java
+    public static ListBoxModel doFillCredentialsIdItems(String credentialsId) {
+        Jenkins jenkins = Jenkins.getInstance();
+        if (jenkins == null) {
+            return (ListBoxModel) null;
+        }
+        StandardListBoxModel model = new StandardListBoxModel();
+        if (!jenkins.hasPermission(ADMINISTER)) {
+            // Important! Otherwise you expose credentials metadata to random web requests.
+            return model.includeCurrentValue(credentialsId);
+        }
+        return model.includeEmptyValue().includeAs(SYSTEM, jenkins, OpenShiftToken.class)
+                .includeCurrentValue(credentialsId);
     }
 
     public boolean isEnabled() {
@@ -218,21 +231,32 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
         this.imageStreamListInterval = imageStreamListInterval;
     }
 
-    // https://wiki.jenkins-ci.org/display/JENKINS/Credentials+Plugin
-    // http://javadoc.jenkins-ci.org/credentials/com/cloudbees/plugins/credentials/common/AbstractIdCredentialsListBoxModel.html
-    // https://github.com/jenkinsci/kubernetes-plugin/blob/master/src/main/java/org/csanchez/jenkins/plugins/kubernetes/KubernetesCloud.java
-    public static ListBoxModel doFillCredentialsIdItems(String credentialsId) {
-        Jenkins jenkins = Jenkins.getInstance();
-        if (jenkins == null) {
-            return (ListBoxModel) null;
-        }
-        StandardListBoxModel model = new StandardListBoxModel();
-        if (!jenkins.hasPermission(ADMINISTER)) {
-            // Important! Otherwise you expose credentials metadata to random web requests.
-            return model.includeCurrentValue(credentialsId);
-        }
-        return model.includeEmptyValue().includeAs(SYSTEM, jenkins, OpenShiftToken.class)
-                .includeCurrentValue(credentialsId);
+    String[] getNamespaces() {
+        return namespaces;
+    }
+
+    void setNamespaces(String[] namespaces) {
+        this.namespaces = namespaces;
+    }
+
+    void setBuildWatcher(BuildWatcher buildWatcher) {
+        this.buildWatcher = buildWatcher;
+    }
+
+    void setBuildConfigWatcher(BuildConfigWatcher buildConfigWatcher) {
+        this.buildConfigWatcher = buildConfigWatcher;
+    }
+
+    void setSecretWatcher(SecretWatcher secretWatcher) {
+        this.secretWatcher = secretWatcher;
+    }
+
+    void setConfigMapWatcher(ConfigMapWatcher configMapWatcher) {
+        this.configMapWatcher = configMapWatcher;
+    }
+
+    void setImageStreamWatcher(ImageStreamWatcher imageStreamWatcher) {
+        this.imageStreamWatcher = imageStreamWatcher;
     }
 
     private synchronized void configChange() {
@@ -259,50 +283,15 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
         this.secretWatcher = null;
         OpenShiftUtils.shutdownOpenShiftClient();
 
-        if (!enabled) {
+        if (!this.enabled) {
             logger.info("OpenShift Sync Plugin has been disabled");
             return;
         }
         try {
             OpenShiftUtils.initializeOpenShiftClient(this.server);
             this.namespaces = getNamespaceOrUseDefault(this.namespaces, getOpenShiftClient());
-
-            Runnable task = new SafeTimerTask() {
-                @Override
-                protected void doRun() throws Exception {
-                    logger.info("Confirming Jenkins is started");
-                    while (true) {
-                        final Jenkins instance = Jenkins.getActiveInstance();
-
-                        // We can look at Jenkins Init Level to see if we are ready to start. If we do
-                        // not wait, we risk the chance of a deadlock.
-                        InitMilestone initLevel = instance.getInitLevel();
-                        logger.fine("Jenkins init level: " + initLevel);
-                        if (initLevel == InitMilestone.COMPLETED) {
-                            break;
-                        }
-                        logger.fine("Jenkins not ready...");
-                        try {
-                            Thread.sleep(500);
-                        } catch (InterruptedException e) {
-                            // ignore
-                        }
-                    }
-
-                    buildConfigWatcher = new BuildConfigWatcher(namespaces);
-                    buildConfigWatcher.start();
-                    buildWatcher = new BuildWatcher(namespaces);
-                    buildWatcher.start();
-                    configMapWatcher = new ConfigMapWatcher(namespaces);
-                    configMapWatcher.start();
-                    imageStreamWatcher = new ImageStreamWatcher(namespaces);
-                    imageStreamWatcher.start();
-                    secretWatcher = new SecretWatcher(namespaces);
-                    secretWatcher.start();
-                }
-            };
-            // lets give jenkins a while to get started ;)
-            Timer.get().schedule(task, 1, SECONDS);
+            Runnable task = new GlobalPluginConfigurationTimerTask(this);
+            Timer.get().schedule(task, 1, SECONDS); // lets give jenkins a while to get started ;)
         } catch (KubernetesClientException e) {
             Throwable exceptionOrCause = (e.getCause() != null) ? e.getCause() : e;
             logger.log(SEVERE, "Failed to configure OpenShift Jenkins Sync Plugin: " + exceptionOrCause);
