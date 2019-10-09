@@ -15,28 +15,32 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import hudson.triggers.SafeTimerTask;
-import io.fabric8.kubernetes.client.Watcher.Action;
-import io.fabric8.openshift.api.model.ImageStream;
-import io.fabric8.openshift.api.model.ImageStreamList;
-import io.fabric8.openshift.api.model.ImageStreamTag;
-import io.fabric8.openshift.api.model.TagReference;
-
-import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
-
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
+import static java.util.logging.Level.FINE;
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.logging.Logger;
+
+import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
+
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import hudson.triggers.SafeTimerTask;
+import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.client.Watcher.Action;
+import io.fabric8.openshift.api.model.ImageStream;
+import io.fabric8.openshift.api.model.ImageStreamList;
+import io.fabric8.openshift.api.model.ImageStreamStatus;
+import io.fabric8.openshift.api.model.ImageStreamTag;
+import io.fabric8.openshift.api.model.TagReference;
+import io.fabric8.openshift.client.OpenShiftClient;
+
 public class ImageStreamWatcher extends BaseWatcher {
+    private static final String SLAVE_LABEL = "slave-label";
+    private static final String IMAGESTREAM_TYPE = isType;
     private final Logger logger = Logger.getLogger(getClass().getName());
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
@@ -57,43 +61,33 @@ public class ImageStreamWatcher extends BaseWatcher {
                     logger.fine("No Openshift Token credential defined.");
                     return;
                 }
-                for (String namespace : namespaces) {
+                for (String ns : namespaces) {
                     ImageStreamList imageStreams = null;
                     try {
                         logger.fine("listing ImageStream resources");
-                        imageStreams = getAuthenticatedOpenShiftClient()
-                                .imageStreams().inNamespace(namespace).list();
-                        onInitialImageStream(imageStreams);
+                        imageStreams = getClient().imageStreams().inNamespace(ns).list();
+                        onImageStreamInitialization(imageStreams);
                         logger.fine("handled ImageStream resources");
                     } catch (Exception e) {
-                        logger.log(SEVERE, "Failed to load ImageStreams: " + e,
-                                e);
+                        logger.log(SEVERE, "Failed to load ImageStreams: " + e, e);
                     }
                     try {
                         String resourceVersion = "0";
                         if (imageStreams == null) {
                             logger.warning("Unable to get image stream list; impacts resource version used for watch");
                         } else {
-                            resourceVersion = imageStreams.getMetadata()
-                                    .getResourceVersion();
+                            resourceVersion = imageStreams.getMetadata().getResourceVersion();
                         }
-                        if (watches.get(namespace) == null) {
-                            logger.info("creating ImageStream watch for namespace "
-                                    + namespace
-                                    + " and resource version "
+                        if (watches.get(ns) == null) {
+                            logger.info("creating ImageStream watch for namespace " + ns + " and resource version "
                                     + resourceVersion);
-                            addWatch(namespace,
-                                    getAuthenticatedOpenShiftClient()
-                                            .imageStreams()
-                                            .inNamespace(namespace)
-                                            .withResourceVersion(
-                                                    resourceVersion)
-                                                    .watch(new WatcherCallback<ImageStream>(ImageStreamWatcher.this,
-                                                            namespace)));
+                            ImageStreamWatcher w = ImageStreamWatcher.this;
+                            WatcherCallback<ImageStream> watcher = new WatcherCallback<ImageStream>(w, ns);
+                            addWatch(ns, getClient().imageStreams().inNamespace(ns).withResourceVersion(resourceVersion)
+                                    .watch(watcher));
                         }
                     } catch (Exception e) {
-                        logger.log(SEVERE, "Failed to load ImageStreams: " + e,
-                                e);
+                        logger.log(SEVERE, "Failed to load ImageStreams: " + e, e);
                     }
                 }
             }
@@ -108,58 +102,60 @@ public class ImageStreamWatcher extends BaseWatcher {
 
     public void eventReceived(Action action, ImageStream imageStream) {
         try {
-            List<PodTemplate> slavesFromIS = podTemplates(imageStream);
-            String uid = imageStream.getMetadata().getUid();
-            String isname = imageStream.getMetadata().getName();
-            String namespace = imageStream.getMetadata().getNamespace();
+            List<PodTemplate> slaves = podTemplates(imageStream);
+            ObjectMeta metadata = imageStream.getMetadata();
+            String uid = metadata.getUid();
+            String name = metadata.getName();
+            String namespace = metadata.getNamespace();
             switch (action) {
             case ADDED:
-                processSlavesForAddEvent(slavesFromIS, isType, uid, isname, namespace);
+                processSlavesForAddEvent(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
                 break;
-
             case MODIFIED:
-                processSlavesForModifyEvent(slavesFromIS, isType, uid, isname, namespace);
+                processSlavesForModifyEvent(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
                 break;
-
             case DELETED:
-                processSlavesForDeleteEvent(slavesFromIS, isType, uid, isname, namespace);
+                processSlavesForDeleteEvent(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
                 break;
-
             case ERROR:
-                logger.warning("watch for imageStream " + imageStream.getMetadata().getName() + " received error event ");
+                logger.warning("watch for imageStream " + name + " received error event ");
                 break;
             default:
-                logger.warning("watch for imageStream " + imageStream.getMetadata().getName() + " received unknown event " + action);
+                logger.warning("watch for imageStream " + name + " received unknown event " + action);
                 break;
             }
         } catch (Exception e) {
             logger.log(WARNING, "Caught: " + e, e);
         }
     }
+
     @Override
-    public <T> void eventReceived(io.fabric8.kubernetes.client.Watcher.Action action, T resource) {
-        ImageStream imageStream = (ImageStream)resource;
+    public <T> void eventReceived(Action action, T resource) {
+        ImageStream imageStream = (ImageStream) resource;
         eventReceived(action, imageStream);
     }
 
-    private void onInitialImageStream(ImageStreamList imageStreams) {
-        if (imageStreams == null)
-            return;
-        List<ImageStream> items = imageStreams.getItems();
-        if (items != null) {
-            for (ImageStream imageStream : items) {
-                try {
-                    List<PodTemplate> slavesFromIS = podTemplates(imageStream);
-                    for (PodTemplate entry : slavesFromIS) {
-                        // watch event might beat the timer - put call is
-                        // technically fine, but
-                        // not addPodTemplate given k8s plugin issues
-                        if (JenkinsUtils.hasPodTemplate(entry))
-                            continue;
-                        JenkinsUtils.addPodTemplate(entry);
+    private OpenShiftClient getClient() {
+        return getAuthenticatedOpenShiftClient();
+    }
+
+    private void onImageStreamInitialization(ImageStreamList imageStreams) {
+        if (imageStreams != null) {
+            List<ImageStream> items = imageStreams.getItems();
+            if (items != null) {
+                for (ImageStream imageStream : items) {
+                    try {
+                        List<PodTemplate> agents = podTemplates(imageStream);
+                        for (PodTemplate entry : agents) {
+                            // watch event might beat the timer - put call is technically fine, but not
+                            // addPodTemplate given k8s plugin issues
+                            if (!JenkinsUtils.hasPodTemplate(entry)) {
+                                JenkinsUtils.addPodTemplate(entry);
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.log(SEVERE, "Failed to update job", e);
                     }
-                } catch (Exception e) {
-                    logger.log(SEVERE, "Failed to update job", e);
                 }
             }
         }
@@ -168,67 +164,66 @@ public class ImageStreamWatcher extends BaseWatcher {
     private List<PodTemplate> podTemplates(ImageStream imageStream) {
         List<PodTemplate> results = new ArrayList<PodTemplate>();
         // for IS, since we can check labels, check there
-        if (hasSlaveLabelOrAnnotation(imageStream.getMetadata().getLabels())) {
-            results.add(podTemplateFromData(
-                    imageStream.getMetadata().getName(), imageStream
-                            .getStatus().getDockerImageRepository(),
-                    imageStream.getMetadata().getAnnotations())); // for
-                                                                  // slave-label,
-                                                                  // still check
-                                                                  // annotations
+        ObjectMeta metadata = imageStream.getMetadata();
+        String isName = metadata.getName();
+        if (hasSlaveLabelOrAnnotation(metadata.getLabels())) {
+            ImageStreamStatus status = imageStream.getStatus();
+            String repository = status.getDockerImageRepository();
+            Map<String, String> annotations = metadata.getAnnotations();
+            PodTemplate podTemplate = podTemplateFromData(isName, repository, annotations);
+            results.add(podTemplate);
         }
+        results.addAll(extractPodTemplatesFromImageStreamTags(imageStream));
+        return results;
+    }
 
-        String namespace = imageStream.getMetadata().getNamespace();
-
+    private List<PodTemplate> extractPodTemplatesFromImageStreamTags(ImageStream imageStream) {
+        // for slave-label, still check annotations
         // since we cannot create watches on ImageStream tags, we have to
-        // traverse
-        // the tags and look for the slave label
-        for (TagReference tagRef : imageStream.getSpec().getTags()) {
-            ImageStreamTag ist = null;
-            try {
-                ist = getAuthenticatedOpenShiftClient()
-                        .imageStreamTags()
-                        .inNamespace(namespace)
-                        .withName(
-                                imageStream.getMetadata().getName() + ":"
-                                        + tagRef.getName()).get();
-            } catch (Throwable t) {
-                logger.log(Level.FINE, "podTemplates", t);
-            }
-            // for IST, can't set labels directly, but can inherit, so check annotations (if IST directly
-            // updated) and then labels (if inherited from imagestream)
-            if (ist != null) {
-                if (hasSlaveLabelOrAnnotation(ist.getMetadata().getAnnotations())) {
-                    results.add(this.podTemplateFromData(ist.getMetadata()
-                        .getName(), ist.getImage()
-                        .getDockerImageReference(), ist.getMetadata()
-                        .getAnnotations()));
-                } else {
-                    if (hasSlaveLabelOrAnnotation(ist.getMetadata().getLabels())) {
-                        results.add(this.podTemplateFromData(ist.getMetadata()
-                                .getName(), ist.getImage()
-                                .getDockerImageReference(), ist.getMetadata()
-                                .getLabels()));
-                    }
-                }
-            }
+        // traverse the tags and look for the slave label
+        List<PodTemplate> results = new ArrayList<PodTemplate>();
+        List<TagReference> tags = imageStream.getSpec().getTags();
+        for (TagReference tagRef : tags) {
+            addPodTemplateFromTag(results, imageStream, tagRef);
         }
         return results;
     }
 
-    private PodTemplate podTemplateFromData(String name, String image,
-            Map<String, String> map) {
-        // node, pod names cannot have colons
-        name = name.replaceAll(":", ".");
-        String label = null;
-        if (map != null && map.containsKey("slave-label")) {
-            label = map.get("slave-label");
-        } else {
-            label = name;
+    private void addPodTemplateFromTag(List<PodTemplate> results, ImageStream imageStream, TagReference tagRef) {
+        ObjectMeta metadata = imageStream.getMetadata();
+        String ns = metadata.getNamespace();
+        String isName = metadata.getName();
+        ImageStreamTag tag = null;
+        try {
+            String tagName = isName + ":" + tagRef.getName();
+            tag = getClient().imageStreamTags().inNamespace(ns).withName(tagName).get();
+        } catch (Throwable t) {
+            logger.log(FINE, "podTemplates", t);
         }
+        // for ImageStreamTag (IST), we can't set labels directly, but can inherit, so
+        // we check annotations (if ImageStreamTag directly updated) and then labels (if
+        // inherited from imagestream)
+        if (tag != null) {
+            ObjectMeta tagMetadata = tag.getMetadata();
+            Map<String, String> tagAnnotations = tagMetadata.getAnnotations();
+            String tagName = tagMetadata.getName();
+            String tagImageReference = tag.getImage().getDockerImageReference();
+            if (hasSlaveLabelOrAnnotation(tagAnnotations)) {
+                results.add(this.podTemplateFromData(tagName, tagImageReference, tagAnnotations));
+            } else {
+                Map<String, String> tagLabels = tagMetadata.getLabels();
+                if (hasSlaveLabelOrAnnotation(tagLabels)) {
+                    results.add(this.podTemplateFromData(tagName, tagImageReference, tagLabels));
+                }
+            }
+        }
+    }
 
-        PodTemplate result = JenkinsUtils.podTemplateInit(name, image, label);
-
+    private PodTemplate podTemplateFromData(String name, String image, Map<String, String> map) {
+        // node, pod names cannot have colons
+        String templateName = name.replaceAll(":", ".");
+        String label = (map != null && map.containsKey(SLAVE_LABEL)) ? map.get(SLAVE_LABEL) : name;
+        PodTemplate result = JenkinsUtils.podTemplateInit(templateName, image, label);
         return result;
     }
 }
