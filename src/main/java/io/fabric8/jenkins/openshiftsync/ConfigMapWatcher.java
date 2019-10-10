@@ -15,25 +15,16 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
-import com.thoughtworks.xstream.XStreamException;
-
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.triggers.SafeTimerTask;
-import hudson.util.XStream2;
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.ConfigMapList;
 import io.fabric8.kubernetes.client.Watcher.Action;
-import io.fabric8.openshift.api.model.ImageStreamTag;
 
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
@@ -41,7 +32,7 @@ import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
 public class ConfigMapWatcher extends BaseWatcher {
-    private final Logger logger = Logger.getLogger(getClass().getName());
+    private final Logger LOGGER = Logger.getLogger(getClass().getName());
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public ConfigMapWatcher(String[] namespaces) {
@@ -58,30 +49,29 @@ public class ConfigMapWatcher extends BaseWatcher {
             @Override
             public void doRun() {
                 if (!CredentialsUtils.hasCredentials()) {
-                    logger.fine("No Openshift Token credential defined.");
+                    LOGGER.fine("No Openshift Token credential defined.");
                     return;
                 }
                 for (String namespace : namespaces) {
                     ConfigMapList configMaps = null;
                     try {
-                        logger.fine("listing ConfigMap resources");
+                        LOGGER.fine("listing ConfigMap resources");
                         configMaps = getAuthenticatedOpenShiftClient()
                                 .configMaps().inNamespace(namespace).list();
                         onInitialConfigMaps(configMaps);
-                        logger.fine("handled ConfigMap resources");
+                        LOGGER.fine("handled ConfigMap resources");
                     } catch (Exception e) {
-                        logger.log(SEVERE, "Failed to load ConfigMaps: " + e, e);
+                        LOGGER.log(SEVERE, "Failed to load ConfigMaps: " + e, e);
                     }
                     try {
                         String resourceVersion = "0";
                         if (configMaps == null) {
-                            logger.warning("Unable to get config map list; impacts resource version used for watch");
+                            LOGGER.warning("Unable to get config map list; impacts resource version used for watch");
                         } else {
-                            resourceVersion = configMaps.getMetadata()
-                                    .getResourceVersion();
+                            resourceVersion = configMaps.getMetadata().getResourceVersion();
                         }
                         if (watches.get(namespace) == null) {
-                            logger.info("creating ConfigMap watch for namespace "
+                            LOGGER.info("creating ConfigMap watch for namespace "
                                     + namespace
                                     + " and resource version "
                                     + resourceVersion);
@@ -89,12 +79,10 @@ public class ConfigMapWatcher extends BaseWatcher {
                                     getAuthenticatedOpenShiftClient()
                                     .configMaps()
                                     .inNamespace(namespace)
-                                    .withResourceVersion(
-                                            resourceVersion)
-                                            .watch(new WatcherCallback<ConfigMap>(ConfigMapWatcher.this,namespace)));
+                                    .withResourceVersion(resourceVersion).watch(new WatcherCallback<ConfigMap>(ConfigMapWatcher.this,namespace)));
                         }
                     } catch (Exception e) {
-                        logger.log(SEVERE, "Failed to load ConfigMaps: " + e, e);
+                        LOGGER.log(SEVERE, "Failed to load ConfigMaps: " + e, e);
                     }
                 }
             }
@@ -104,12 +92,12 @@ public class ConfigMapWatcher extends BaseWatcher {
     public void start() {
         super.start();
         // lets process the initial state
-        logger.info("Now handling startup config maps!!");
+        LOGGER.info("Now handling startup config maps!!");
     }
 
     public void eventReceived(Action action, ConfigMap configMap) {
         try {
-            List<PodTemplate> slavesFromCM = podTemplatesFromConfigMap(configMap);
+            List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, configMap);
             boolean hasSlaves = slavesFromCM.size() > 0;
             String uid = configMap.getMetadata().getUid();
             String cmname = configMap.getMetadata().getName();
@@ -117,28 +105,24 @@ public class ConfigMapWatcher extends BaseWatcher {
             switch (action) {
             case ADDED:
                 if (hasSlaves) {
-                    processSlavesForAddEvent(slavesFromCM, cmType, uid, cmname, namespace);
+                    processSlavesForAddEvent(slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
                 }
                 break;
-
             case MODIFIED:
-                processSlavesForModifyEvent(slavesFromCM, cmType, uid, cmname, namespace);
+                processSlavesForModifyEvent(slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
                 break;
-
             case DELETED:
-                this.processSlavesForDeleteEvent(slavesFromCM, cmType, uid, cmname, namespace);
+                this.processSlavesForDeleteEvent(slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
                 break;
-
             case ERROR:
-                logger.warning("watch for configMap " + configMap.getMetadata().getName() + " received error event ");
+                LOGGER.warning("watch for configMap " + configMap.getMetadata().getName() + " received error event ");
                 break;
             default:
-                logger.warning("watch for configMap " + configMap.getMetadata().getName() + " received unknown event " + action);
+                LOGGER.warning("watch for configMap " + configMap.getMetadata().getName() + " received unknown event " + action);
                 break;
-
             }
         } catch (Exception e) {
-            logger.log(WARNING, "Caught: " + e, e);
+            LOGGER.log(WARNING, "Caught: " + e, e);
         }
     }
     @Override
@@ -150,158 +134,26 @@ public class ConfigMapWatcher extends BaseWatcher {
     private void onInitialConfigMaps(ConfigMapList configMaps) {
         if (configMaps == null)
             return;
-        if (trackedPodTemplates == null) {
-            trackedPodTemplates = new ConcurrentHashMap<>(configMaps.getItems()
-                    .size());
+        if (PodTemplateUtils.trackedPodTemplates == null) {
+            PodTemplateUtils.trackedPodTemplates = new ConcurrentHashMap<>(configMaps.getItems().size());
         }
         List<ConfigMap> items = configMaps.getItems();
         if (items != null) {
             for (ConfigMap configMap : items) {
                 try {
-                    if (containsSlave(configMap)
-                            && !trackedPodTemplates.containsKey(configMap
-                                    .getMetadata().getUid())) {
-                        List<PodTemplate> templates = podTemplatesFromConfigMap(configMap);
-                        trackedPodTemplates.put(configMap.getMetadata().getUid(),
-                                templates);
+                    if (PodTemplateUtils.configMapContainsSlave(configMap) && !PodTemplateUtils.trackedPodTemplates.containsKey(configMap.getMetadata().getUid())) {
+                        List<PodTemplate> templates = PodTemplateUtils.podTemplatesFromConfigMap(this, configMap);
+                        PodTemplateUtils.trackedPodTemplates.put(configMap.getMetadata().getUid(), templates);
                         for (PodTemplate podTemplate : templates) {
-                            JenkinsUtils.addPodTemplate(podTemplate);
+                          PodTemplateUtils.addPodTemplate(podTemplate);
                         }
                     }
                 } catch (Exception e) {
-                    logger.log(SEVERE,
+                    LOGGER.log(SEVERE,
                             "Failed to update ConfigMap PodTemplates", e);
                 }
             }
         }
     }
 
-    private boolean containsSlave(ConfigMap configMap) {
-        return hasSlaveLabelOrAnnotation(configMap.getMetadata().getLabels());
-    }
-
-    private boolean hasOneAndOnlyOneWithSomethingAfter(String str, String substr) {
-        return str.contains(substr)
-                && str.indexOf(substr) == str.lastIndexOf(substr)
-                && str.indexOf(substr) < str.length();
-    }
-
-    private static final String SPECIAL_IST_PREFIX = "imagestreamtag:";
-    private static final int SPECIAL_IST_PREFIX_IDX = SPECIAL_IST_PREFIX
-            .length();
-
-    // podTemplatesFromConfigMap takes every key from a ConfigMap and tries to
-    // create a PodTemplate from the contained
-    // XML.
-    public List<PodTemplate> podTemplatesFromConfigMap(ConfigMap configMap) {
-        List<PodTemplate> results = new ArrayList<>();
-        Map<String, String> data = configMap.getData();
-        
-        if (!containsSlave(configMap)) {
-            return results;
-        }
-
-        XStream2 xStream2 = new XStream2();
-
-        for (Entry<String, String> entry : data.entrySet()) {
-            Object podTemplate;
-            try {
-                podTemplate = xStream2.fromXML(entry.getValue());
-
-                String warningPrefix = "Content of key '" + entry.getKey()
-                        + "' in ConfigMap '"
-                        + configMap.getMetadata().getName();
-                if (podTemplate instanceof PodTemplate) {
-                    PodTemplate pt = (PodTemplate) podTemplate;
-
-                    String image = pt.getImage();
-                    try {
-                        // if requested via special prefix, convert this images
-                        // entry field, if not already fully qualified, as if
-                        // it were an IST
-                        // IST of form [optional_namespace]/imagestreamname:tag
-                        // checks based on ParseImageStreamTagName in
-                        // https://github.com/openshift/origin/blob/master/pkg/image/apis/image/helper.go
-                        if (image.startsWith(SPECIAL_IST_PREFIX)) {
-                            image = image.substring(SPECIAL_IST_PREFIX_IDX);
-                            if (image.contains("@")) {
-                                logger.warning(warningPrefix
-                                        + " the presence of @ implies an image stream image, not an image stream tag, "
-                                        + " so no ImageStreamTag to Docker image reference translation was performed.");
-                            } else {
-                                boolean hasNamespace = hasOneAndOnlyOneWithSomethingAfter(
-                                        image, "/");
-                                boolean hasTag = hasOneAndOnlyOneWithSomethingAfter(
-                                        image, ":");
-                                String namespace = getAuthenticatedOpenShiftClient()
-                                        .getNamespace();
-                                String isName = image;
-                                String newImage = null;
-                                if (hasNamespace) {
-                                    String[] parts = image.split("/");
-                                    namespace = parts[0];
-                                    isName = parts[1];
-                                }
-                                if (hasTag) {
-                                    ImageStreamTag ist = getAuthenticatedOpenShiftClient()
-                                            .imageStreamTags()
-                                            .inNamespace(namespace)
-                                            .withName(isName).get();
-                                    if (ist != null
-                                            && ist.getImage() != null
-                                            && ist.getImage()
-                                                    .getDockerImageReference() != null
-                                            && ist.getImage()
-                                                    .getDockerImageReference()
-                                                    .length() > 0) {
-                                        newImage = ist.getImage()
-                                                .getDockerImageReference();
-                                        logger.fine(String
-                                                .format("Converting image ref %s as an imagestreamtag %s to fully qualified image %s",
-                                                        image, isName, newImage));
-                                    } else {
-                                        logger.warning(warningPrefix
-                                                + " used the 'imagestreamtag:' prefix in the image field, but the subsequent value, while a valid ImageStreamTag reference,"
-                                                + " produced no valid ImageStreaTag upon lookup,"
-                                                + " so no ImageStreamTag to Docker image reference translation was performed.");
-                                    }
-                                } else {
-                                    logger.warning(warningPrefix
-                                            + " used the 'imagestreamtag:' prefix in the image field, but the subsequent value had no tag indicator,"
-                                            + " so no ImageStreamTag to Docker image reference translation was performed.");
-                                }
-
-                                if (newImage != null) {
-                                    logger.fine("translated IST ref " + image
-                                            + " to docker image ref "
-                                            + newImage);
-                                    pt.getContainers().get(0)
-                                            .setImage(newImage);
-                                }
-                            }
-                        }
-                    } catch (Throwable t) {
-                        if (logger.isLoggable(Level.FINE))
-                            logger.log(Level.FINE, "podTemplateFromConfigMap",
-                                    t);
-                    }
-                    results.add((PodTemplate) podTemplate);
-                } else {
-                    logger.warning(warningPrefix + "' is not a PodTemplate");
-                }
-            } catch (XStreamException xse) {
-                logger.warning(new IOException("Unable to read key '"
-                        + entry.getKey() + "' from ConfigMap '"
-                        + configMap.getMetadata().getName() + "'", xse)
-                        .getMessage());
-            } catch (Error e) {
-                logger.warning(new IOException("Unable to read key '"
-                        + entry.getKey() + "' from ConfigMap '"
-                        + configMap.getMetadata().getName() + "'", e)
-                        .getMessage());
-            }
-        }
-
-        return results;
-    }
 }

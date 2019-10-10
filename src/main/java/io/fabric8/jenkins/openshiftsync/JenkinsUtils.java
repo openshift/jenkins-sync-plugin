@@ -40,7 +40,6 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,8 +53,6 @@ import javax.xml.transform.stream.StreamSource;
 import org.apache.commons.lang.StringUtils;
 import org.apache.tools.ant.filters.StringInputStream;
 import org.csanchez.jenkins.plugins.kubernetes.KubernetesCloud;
-import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
-import org.csanchez.jenkins.plugins.kubernetes.PodVolumes;
 import org.eclipse.jgit.transport.URIish;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
@@ -88,7 +85,6 @@ import hudson.triggers.SafeTimerTask;
 import hudson.util.XStream2;
 import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
-import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildBuilder;
 import io.fabric8.openshift.api.model.BuildConfig;
@@ -844,92 +840,6 @@ public class JenkinsUtils {
 		return name;
 	}
 
-	public static void removePodTemplate(PodTemplate podTemplate) {
-		KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
-		if (kubeCloud != null) {
-			LOGGER.info("Removing PodTemplate: " + podTemplate.getName());
-			// NOTE - PodTemplate does not currently override hashCode, equals,
-			// so
-			// the KubernetsCloud.removeTemplate currently is broken;
-			// kubeCloud.removeTemplate(podTemplate);
-			List<PodTemplate> list = kubeCloud.getTemplates();
-			Iterator<PodTemplate> iter = list.iterator();
-			while (iter.hasNext()) {
-				PodTemplate pt = iter.next();
-				if (pt.getName().equals(podTemplate.getName())) {
-					iter.remove();
-				}
-			}
-			// now set new list back into cloud
-			kubeCloud.setTemplates(list);
-			try {
-				// pedantic mvn:findbugs
-				Jenkins jenkins = Jenkins.getInstance();
-				if (jenkins != null)
-					jenkins.save();
-			} catch (IOException e) {
-				LOGGER.log(Level.SEVERE, "removePodTemplate", e);
-			}
-
-			if (LOGGER.isLoggable(Level.FINE)) {
-				LOGGER.fine("PodTemplates now:");
-				for (PodTemplate pt : kubeCloud.getTemplates()) {
-					LOGGER.fine(pt.getName());
-				}
-			}
-		}
-	}
-
-	public static synchronized List<PodTemplate> getPodTemplates() {
-		KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
-		if (kubeCloud != null) {
-			// create copy of list for more flexiblity in loops
-			ArrayList<PodTemplate> list = new ArrayList<PodTemplate>();
-			list.addAll(kubeCloud.getTemplates());
-			return list;
-		} else {
-			return null;
-		}
-	}
-
-	public static synchronized boolean hasPodTemplate(PodTemplate incomingPod) {
-		String name = incomingPod.getName();
-		if (name == null)
-			return false;
-		String image = incomingPod.getImage();
-		if (image == null)
-			return false;
-		KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
-		if (kubeCloud != null) {
-			List<PodTemplate> list = kubeCloud.getTemplates();
-			for (PodTemplate pod : list) {
-				if (name.equals(pod.getName()) && image.equals(pod.getImage()))
-					return true;
-			}
-		}
-		return false;
-	}
-
-	public static synchronized void addPodTemplate(PodTemplate podTemplate) {
-		// clear out existing template with same name; k8s plugin maintains
-		// list, not map
-		removePodTemplate(podTemplate);
-
-		KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
-		if (kubeCloud != null) {
-			LOGGER.info("Adding PodTemplate: " + podTemplate.getName());
-			kubeCloud.addTemplate(podTemplate);
-			try {
-				// pedantic mvn:findbugs
-				Jenkins jenkins = Jenkins.getInstance();
-				if (jenkins != null)
-					jenkins.save();
-			} catch (IOException e) {
-				LOGGER.log(Level.SEVERE, "addPodTemplate", e);
-			}
-		}
-	}
-
 	public static KubernetesCloud getKubernetesCloud() {
 		// pedantic mvn:findbugs
 		Jenkins jenkins = Jenkins.getInstance();
@@ -943,30 +853,5 @@ public class JenkinsUtils {
 		return null;
 	}
 
-	public static PodTemplate podTemplateInit(String name, String image, String label) {
-		PodTemplate podTemplate = new PodTemplate(image, new ArrayList<PodVolumes.PodVolume>());
-		// with the above ctor guarnateed to have 1 container
-		// also still force our image as the special case "jnlp" container for
-		// the KubernetesSlave;
-		// attempts to use the "jenkinsci/jnlp-slave:alpine" image for a
-		// separate jnlp container
-		// have proved unsuccessful (could not access gihub.com for example)
-		podTemplate.getContainers().get(0).setName("jnlp");
-		// podTemplate.setInstanceCap(Integer.MAX_VALUE);
-		podTemplate.setName(name);
-		podTemplate.setLabel(label);
-		podTemplate.setAlwaysPullImage(true);
-		podTemplate.setCommand("");
-		podTemplate.setArgs("${computer.jnlpmac} ${computer.name}");
-		podTemplate.setRemoteFs("/tmp");
-		String podName = System.getenv().get("HOSTNAME");
-		if (podName != null) {
-			Pod pod = getAuthenticatedOpenShiftClient().pods().withName(podName).get();
-			if (pod != null) {
-				podTemplate.setServiceAccount(pod.getSpec().getServiceAccountName());
-			}
-		}
 
-		return podTemplate;
-	}
 }

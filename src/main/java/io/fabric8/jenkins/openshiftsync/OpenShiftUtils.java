@@ -657,7 +657,11 @@ public class OpenShiftUtils {
         return null;
     }
 
-    abstract class StatelessReplicationControllerMixIn extends
+  protected static OpenShiftClient getOpenshiftClient() {
+       return getAuthenticatedOpenShiftClient();
+   }
+
+  abstract class StatelessReplicationControllerMixIn extends
             ReplicationController {
         @JsonIgnore
         private ReplicationControllerStatus status;
