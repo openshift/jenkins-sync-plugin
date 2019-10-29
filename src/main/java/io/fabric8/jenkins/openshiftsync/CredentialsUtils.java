@@ -35,9 +35,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static com.cloudbees.plugins.credentials.CredentialsScope.GLOBAL;
 import static hudson.Util.fixNull;
 import static io.fabric8.jenkins.openshiftsync.Constants.*;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.logging.Level.WARNING;
 import static org.apache.commons.lang.StringUtils.isNotBlank;
 
 public class CredentialsUtils {
@@ -282,34 +285,35 @@ public class CredentialsUtils {
     private static Credentials secretToCredentials(Secret secret) {
         String namespace = secret.getMetadata().getNamespace();
         String name = secret.getMetadata().getName();
-
         Map<String, String> data = secret.getData();
-
         if (data == null) {
-            logger.log(Level.WARNING,
-                    "An OpenShift secret was marked for import, but it has no secret data.  No credential will be created.");
+            logger.log(WARNING, "An OpenShift secret was marked for import, but it has no secret data.  No credential will be created.");
             return null;
         }
 
         final String generatedCredentialsName = generateCredentialsName(namespace, name, getSecretCustomName(secret));
+        String passwordData = data.get(OPENSHIFT_SECRETS_DATA_PASSWORD);
+        String sshKeyData = data.get(OPENSHIFT_SECRETS_DATA_SSHPRIVATEKEY);
+        String usernameData = data.get(OPENSHIFT_SECRETS_DATA_USERNAME);
+        // We support "passphrase" and "password" for the ssh passphrase; passphrase has precedence over password
+        String passphraseData = data.get(OPENSHIFT_SECRETS_DATA_PASSPHRASE); 
+        String sshPassphrase = isNotBlank(passphraseData) ? passphraseData : passwordData;
+
         switch (secret.getType()) {
         case OPENSHIFT_SECRETS_TYPE_OPAQUE:
-            String usernameData = data.get(OPENSHIFT_SECRETS_DATA_USERNAME);
-            String passwordData = data.get(OPENSHIFT_SECRETS_DATA_PASSWORD);
             if (isNotBlank(usernameData) && isNotBlank(passwordData)) {
                 return newUsernamePasswordCredentials(generatedCredentialsName, usernameData, passwordData);
             }
-            String sshKeyData = data.get(OPENSHIFT_SECRETS_DATA_SSHPRIVATEKEY);
             if (isNotBlank(sshKeyData)) {
-                return newSSHUserCredential(generatedCredentialsName, usernameData, sshKeyData, passwordData);
+                return newSSHUserCredential(generatedCredentialsName, usernameData, sshKeyData, sshPassphrase);
             }
             String fileData = data.get(OPENSHIFT_SECRETS_DATA_FILENAME);
             if (isNotBlank(fileData)) {
                 return newSecretFileCredential(generatedCredentialsName, fileData);
             }
-            String certificateDate = data.get(OPENSHIFT_SECRETS_DATA_CERTIFICATE);
-            if (isNotBlank(certificateDate)) {
-                return newCertificateCredential(generatedCredentialsName, passwordData, certificateDate);
+            String certificateData = data.get(OPENSHIFT_SECRETS_DATA_CERTIFICATE);
+            if (isNotBlank(certificateData)) {
+                return newCertificateCredential(generatedCredentialsName, passwordData, certificateData);
             }
             String secretTextData = data.get(OPENSHIFT_SECRETS_DATA_SECRET_TEXT);
             if (isNotBlank(secretTextData)) {
@@ -319,15 +323,12 @@ public class CredentialsUtils {
             if (isNotBlank(openshiftTokenData)) {
               return newOpenshiftTokenCredentials(generatedCredentialsName, openshiftTokenData);
             }
-
             return arbitraryKeyValueTextCredential(data, generatedCredentialsName);
 
         case OPENSHIFT_SECRETS_TYPE_BASICAUTH:
-            return newUsernamePasswordCredentials(generatedCredentialsName, data.get(OPENSHIFT_SECRETS_DATA_USERNAME),
-                    data.get(OPENSHIFT_SECRETS_DATA_PASSWORD));
+            return newUsernamePasswordCredentials(generatedCredentialsName, usernameData, passwordData);
         case OPENSHIFT_SECRETS_TYPE_SSH:
-            return newSSHUserCredential(generatedCredentialsName, data.get(OPENSHIFT_SECRETS_DATA_USERNAME),
-                    data.get(OPENSHIFT_SECRETS_DATA_SSHPRIVATEKEY), data.get(OPENSHIFT_SECRETS_DATA_PASSWORD));
+            return newSSHUserCredential(generatedCredentialsName, usernameData, sshKeyData, sshPassphrase); 
         default:
             // the type field is marked optional in k8s.io/api/core/v1/types.go,
             // default to OPENSHIFT_SECRETS_DATA_SECRET_TEXT in this case
@@ -388,26 +389,24 @@ public class CredentialsUtils {
     }
 
     private static Credentials newSSHUserCredential(String secretName, String username, String sshKeyData, String passwordData) {
-        if (secretName == null || secretName.length() == 0 || sshKeyData == null || sshKeyData.length() == 0) {
-            logger.log(Level.WARNING,
-                    "Invalid secret data, secretName: " + secretName + " sshKeyData is null: " + (sshKeyData == null)
-                            + " sshKeyData is empty: " + (sshKeyData != null ? sshKeyData.length() == 0 : false));
+        boolean secretNameIsBlank = StringUtils.isBlank(secretName);
+        boolean sshKeyDataIsBlank = StringUtils.isBlank(sshKeyData);
+        if ( secretNameIsBlank || sshKeyDataIsBlank) {
+            logger.log(WARNING, "Invalid secret data, secretName: " + secretName + " sshKeyData is blank null: " + sshKeyDataIsBlank);
             return null;
-
         }
-        String sshKeyPassword = passwordData != null ? new String(Base64.decode(passwordData)) : null;
-        return new BasicSSHUserPrivateKey(CredentialsScope.GLOBAL, secretName,
-                fixNull(username).isEmpty() ? "" : new String(Base64.decode(username), StandardCharsets.UTF_8),
-                new BasicSSHUserPrivateKey.DirectEntryPrivateKeySource(
-                        new String(Base64.decode(sshKeyData), StandardCharsets.UTF_8)),
-                sshKeyPassword, secretName);
+        String sshKeyPassword = (passwordData != null) ? new String(Base64.decode(passwordData),UTF_8) : null;
+        String sshKey = new String(Base64.decode(sshKeyData), UTF_8);
+        String sshUser = fixNull(username).isEmpty() ? "" : new String(Base64.decode(username), UTF_8);
+        BasicSSHUserPrivateKey.DirectEntryPrivateKeySource key = new BasicSSHUserPrivateKey.DirectEntryPrivateKeySource(sshKey);
+        return new BasicSSHUserPrivateKey(GLOBAL, secretName, sshUser, key, sshKeyPassword, secretName);
     }
 
     private static Credentials newUsernamePasswordCredentials(String secretName, String usernameData,
             String passwordData) {
         if (secretName == null || secretName.length() == 0 || usernameData == null || usernameData.length() == 0
                 || passwordData == null || passwordData.length() == 0) {
-            logger.log(Level.WARNING,
+            logger.log(WARNING,
                     "Invalid secret data, secretName: " + secretName + " usernameData is null: "
                             + (usernameData == null) + " usernameData is empty: "
                             + (usernameData != null ? usernameData.length() == 0 : false) + " passwordData is null: "
@@ -417,8 +416,8 @@ public class CredentialsUtils {
 
         }
         return new UsernamePasswordCredentialsImpl(CredentialsScope.GLOBAL, secretName, secretName,
-                new String(Base64.decode(usernameData), StandardCharsets.UTF_8),
-                new String(Base64.decode(passwordData), StandardCharsets.UTF_8));
+                new String(Base64.decode(usernameData), UTF_8),
+                new String(Base64.decode(passwordData), UTF_8));
     }
 
     /**
