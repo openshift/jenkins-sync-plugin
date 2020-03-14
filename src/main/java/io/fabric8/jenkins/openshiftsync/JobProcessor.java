@@ -1,6 +1,7 @@
 package io.fabric8.jenkins.openshiftsync;
 
 
+import static io.fabric8.jenkins.openshiftsync.Annotations.AUTOSTART;
 import static io.fabric8.jenkins.openshiftsync.Annotations.DISABLE_SYNC_CREATE;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.putJobWithBuildConfig;
@@ -139,6 +140,13 @@ public class JobProcessor extends NotReallyRoleSensitiveCallable<Void, Exception
 
 				logger.info("Created job " + jobName + " from BuildConfig " + NamespaceName.create(buildConfig)
 						+ " with revision: " + buildConfig.getMetadata().getResourceVersion());
+				
+				String autostart = getAnnotation(buildConfig, AUTOSTART);
+				if (Boolean.parseBoolean(autostart)) {
+					logger.info("Automatically starting job " + jobName + " from BuildConfig "
+							+ NamespaceName.create(buildConfig)	+ " with revision: " + buildConfig.getMetadata().getResourceVersion());
+					job.scheduleBuild2(0);
+				}
 			} catch (IllegalArgumentException e) {
 				// see
 				// https://github.com/openshift/jenkins-sync-plugin/issues/117,
@@ -183,6 +191,4 @@ public class JobProcessor extends NotReallyRoleSensitiveCallable<Void, Exception
 		}
 		return existingBuildRunPolicy;
 	}
-
 }
-
