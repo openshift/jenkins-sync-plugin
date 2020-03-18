@@ -17,14 +17,19 @@ import org.csanchez.jenkins.plugins.kubernetes.PodVolumes;
 import org.csanchez.jenkins.plugins.kubernetes.model.KeyValueEnvVar;
 import org.csanchez.jenkins.plugins.kubernetes.model.TemplateEnvVar;
 
+import org.apache.commons.lang.StringUtils;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BinaryOperator;
+import java.util.function.Function;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static java.util.logging.Level.FINE;
@@ -150,6 +155,7 @@ public class PodTemplateUtils {
   }
 
   public static synchronized void addPodTemplate(PodTemplate podTemplate) {
+    LOGGER.info("About to addPodTemplate: " + podTemplate.getName());
     // clear out existing template with same name; k8s plugin maintains
     // list, not map
     removePodTemplate(podTemplate);
@@ -169,36 +175,65 @@ public class PodTemplateUtils {
     }
   }
 
+
   protected static PodTemplate setProxyEnvVar(PodTemplate podTemplate) {
+    LOGGER.info("About to setProxyEnvVar for Template " + podTemplate.getName());
     String podTemplateName = podTemplate.getName();
-    LOGGER.info("Adding Proxy EnvVar for Template " + podTemplateName);
     List<TemplateEnvVar> envVars = podTemplate.getEnvVars();
-    List<TemplateEnvVar> ptEnvVars = new ArrayList<TemplateEnvVar>();
+    LOGGER.info("Print EnvVars elements");
+    envVars.forEach(k -> LOGGER.info(k.toString()));
 
     String httpProxy = System.getenv(HTTP_PROXY_ENV_VAR_NAME);
     String httpsProxy = System.getenv(HTTPS_PROXY_ENV_VAR_NAME);
     String noProxy = System.getenv(NO_PROXY_ENV_VAR_NAME);
+    LOGGER.info("Env httpProxy:" + httpProxy);
+    LOGGER.info("Env httpsProxy:" + httpsProxy);
+    LOGGER.info("Env noProxy:"+ noProxy);
 
-    if (httpProxy != null && !httpProxy.isEmpty()) {
-      ptEnvVars.add(new KeyValueEnvVar(HTTP_PROXY_ENV_VAR_NAME, httpProxy));
-      LOGGER.info("Added EnvVar with key " + HTTP_PROXY_ENV_VAR_NAME + " for PodTemplate " + podTemplateName);
+    LOGGER.info("Stream and collect envVars list to envVarsMap");
+    Map<String, TemplateEnvVar>  envVarsMap = envVars.stream().distinct().collect(Collectors.toMap(TemplateEnvVar::getKey, Function.identity()));
+  
+    LOGGER.info("Print EnvVarMaps elements");
+    envVarsMap.forEach((k, v) -> LOGGER.info(k + ":" + v));
+    envVarsMap.keySet().stream().forEach(x -> System.out.println("-"+x+"-"));
+    System.out.println("http_proxy:"+envVarsMap.containsKey("http_proxy"));
+    System.out.println("https_proxy:"+envVarsMap.containsKey("https_proxy"));
+    System.out.println("HTTP_PROXY_ENV_VAR_NAME:"+HTTPS_PROXY_ENV_VAR_NAME + ":" +envVarsMap.containsKey("HTTP_PROXY_ENV_VAR_NAME"));
+    System.out.println("HTTPS_PROXY_ENV_VAR_NAME:"+HTTPS_PROXY_ENV_VAR_NAME+":"+envVarsMap.containsKey("HTTPS_PROXY_ENV_VAR_NAME"));
+    KeyValueEnvVar httpProxyEnvVar = (KeyValueEnvVar) envVarsMap.get("HTTP_PROXY_ENV_VAR_NAME");
+    KeyValueEnvVar httpsProxyEnvVar = (KeyValueEnvVar) envVarsMap.get("HTTPS_PROXY_ENV_VAR_NAME");
+    LOGGER.info("httpProxyEnvVar:::::" + httpProxyEnvVar);
+    LOGGER.info("httpsProxyEnvVar:::::" + httpsProxyEnvVar);
+    LOGGER.info("httpProxyEnvVar != null && StringUtils.isBlank(httpProxyEnvVar.getValue()):::::" + (httpProxyEnvVar != null && StringUtils.isBlank(httpProxyEnvVar.getValue())));
+    LOGGER.info("httpsProxyEnvVar != null && StringUtils.isBlank(httpsProxyEnvVar.getValue()):::::" + (httpsProxyEnvVar != null && StringUtils.isBlank(httpsProxyEnvVar.getValue())));
+    // Override podTemplate proxy envars only if http and https proxy env vars are null
+    if ((!envVarsMap.containsKey("HTTP_PROXY_ENV_VAR_NAME") && !envVarsMap.containsKey("HTTPS_PROXY_ENV_VAR_NAME"))  ||
+        httpProxyEnvVar != null && StringUtils.isBlank(httpProxyEnvVar.getValue()) &&
+        httpsProxyEnvVar != null && StringUtils.isBlank(httpsProxyEnvVar.getValue())) {
+      
+      if (!StringUtils.isBlank(httpProxy)) {
+          LOGGER.info("Add EnvVar with key " + HTTP_PROXY_ENV_VAR_NAME + " for PodTemplate " + podTemplateName);
+          envVarsMap.put("HTTP_PROXY_ENV_VAR_NAME", new KeyValueEnvVar(HTTP_PROXY_ENV_VAR_NAME, httpProxy));
+      }
+      if (!StringUtils.isBlank(httpsProxy)) {
+          LOGGER.info("Add EnvVar with key " + HTTPS_PROXY_ENV_VAR_NAME + " for PodTemplate " + podTemplateName);
+          envVarsMap.put("HTTPS_PROXY_ENV_VAR_NAME", new KeyValueEnvVar(HTTPS_PROXY_ENV_VAR_NAME, httpsProxy));
+      }
+      if (!StringUtils.isBlank(noProxy)) {
+          LOGGER.info("Add EnvVar with key " + NO_PROXY_ENV_VAR_NAME + " for PodTemplate " + podTemplateName);
+          envVarsMap.put("NO_PROXY_ENV_VAR_NAME", new KeyValueEnvVar(NO_PROXY_ENV_VAR_NAME, noProxy));
+      }
     }
-    if (httpsProxy != null && !httpsProxy.isEmpty()) {
-      ptEnvVars.add(new KeyValueEnvVar(HTTPS_PROXY_ENV_VAR_NAME, httpsProxy));
-      LOGGER.info("Added EnvVar with key " + HTTPS_PROXY_ENV_VAR_NAME + " for PodTemplate " + podTemplateName);
-    }
-    if (noProxy != null && !noProxy.isEmpty()) {
-      ptEnvVars.add(new KeyValueEnvVar(NO_PROXY_ENV_VAR_NAME, noProxy));
-      LOGGER.info("Added EnvVar with key " + NO_PROXY_ENV_VAR_NAME + " for PodTemplate " + podTemplateName);
-    }
-    ptEnvVars.addAll(envVars);
-    podTemplate.setEnvVars(ptEnvVars);
+    
+    LOGGER.info("Stream and collect envVarsMap to envVars List");
+    envVars = envVarsMap.values().stream().distinct().collect(Collectors.toList());
+    podTemplate.setEnvVars(envVars);
     podTemplate.save();
     return podTemplate;
   }
 
   protected static void purgeTemplates(BaseWatcher baseWatcher, String type, String uid, String apiObjName, String namespace) {
-    LOGGER.info("Purging PodTemplates for from Configmap with Uid "+uid);
+    LOGGER.info("Purging PodTemplates for from Configmap with Uid " + uid);
     for (PodTemplate podTemplate : trackedPodTemplates.get(uid)) {
       // we should not have included any pod templates we did not
       // mark the type for, but we'll check just in case
@@ -244,6 +279,8 @@ public class PodTemplateUtils {
 
   // Adds PodTemplate from Jenkins
   protected static void addPodTemplate(BaseWatcher baseWatcher, String type, String apiObjName, String namespace, List<PodTemplate> podTemplates, PodTemplate podTemplate) {
+    LOGGER.info("About to addPodTemplate from jenkins: " + podTemplate.getName());
+
     String name = podTemplate.getName();
     // we allow configmap overrides of maven and nodejs, but not imagestream ones
     // as they are less specific/defined wrt podTemplate fields
@@ -267,6 +304,7 @@ public class PodTemplateUtils {
 
   // Delete a PodTemplate from Jenkins
   protected static void removePodTemplate(Logger LOGGER, String PT_NOT_OWNED, String type, String apiObjName, String namespace, PodTemplate podTemplate) {
+    LOGGER.info("About to removePodTemplate from jenkins: " + podTemplate.getName());
     String name = podTemplate.getName();
     String t = podTemplateToApiType.get(name);
     if (t != null && t.equals(type)) {
@@ -312,6 +350,7 @@ public class PodTemplateUtils {
   }
 
   protected static void addPodTemplateFromImageStreamTag(List<PodTemplate> results, ImageStream imageStream, TagReference tagRef) {
+    LOGGER.info("About to addPodTemplateFromImageStreamTag");
     ObjectMeta metadata = imageStream.getMetadata();
     String ns = metadata.getNamespace();
     String isName = metadata.getName();
@@ -454,11 +493,10 @@ public class PodTemplateUtils {
     return false;
   }
 
-
+  // propogateProxyConfigToReservedPodTemplates Propogate Proxy config to node and maven podTemplates which cannot be changed otherwise
   protected synchronized static void propogateProxyConfigToReservedPodTemplates(){
-    // Propogate Proxy config to node and maven podTemplates which cannot be changed otherwise
-    KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
     LOGGER.info("Propogate proxy config to Reserved PodTemplates");
+    KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
     if (kubeCloud != null) {
       List<PodTemplate> list = kubeCloud.getTemplates();
       Iterator<PodTemplate> iter = list.iterator();
