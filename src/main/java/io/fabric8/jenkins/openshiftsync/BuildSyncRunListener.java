@@ -485,14 +485,19 @@ public class BuildSyncRunListener extends RunListener<Run> {
         List<PendingInputActionsExt> pendingInputActions = new ArrayList<PendingInputActionsExt>();
         InputAction inputAction = run.getAction(InputAction.class);
 
-        if (inputAction != null) {
-            List<InputStepExecution> executions = inputAction.getExecutions();
-            if (executions != null && !executions.isEmpty()) {
-                for (InputStepExecution inputStepExecution : executions) {
-                    pendingInputActions.add(PendingInputActionsExt.create(
-                            inputStepExecution, run));
+        try {
+            if (inputAction != null) {
+                List<InputStepExecution> executions = inputAction.getExecutions();
+                if (executions != null && !executions.isEmpty()) {
+                    for (InputStepExecution inputStepExecution : executions) {
+                        pendingInputActions.add(PendingInputActionsExt.create(
+                                inputStepExecution, run));
+                    }
                 }
             }
+        } catch (Exception e) {
+            logger.log(SEVERE, "Failed to serialize pending actions. " + e, e);
+            return null;
         }
         try {
             return new ObjectMapper().writeValueAsString(pendingInputActions);
