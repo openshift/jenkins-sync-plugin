@@ -5,7 +5,7 @@ FROM quay.io/openshift/origin-jenkins-agent-maven:v4.0 AS builder
 WORKDIR /java/src/github.com/openshift/jenkins-sync-plugin
 COPY . .
 USER 0
-RUN export PATH=/opt/rh/rh-maven35/root/usr/bin:$PATH && mvn clean package
+RUN export PATH=/opt/rh/rh-maven35/root/usr/bin:$PATH && mvn clean package -DskipTests
 
 FROM quay.io/openshift/origin-jenkins:v4.0
 RUN rm /opt/openshift/plugins/openshift-sync.jpi
