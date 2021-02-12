@@ -484,9 +484,14 @@ public class BuildSyncRunListener extends RunListener<Run> {
     private String getPendingActionsJson(WorkflowRun run) {
         List<PendingInputActionsExt> pendingInputActions = new ArrayList<PendingInputActionsExt>();
         InputAction inputAction = run.getAction(InputAction.class);
-
+List<InputStepExecution> executions  = null;
         if (inputAction != null) {
-            List<InputStepExecution> executions = inputAction.getExecutions();
+	    try {
+            executions = inputAction.getExecutions();
+	    } catch (Exception e) {
+		     logger.log(SEVERE, "Failed to get Excecutions:" + e, e);
+		                 return null;
+				         }
             if (executions != null && !executions.isEmpty()) {
                 for (InputStepExecution inputStepExecution : executions) {
                     pendingInputActions.add(PendingInputActionsExt.create(
