@@ -113,14 +113,19 @@ public class CredentialsUtils {
     public static void deleteSourceCredentials(BuildConfig buildConfig) throws IOException {
         Secret sourceSecret = getSourceCredentials(buildConfig);
         if (sourceSecret != null) {
-            String labelValue = sourceSecret.getMetadata().getLabels()
-                    .get(Constants.OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC);
-            boolean watching = labelValue != null && labelValue.equalsIgnoreCase(Constants.VALUE_SECRET_SYNC);
-            // for a bc delete, if we are watching this secret, do not delete
-            // credential until secret is actually deleted
-            if (watching)
-                return;
-            deleteCredential(sourceSecret);
+            ObjectMeta metadata = sourceSecret.getMetadata();
+            if (metadata != null) {
+              Map<String,String> labels = metadata.getLabels();
+              if (labels != null) {
+                String labelValue =labels.get(Constants.OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC);
+                boolean watching = labelValue != null && labelValue.equalsIgnoreCase(Constants.VALUE_SECRET_SYNC);
+                // for a bc delete, if we are watching this secret, do not delete
+                // credential until secret is actually deleted
+                if (watching)
+                  return;
+                deleteCredential(sourceSecret);
+              }
+            }
         }
     }
     

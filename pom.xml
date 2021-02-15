@@ -97,10 +97,8 @@
       <groupId>io.fabric8</groupId>
       <artifactId>openshift-client</artifactId>
       <version>${openshift-client.version}</version>
+      <scope>provided</scope>
     </dependency>
-
-
-
     <dependency>
       <groupId>org.jenkins-ci.plugins.workflow</groupId>
       <artifactId>workflow-cps</artifactId>
@@ -134,7 +132,7 @@
     <dependency>
       <groupId>com.openshift.jenkins.plugins</groupId>
       <artifactId>openshift-client</artifactId>
-      <version>1.0.23</version>
+      <version>1.0.34</version>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins.pipeline-stage-view</groupId>
@@ -163,12 +161,6 @@
       <artifactId>kubernetes</artifactId>
       <version>1.29.0</version>
     </dependency>
-    <dependency>
-      <groupId>org.jenkins-ci.plugins</groupId>
-      <artifactId>kubernetes-client-api</artifactId>
-      <version>4.13.2-1</version>
-    </dependency>
-
     <dependency>
       <groupId>io.fabric8</groupId>
       <artifactId>kubernetes-client</artifactId>
