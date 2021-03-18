@@ -19,6 +19,7 @@ import static java.net.HttpURLConnection.HTTP_GONE;
 
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.Watch;
+import io.fabric8.kubernetes.client.WatcherException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -80,7 +81,7 @@ public abstract class BaseWatcher {
         }
     }
 
-    public void onClose(KubernetesClientException e, String namespace) {
+    public void onClose(WatcherException e, String namespace) {
         //scans of fabric client confirm this call be called with null
         //we do not want to totally ignore this, as the closing of the
         //watch can effect responsiveness
@@ -88,7 +89,7 @@ public abstract class BaseWatcher {
         if (e != null) {
             LOGGER.warning(e.toString());
 
-            if (e.getStatus() != null && e.getStatus().getCode() == HTTP_GONE) {
+            if (e.isHttpGone()) {
                 stop();
                 start();
             }

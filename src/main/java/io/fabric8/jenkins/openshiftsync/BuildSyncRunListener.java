@@ -15,6 +15,44 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_BLUEOCEAN_LOG_URL;
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_BUILD_URI;
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_CONSOLE_LOG_URL;
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_LOG_URL;
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_NAMESPACE;
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_PENDING_INPUT_ACTION_JSON;
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_STATUS_JSON;
+import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.maybeScheduleNext;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.formatTimestamp;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
+import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
+import static java.util.logging.Level.FINE;
+import static java.util.logging.Level.INFO;
+import static java.util.logging.Level.SEVERE;
+import static java.util.logging.Level.WARNING;
+
+import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import javax.annotation.Nonnull;
+
+import org.apache.commons.httpclient.HttpStatus;
+import org.jenkinsci.plugins.workflow.job.WorkflowRun;
+import org.jenkinsci.plugins.workflow.support.steps.input.InputAction;
+import org.jenkinsci.plugins.workflow.support.steps.input.InputStepExecution;
+import org.kohsuke.stapler.DataBoundConstructor;
+
 import com.cloudbees.workflow.rest.external.AtomFlowNodeExt;
 import com.cloudbees.workflow.rest.external.FlowNodeExt;
 import com.cloudbees.workflow.rest.external.PendingInputActionsExt;
@@ -33,49 +71,13 @@ import hudson.model.listeners.RunListener;
 import hudson.triggers.SafeTimerTask;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.openshift.api.model.Build;
-import io.fabric8.openshift.api.model.BuildFluent;
-import io.fabric8.openshift.api.model.DoneableBuild;
+import io.fabric8.openshift.api.model.BuildBuilder;
 import io.jenkins.blueocean.rest.factory.BlueRunFactory;
 import io.jenkins.blueocean.rest.model.BluePipelineNode;
 import io.jenkins.blueocean.rest.model.BlueRun;
 import io.jenkins.blueocean.rest.model.BlueRun.BlueRunResult;
 import jenkins.model.Jenkins;
 import jenkins.util.Timer;
-
-import org.apache.commons.httpclient.HttpStatus;
-import org.jenkinsci.plugins.workflow.job.WorkflowRun;
-import org.jenkinsci.plugins.workflow.support.steps.input.InputAction;
-import org.jenkinsci.plugins.workflow.support.steps.input.InputStepExecution;
-import org.kohsuke.stapler.DataBoundConstructor;
-
-import javax.annotation.Nonnull;
-
-import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_BUILD_URI;
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_LOG_URL;
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_NAMESPACE;
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_PENDING_INPUT_ACTION_JSON;
-import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_STATUS_JSON;
-import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.maybeScheduleNext;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.formatTimestamp;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
-import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
-import static java.util.logging.Level.FINE;
-import static java.util.logging.Level.SEVERE;
-import static java.util.logging.Level.WARNING;
 
 /**
  * Listens to Jenkins Job build {@link Run} start and stop then ensure there's a
@@ -84,10 +86,9 @@ import static java.util.logging.Level.WARNING;
  */
 @Extension
 public class BuildSyncRunListener extends RunListener<Run> {
-    private static final Logger logger = Logger
-            .getLogger(BuildSyncRunListener.class.getName());
+    private static final Logger logger = Logger.getLogger(BuildSyncRunListener.class.getName());
 
-    private long pollPeriodMs = 1000 * 5;  // 5 seconds
+    private long pollPeriodMs = 1000 * 5; // 5 seconds
     private long delayPollPeriodMs = 1000; // 1 seconds
     private static final long maxDelay = 30000;
 
@@ -104,14 +105,13 @@ public class BuildSyncRunListener extends RunListener<Run> {
     }
 
     /**
-     * Joins all the given strings, ignoring nulls so that they form a URL with
-     * / between the paths without a // if the previous path ends with / and the
-     * next path starts with / unless a path item is blank
+     * Joins all the given strings, ignoring nulls so that they form a URL with /
+     * between the paths without a // if the previous path ends with / and the next
+     * path starts with / unless a path item is blank
      *
-     * @param strings
-     *            the sequence of strings to join
-     * @return the strings concatenated together with / while avoiding a double
-     *         // between non blank strings.
+     * @param strings the sequence of strings to join
+     * @return the strings concatenated together with / while avoiding a double //
+     *         between non blank strings.
      */
     public static String joinPaths(String... strings) {
         StringBuilder sb = new StringBuilder();
@@ -124,8 +124,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
         String joined = sb.toString();
 
         // And normalize it...
-        return joined.replaceAll("/+", "/").replaceAll("/\\?", "?")
-                .replaceAll("/#", "#").replaceAll(":/", "://");
+        return joined.replaceAll("/+", "/").replaceAll("/\\?", "?").replaceAll("/#", "#").replaceAll(":/", "://");
     }
 
     @Override
@@ -145,8 +144,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
             }
             checkTimerStarted();
         } else {
-            logger.fine("not polling polling build " + run.getUrl()
-                    + " as its not a WorkflowJob");
+            logger.fine("not polling polling build " + run.getUrl() + " as its not a WorkflowJob");
         }
         super.onStarted(run, listener);
     }
@@ -159,8 +157,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
                     pollLoop();
                 }
             };
-            Timer.get().scheduleAtFixedRate(task, delayPollPeriodMs, pollPeriodMs,
-                    TimeUnit.MILLISECONDS);
+            Timer.get().scheduleAtFixedRate(task, delayPollPeriodMs, pollPeriodMs, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -234,18 +231,15 @@ public class BuildSyncRunListener extends RunListener<Run> {
         }
     }
 
-    private boolean shouldUpdateOpenShiftBuild(BuildCause cause,
-            int latestStageNum, int latestNumFlowNodes, StatusExt status) {
+    private boolean shouldUpdateOpenShiftBuild(BuildCause cause, int latestStageNum, int latestNumFlowNodes,
+            StatusExt status) {
         long currTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime());
         logger.fine(String.format(
                 "shouldUpdateOpenShiftBuild curr time %s last update %s curr stage num %s last stage num %s"
                         + "curr flow num %s last flow num %s status %s",
-                String.valueOf(currTime),
-                String.valueOf(cause.getLastUpdateToOpenshift()),
-                String.valueOf(latestStageNum),
-                String.valueOf(cause.getNumStages()),
-                String.valueOf(latestNumFlowNodes),
-                String.valueOf(cause.getNumFlowNodes()), status.toString()));
+                String.valueOf(currTime), String.valueOf(cause.getLastUpdateToOpenshift()),
+                String.valueOf(latestStageNum), String.valueOf(cause.getNumStages()),
+                String.valueOf(latestNumFlowNodes), String.valueOf(cause.getNumFlowNodes()), status.toString()));
 
         // if we have not updated in maxDelay time, update
         if (currTime > (cause.getLastUpdateToOpenshift() + maxDelay)) {
@@ -263,8 +257,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
         }
 
         // if the run is in some sort of terminal state, update
-        if (status != StatusExt.IN_PROGRESS && 
-            status != StatusExt.PAUSED_PENDING_INPUT) {
+        if (status != StatusExt.IN_PROGRESS && status != StatusExt.PAUSED_PENDING_INPUT) {
             return true;
         }
 
@@ -282,10 +275,10 @@ public class BuildSyncRunListener extends RunListener<Run> {
         }
 
         String namespace = OpenShiftUtils.getNamespacefromPodInputs();
+        String ns = cause.getNamespace();
         if (namespace == null)
-            namespace = cause.getNamespace();
-        String rootUrl = OpenShiftUtils.getJenkinsURL(
-                getAuthenticatedOpenShiftClient(), namespace);
+            namespace = ns;
+        String rootUrl = OpenShiftUtils.getJenkinsURL(getAuthenticatedOpenShiftClient(), namespace);
         String buildUrl = joinPaths(rootUrl, run.getUrl());
         String logsUrl = joinPaths(buildUrl, "/consoleText");
         String logsConsoleUrl = joinPaths(buildUrl, "/console");
@@ -309,20 +302,15 @@ public class BuildSyncRunListener extends RunListener<Run> {
                                 .loadClass("org.jenkinsci.plugins.blueoceandisplayurl.BlueOceanDisplayURLImpl");
                         Constructor ctor = weburlbldr.getConstructor();
                         Object displayURL = ctor.newInstance();
-                        Method getRunURLMethod = weburlbldr.getMethod(
-                                "getRunURL", hudson.model.Run.class);
-                        Object blueOceanURI = getRunURLMethod.invoke(
-                                displayURL, run);
+                        Method getRunURLMethod = weburlbldr.getMethod("getRunURL", hudson.model.Run.class);
+                        Object blueOceanURI = getRunURLMethod.invoke(displayURL, run);
                         logsBlueOceanUrl = blueOceanURI.toString();
-                        logsBlueOceanUrl = logsBlueOceanUrl.replaceAll(
-                                "http://unconfigured-jenkins-location/", "");
-                        if (logsBlueOceanUrl.startsWith("http://")
-                                || logsBlueOceanUrl.startsWith("https://"))
+                        logsBlueOceanUrl = logsBlueOceanUrl.replaceAll("http://unconfigured-jenkins-location/", "");
+                        if (logsBlueOceanUrl.startsWith("http://") || logsBlueOceanUrl.startsWith("https://"))
                             // still normalize string
                             logsBlueOceanUrl = joinPaths("", logsBlueOceanUrl);
                         else
-                            logsBlueOceanUrl = joinPaths(rootUrl,
-                                    logsBlueOceanUrl);
+                            logsBlueOceanUrl = joinPaths(rootUrl, logsBlueOceanUrl);
                     }
                 }
             }
@@ -343,8 +331,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
         }
         boolean pendingInput = false;
         if (!wfRunExt.get_links().self.href.matches("^https?://.*$")) {
-            wfRunExt.get_links().self.setHref(joinPaths(rootUrl,
-                    wfRunExt.get_links().self.href));
+            wfRunExt.get_links().self.setHref(joinPaths(rootUrl, wfRunExt.get_links().self.href));
         }
         int newNumStages = wfRunExt.getStages().size();
         int newNumFlowNodes = 0;
@@ -356,9 +343,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
             // we leverage the blue ocean state machine to determine this
             BlueRunResult result = blueRunResults.get(stage.getName());
             if (result != null && result == BlueRunResult.NOT_BUILT) {
-                logger.info("skipping stage "
-                        + stage.getName()
-                        + " for the status JSON for pipeline run "
+                logger.info("skipping stage " + stage.getName() + " for the status JSON for pipeline run "
                         + run.getDisplayName()
                         + " because it was not executed (most likely because of a failure in another stage)");
                 continue;
@@ -369,22 +354,17 @@ public class BuildSyncRunListener extends RunListener<Run> {
             if (!links.self.href.matches("^https?://.*$")) {
                 links.self.setHref(joinPaths(rootUrl, links.self.href));
             }
-            if (links.getLog() != null
-                    && !links.getLog().href.matches("^https?://.*$")) {
+            if (links.getLog() != null && !links.getLog().href.matches("^https?://.*$")) {
                 links.getLog().setHref(joinPaths(rootUrl, links.getLog().href));
             }
-            newNumFlowNodes = newNumFlowNodes
-                    + stage.getStageFlowNodes().size();
+            newNumFlowNodes = newNumFlowNodes + stage.getStageFlowNodes().size();
             for (AtomFlowNodeExt node : stage.getStageFlowNodes()) {
                 FlowNodeExt.FlowNodeLinks nodeLinks = node.get_links();
                 if (!nodeLinks.self.href.matches("^https?://.*$")) {
-                    nodeLinks.self.setHref(joinPaths(rootUrl,
-                            nodeLinks.self.href));
+                    nodeLinks.self.setHref(joinPaths(rootUrl, nodeLinks.self.href));
                 }
-                if (nodeLinks.getLog() != null
-                        && !nodeLinks.getLog().href.matches("^https?://.*$")) {
-                    nodeLinks.getLog().setHref(
-                            joinPaths(rootUrl, nodeLinks.getLog().href));
+                if (nodeLinks.getLog() != null && !nodeLinks.getLog().href.matches("^https?://.*$")) {
+                    nodeLinks.getLog().setHref(joinPaths(rootUrl, nodeLinks.getLog().href));
                 }
             }
 
@@ -396,8 +376,8 @@ public class BuildSyncRunListener extends RunListener<Run> {
         // override stages in case declarative has fooled base pipeline support
         wfRunExt.setStages(validStageList);
 
-        boolean needToUpdate = this.shouldUpdateOpenShiftBuild(cause,
-                newNumStages, newNumFlowNodes, wfRunExt.getStatus());
+        boolean needToUpdate = this.shouldUpdateOpenShiftBuild(cause, newNumStages, newNumFlowNodes,
+                wfRunExt.getStatus());
         if (!needToUpdate) {
             return;
         }
@@ -410,9 +390,9 @@ public class BuildSyncRunListener extends RunListener<Run> {
             return;
         }
 
-        String pendingActionsJson = null;
+        String pendingActions = null;
         if (pendingInput && run instanceof WorkflowRun) {
-            pendingActionsJson = getPendingActionsJson((WorkflowRun) run);
+            pendingActions = getPendingActionsJson((WorkflowRun) run);
         }
 
         String phase = runToBuildPhase(run);
@@ -429,42 +409,28 @@ public class BuildSyncRunListener extends RunListener<Run> {
             }
         }
 
-        logger.log(FINE, "Patching build {0}/{1}: setting phase to {2}",
-                new Object[] { cause.getNamespace(), cause.getName(), phase });
+        String name = cause.getName();
+        logger.log(FINE, "Patching build {0}/{1}: setting phase to {2}", new Object[] { ns, name, phase });
         try {
-            BuildFluent.MetadataNested<DoneableBuild> builder = getAuthenticatedOpenShiftClient()
-                    .builds()
-                    .inNamespace(cause.getNamespace())
-                    .withName(cause.getName())
-                    .edit()
-                    .editMetadata()
-                    .addToAnnotations(
-                            OPENSHIFT_ANNOTATIONS_JENKINS_STATUS_JSON, json)
-                    .addToAnnotations(OPENSHIFT_ANNOTATIONS_JENKINS_BUILD_URI,
-                            buildUrl)
-                    .addToAnnotations(OPENSHIFT_ANNOTATIONS_JENKINS_LOG_URL,
-                            logsUrl)
-                    .addToAnnotations(
-                            Constants.OPENSHIFT_ANNOTATIONS_JENKINS_CONSOLE_LOG_URL,
-                            logsConsoleUrl)
-                    .addToAnnotations(
-                            Constants.OPENSHIFT_ANNOTATIONS_JENKINS_BLUEOCEAN_LOG_URL,
-                            logsBlueOceanUrl);
 
+            Map<String, String> annotations = new HashMap<String, String>();
+            annotations.put(OPENSHIFT_ANNOTATIONS_JENKINS_STATUS_JSON, json);
+            annotations.put(OPENSHIFT_ANNOTATIONS_JENKINS_BUILD_URI, buildUrl);
+            annotations.put(OPENSHIFT_ANNOTATIONS_JENKINS_LOG_URL, logsUrl);
+            annotations.put(OPENSHIFT_ANNOTATIONS_JENKINS_CONSOLE_LOG_URL, logsConsoleUrl);
+            annotations.put(OPENSHIFT_ANNOTATIONS_JENKINS_BLUEOCEAN_LOG_URL, logsBlueOceanUrl);
             String jenkinsNamespace = System.getenv("KUBERNETES_NAMESPACE");
             if (jenkinsNamespace != null && !jenkinsNamespace.isEmpty()) {
-                builder.addToAnnotations(
-                        OPENSHIFT_ANNOTATIONS_JENKINS_NAMESPACE,
-                        jenkinsNamespace);
+                annotations.put(OPENSHIFT_ANNOTATIONS_JENKINS_NAMESPACE, jenkinsNamespace);
             }
-            if (pendingActionsJson != null && !pendingActionsJson.isEmpty()) {
-                builder.addToAnnotations(
-                        OPENSHIFT_ANNOTATIONS_JENKINS_PENDING_INPUT_ACTION_JSON,
-                        pendingActionsJson);
+            if (pendingActions != null && !pendingActions.isEmpty()) {
+                annotations.put(OPENSHIFT_ANNOTATIONS_JENKINS_PENDING_INPUT_ACTION_JSON, pendingActions);
             }
-            builder.endMetadata().editStatus().withPhase(phase)
-                    .withStartTimestamp(startTime)
-                    .withCompletionTimestamp(completionTime).endStatus().done();
+            BuildBuilder builder = new BuildBuilder().editMetadata().withAnnotations(annotations).endMetadata()
+                    .editStatus().withPhase(phase).withStartTimestamp(startTime).withCompletionTimestamp(completionTime)
+                    .endStatus();
+            logger.log(INFO, "Creating a new build builder: " + builder);
+            getAuthenticatedOpenShiftClient().builds().inNamespace(ns).withName(name).edit(b -> builder.build());
         } catch (KubernetesClientException e) {
             if (HTTP_NOT_FOUND == e.getCode()) {
                 runsToPoll.remove(run);
@@ -475,8 +441,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
 
         cause.setNumFlowNodes(newNumFlowNodes);
         cause.setNumStages(newNumStages);
-        cause.setLastUpdateToOpenshift(TimeUnit.NANOSECONDS.toMillis(System
-                .nanoTime()));
+        cause.setLastUpdateToOpenshift(TimeUnit.NANOSECONDS.toMillis(System.nanoTime()));
     }
 
     // annotate the Build with pending input JSON so consoles can do the
@@ -484,18 +449,17 @@ public class BuildSyncRunListener extends RunListener<Run> {
     private String getPendingActionsJson(WorkflowRun run) {
         List<PendingInputActionsExt> pendingInputActions = new ArrayList<PendingInputActionsExt>();
         InputAction inputAction = run.getAction(InputAction.class);
-List<InputStepExecution> executions  = null;
+        List<InputStepExecution> executions = null;
         if (inputAction != null) {
-	    try {
-            executions = inputAction.getExecutions();
-	    } catch (Exception e) {
-		     logger.log(SEVERE, "Failed to get Excecutions:" + e, e);
-		                 return null;
-				         }
+            try {
+                executions = inputAction.getExecutions();
+            } catch (Exception e) {
+                logger.log(SEVERE, "Failed to get Excecutions:" + e, e);
+                return null;
+            }
             if (executions != null && !executions.isEmpty()) {
                 for (InputStepExecution inputStepExecution : executions) {
-                    pendingInputActions.add(PendingInputActionsExt.create(
-                            inputStepExecution, run));
+                    pendingInputActions.add(PendingInputActionsExt.create(inputStepExecution, run));
                 }
             }
         }
@@ -542,13 +506,11 @@ List<InputStepExecution> executions  = null;
     /**
      * Returns true if we should poll the status of this run
      *
-     * @param run
-     *            the Run to test against
+     * @param run the Run to test against
      * @return true if the should poll the status of this build run
      */
     protected boolean shouldPollRun(Run run) {
-        return run instanceof WorkflowRun
-                && run.getCause(BuildCause.class) != null
+        return run instanceof WorkflowRun && run.getCause(BuildCause.class) != null
                 && GlobalPluginConfiguration.get().isEnabled();
     }
 }
