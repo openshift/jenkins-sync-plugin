@@ -19,6 +19,7 @@ import static java.net.HttpURLConnection.HTTP_GONE;
 
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.Watch;
+import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.kubernetes.client.WatcherException;
 
 import java.util.ArrayList;
@@ -34,7 +35,7 @@ import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jenkins.util.Timer;
 
-public abstract class BaseWatcher {
+public abstract class BaseWatcher{
     private final Logger LOGGER = Logger.getLogger(BaseWatcher.class.getName());
 
     protected ScheduledFuture relister;
