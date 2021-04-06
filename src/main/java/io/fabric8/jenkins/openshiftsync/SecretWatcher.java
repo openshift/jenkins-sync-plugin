@@ -59,47 +59,54 @@ public class SecretWatcher extends BaseWatcher {
                     return;
                 }
                 for (String namespace : namespaces) {
-                    SecretList secrets = null;
-                    try {
-                        logger.fine("listing Secrets resources");
-                        secrets = getAuthenticatedOpenShiftClient().secrets()
-                                .inNamespace(namespace)
-                                .withLabel(Constants.OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC, Constants.VALUE_SECRET_SYNC).list();
-                        onInitialSecrets(secrets);
-                        logger.fine("handled Secrets resources");
-                    } catch (Exception e) {
-                        logger.log(SEVERE, "Failed to load Secrets: " + e, e);
-                    }
-                    try {
-                        String resourceVersion = "0";
-                        if (secrets == null) {
-                            logger.warning("Unable to get secret list; impacts resource version used for watch");
-                        } else {
-                            resourceVersion = secrets.getMetadata()
-                                    .getResourceVersion();
-                        }
-                        if (watches.get(namespace) == null) {
-                            logger.info("creating Secret watch for namespace "
-                                    + namespace + " and resource version"
-                                    + resourceVersion);
-                            addWatch(namespace,
-                                    getAuthenticatedOpenShiftClient()
-                                    .secrets()
-                                    .inNamespace(namespace)
-                                    .withLabel(Constants.OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC,
-                                            Constants.VALUE_SECRET_SYNC)
-                                            .withResourceVersion(
-                                                    resourceVersion)
-                                                    .watch(new WatcherCallback<Secret>(SecretWatcher.this,
-                                                            namespace)));
-                        }
-                    } catch (Exception e) {
-                        logger.log(SEVERE, "Failed to load Secrets: " + e, e);
-                    }
+                    addWatchForNamespace(namespace);
                 }
 
             }
         };
+    }
+
+    public void addWatchForNamespace(String namespace) {
+      SecretList secrets = null;
+      try {
+        logger.fine("listing Secrets resources");
+        secrets = getAuthenticatedOpenShiftClient().secrets()
+                  .inNamespace(namespace)
+                  .withLabel(Constants.OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC, Constants.VALUE_SECRET_SYNC).list();
+        onInitialSecrets(secrets);
+        logger.fine("handled Secrets resources");
+      } catch (Exception e) {
+        logger.log(SEVERE, "Failed to load Secrets: " + e, e);
+      }
+      try {
+        String resourceVersion = "0";
+        if (secrets == null) {
+          logger.warning("Unable to get secret list; impacts resource version used for watch");
+        } else {
+          resourceVersion = secrets.getMetadata()
+                                    .getResourceVersion();
+        }
+        if (watches.get(namespace) == null) {
+          logger.info("creating Secret watch for namespace "
+                                    + namespace + " and resource version"
+                                    + resourceVersion);
+          addWatch(namespace, getAuthenticatedOpenShiftClient()
+                              .secrets()
+                              .inNamespace(namespace)
+                              .withLabel(Constants.OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC,
+                                            Constants.VALUE_SECRET_SYNC)
+                              .withResourceVersion(resourceVersion)
+                              .watch(new WatcherCallback<Secret>(SecretWatcher.this,namespace)));
+                        }
+      } catch (Exception e) {
+        logger.log(SEVERE, "Failed to load Secrets: " + e, e);
+      }
+    }
+
+    public void startAfterOnClose(String namespace) {
+        synchronized (this.lock) {
+             addWatchForNamespace(namespace);
+        }
     }
 
     public void start() {

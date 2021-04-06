@@ -53,40 +53,51 @@ public class ConfigMapWatcher extends BaseWatcher {
                     return;
                 }
                 for (String namespace : namespaces) {
-                    ConfigMapList configMaps = null;
-                    try {
-                        LOGGER.fine("listing ConfigMap resources");
-                        configMaps = getAuthenticatedOpenShiftClient()
-                                .configMaps().inNamespace(namespace).list();
-                        onInitialConfigMaps(configMaps);
-                        LOGGER.fine("handled ConfigMap resources");
-                    } catch (Exception e) {
-                        LOGGER.log(SEVERE, "Failed to load ConfigMaps: " + e, e);
-                    }
-                    try {
-                        String resourceVersion = "0";
-                        if (configMaps == null) {
-                            LOGGER.warning("Unable to get config map list; impacts resource version used for watch");
-                        } else {
-                            resourceVersion = configMaps.getMetadata().getResourceVersion();
-                        }
-                        if (watches.get(namespace) == null) {
-                            LOGGER.info("creating ConfigMap watch for namespace "
-                                    + namespace
-                                    + " and resource version "
-                                    + resourceVersion);
-                            addWatch(namespace,
-                                    getAuthenticatedOpenShiftClient()
-                                    .configMaps()
-                                    .inNamespace(namespace)
-                                    .withResourceVersion(resourceVersion).watch(new WatcherCallback<ConfigMap>(ConfigMapWatcher.this,namespace)));
-                        }
-                    } catch (Exception e) {
-                        LOGGER.log(SEVERE, "Failed to load ConfigMaps: " + e, e);
-                    }
+                    addWatchForNamespace(namespace);
                 }
             }
         };
+    }
+
+    public void addWatchForNamespace(String namespace) {
+        ConfigMapList configMaps = null;
+        try {
+            LOGGER.fine("listing ConfigMap resources");
+            configMaps = getAuthenticatedOpenShiftClient()
+                                .configMaps().inNamespace(namespace).list();
+                        onInitialConfigMaps(configMaps);
+            LOGGER.fine("handled ConfigMap resources");
+        } catch (Exception e) {
+            LOGGER.log(SEVERE, "Failed to load ConfigMaps: " + e, e);
+        }
+        try {
+            String resourceVersion = "0";
+            if (configMaps == null) {
+                LOGGER.warning("Unable to get config map list; impacts resource version used for watch");
+            } else {
+                resourceVersion = configMaps.getMetadata().getResourceVersion();
+            }
+            if (watches.get(namespace) == null) {
+                LOGGER.info("creating ConfigMap watch for namespace "
+                                    + namespace
+                                    + " and resource version "
+                                    + resourceVersion);
+                addWatch(namespace,
+                    getAuthenticatedOpenShiftClient()
+                    .configMaps()
+                    .inNamespace(namespace)
+                    .withResourceVersion(resourceVersion).watch(new WatcherCallback<ConfigMap>(ConfigMapWatcher.this,namespace)));
+            }
+        } catch (Exception e) {
+            LOGGER.log(SEVERE, "Failed to load ConfigMaps: " + e, e);
+        }
+
+    }
+
+    public void startAfterOnClose(String namespace) {
+        synchronized (this.lock) {
+             addWatchForNamespace(namespace);
+        }
     }
 
     public void start() {

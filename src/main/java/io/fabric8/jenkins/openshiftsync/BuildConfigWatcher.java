@@ -99,29 +99,7 @@ public class BuildConfigWatcher extends BaseWatcher {
                     return;
                 }
                 for (String namespace : namespaces) {
-                    BuildConfigList buildConfigs = null;
-                    try {
-                        logger.fine("listing BuildConfigs resources");
-                        buildConfigs = getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace).list();
-                        onInitialBuildConfigs(buildConfigs);
-                        logger.fine("handled BuildConfigs resources");
-                    } catch (Exception e) {
-                        logger.log(SEVERE, "Failed to load BuildConfigs: " + e, e);
-                    }
-                    try {
-                        String resourceVersion = "0";
-                        if (buildConfigs == null) {
-                            logger.warning("Unable to get build config list; impacts resource version used for watch");
-                        } else {
-                            resourceVersion = buildConfigs.getMetadata().getResourceVersion();
-                        }
-                        if (watches.get(namespace) == null) {
-                            logger.info("creating BuildConfig watch for namespace " + namespace + " and resource version " + resourceVersion);
-                            addWatch(namespace, getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace).withResourceVersion(resourceVersion).watch(new WatcherCallback<BuildConfig>(BuildConfigWatcher.this,namespace)));
-                        }
-                    } catch (Exception e) {
-                        logger.log(SEVERE, "Failed to load BuildConfigs: " + e, e);
-                    }
+                    addWatchForNamespace(namespace);
                 }
                 // poke the BuildWatcher builds with no BC list and see if we
                 // can create job
@@ -129,6 +107,42 @@ public class BuildConfigWatcher extends BaseWatcher {
                 BuildWatcher.flushBuildsWithNoBCList();
             }
         };
+    }
+    
+    public void addWatchForNamespace(String namespace) {
+        BuildConfigList buildConfigs = null;
+        try {
+            logger.fine("listing BuildConfigs resources");
+            buildConfigs = getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace).list();
+            onInitialBuildConfigs(buildConfigs);
+            logger.fine("handled BuildConfigs resources");
+        } catch (Exception e) {
+            logger.log(SEVERE, "Failed to load BuildConfigs: " + e, e);
+        }
+        try {
+            String resourceVersion = "0";
+            if (buildConfigs == null) {
+                logger.warning("Unable to get build config list; impacts resource version used for watch");
+            } else {
+                resourceVersion = buildConfigs.getMetadata().getResourceVersion();
+            }
+            if (watches.get(namespace) == null) {
+                logger.info("creating BuildConfig watch for namespace " + namespace + " and resource version " + resourceVersion);
+                addWatch(namespace, getAuthenticatedOpenShiftClient()
+                                    .buildConfigs()
+                                    .inNamespace(namespace)
+                                    .withResourceVersion(resourceVersion)
+                                    .watch(new WatcherCallback<BuildConfig>(BuildConfigWatcher.this,namespace)));
+            }
+        } catch (Exception e) {
+            logger.log(SEVERE, "Failed to load BuildConfigs: " + e, e);
+         }
+    }
+
+    public void startAfterOnClose(String namespace) {
+        synchronized (this.lock) {
+             addWatchForNamespace(namespace);
+        }
     }
 
     public void start() {

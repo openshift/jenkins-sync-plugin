@@ -103,35 +103,42 @@ public class BuildWatcher extends BaseWatcher {
                 // about
                 BuildWatcher.flushBuildsWithNoBCList();
                 for (String namespace : namespaces) {
-                    BuildList newBuilds = null;
-                    try {
-                        logger.fine("listing Build resources");
-                        newBuilds = getAuthenticatedOpenShiftClient()
-                                .builds()
-                                .inNamespace(namespace)
-                                .withField(OPENSHIFT_BUILD_STATUS_FIELD,
+                    addWatchForNamespace(namespace);
+                }
+                reconcileRunsAndBuilds();
+            }
+        };
+    }
+
+    public void addWatchForNamespace(String namespace) {
+        BuildList newBuilds = null;
+        try {
+            logger.fine("listing Build resources");
+            newBuilds = getAuthenticatedOpenShiftClient()
+                        .builds()
+                        .inNamespace(namespace)
+                        .withField(OPENSHIFT_BUILD_STATUS_FIELD,
                                         BuildPhases.NEW).list();
-                        onInitialBuilds(newBuilds);
-                        logger.fine("handled Build resources");
-                    } catch (Exception e) {
-                        logger.log(Level.SEVERE,
-                                "Failed to load initial Builds: " + e, e);
-                    }
-                    try {
-                        String resourceVersion = "0";
-                        if (newBuilds == null) {
-                            logger.warning("Unable to get build list; impacts resource version used for watch");
-                        } else {
-                            resourceVersion = newBuilds.getMetadata()
+            onInitialBuilds(newBuilds);
+            logger.fine("handled Build resources");
+        } catch (Exception e) {
+            logger.log(Level.SEVERE,"Failed to load initial Builds: " + e, e);
+        }
+        try {
+            String resourceVersion = "0";
+            if (newBuilds == null) {
+                logger.warning("Unable to get build list; impacts resource version used for watch");
+            } else {
+                resourceVersion = newBuilds.getMetadata()
                                     .getResourceVersion();
-                        }
-                        if (watches.get(namespace) == null) {
-                            logger.info("creating Build watch for namespace "
+            }
+            if (watches.get(namespace) == null) {
+                logger.info("creating Build watch for namespace "
                                     + namespace
                                     + " and resource version "
                                     + resourceVersion);
 
-                            addWatch(namespace, getAuthenticatedOpenShiftClient()
+                addWatch(namespace, getAuthenticatedOpenShiftClient()
                               .builds()
                               .inNamespace(namespace)
                               .withResourceVersion(
@@ -139,15 +146,16 @@ public class BuildWatcher extends BaseWatcher {
                               .watch(new WatcherCallback<Build>(
                                 BuildWatcher.this,
                                 namespace)));
-                        }
-                    } catch (Exception e) {
-                        logger.log(Level.SEVERE,
-                                "Failed to load initial Builds: " + e, e);
-                    }
                 }
-                reconcileRunsAndBuilds();
-            }
-        };
+        } catch (Exception e) {
+            logger.log(Level.SEVERE,"Failed to load initial Builds: " + e, e);
+        }
+    }
+
+    public void startAfterOnClose(String namespace) {
+        synchronized (this.lock) {
+             addWatchForNamespace(namespace);
+        }
     }
 
     public void start() {
