@@ -86,6 +86,8 @@ import jenkins.util.Timer;
  */
 @Extension
 public class BuildSyncRunListener extends RunListener<Run> {
+    private static final String KUBERNETES_NAMESPACE = "KUBERNETES_NAMESPACE";
+
     private static final Logger logger = Logger.getLogger(BuildSyncRunListener.class.getName());
 
     private long pollPeriodMs = 1000 * 5; // 5 seconds
@@ -419,18 +421,20 @@ public class BuildSyncRunListener extends RunListener<Run> {
             annotations.put(OPENSHIFT_ANNOTATIONS_JENKINS_LOG_URL, logsUrl);
             annotations.put(OPENSHIFT_ANNOTATIONS_JENKINS_CONSOLE_LOG_URL, logsConsoleUrl);
             annotations.put(OPENSHIFT_ANNOTATIONS_JENKINS_BLUEOCEAN_LOG_URL, logsBlueOceanUrl);
-            String jenkinsNamespace = System.getenv("KUBERNETES_NAMESPACE");
+            String jenkinsNamespace = System.getenv(KUBERNETES_NAMESPACE);
             if (jenkinsNamespace != null && !jenkinsNamespace.isEmpty()) {
                 annotations.put(OPENSHIFT_ANNOTATIONS_JENKINS_NAMESPACE, jenkinsNamespace);
             }
             if (pendingActions != null && !pendingActions.isEmpty()) {
                 annotations.put(OPENSHIFT_ANNOTATIONS_JENKINS_PENDING_INPUT_ACTION_JSON, pendingActions);
             }
-            BuildBuilder builder = new BuildBuilder().editMetadata().withAnnotations(annotations).endMetadata()
-                    .editStatus().withPhase(phase).withStartTimestamp(startTime).withCompletionTimestamp(completionTime)
-                    .endStatus();
-            logger.log(INFO, "Creating a new build builder: " + builder);
-            getAuthenticatedOpenShiftClient().builds().inNamespace(ns).withName(name).edit(b -> builder.build());
+            final String finalStartTime = startTime;
+            final String finalCompletionTime = completionTime;
+            logger.log(INFO, "Creating a new build builder: ");
+            getAuthenticatedOpenShiftClient().builds().inNamespace(ns).withName(name)
+                    .edit(b -> new BuildBuilder(b).editMetadata().withAnnotations(annotations).endMetadata()
+                            .editStatus().withPhase(phase).withStartTimestamp(finalStartTime)
+                            .withCompletionTimestamp(finalCompletionTime).endStatus().build());
         } catch (KubernetesClientException e) {
             if (HTTP_NOT_FOUND == e.getCode()) {
                 runsToPoll.remove(run);
