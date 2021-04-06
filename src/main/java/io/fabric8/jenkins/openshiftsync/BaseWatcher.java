@@ -38,6 +38,7 @@ public abstract class BaseWatcher {
     private final Logger LOGGER = Logger.getLogger(BaseWatcher.class.getName());
 
     protected ScheduledFuture relister;
+    protected final Object lock = new Object();
     protected final String[] namespaces;
     protected ConcurrentHashMap<String, Watch> watches;
     private final String PT_NAME_CLAIMED = "The event for %s | %s | %s that attempts to add the pod template %s was ignored because a %s previously created a pod template with the same name";
@@ -68,6 +69,7 @@ public abstract class BaseWatcher {
                 TimeUnit.MILLISECONDS);
 
     }
+    public abstract void startAfterOnClose(String namespace);
 
     public void stop() {
         if (relister != null && !relister.isDone()) {
@@ -81,24 +83,26 @@ public abstract class BaseWatcher {
         }
     }
 
-    public void onClose(WatcherException e, String namespace) {
+    public void stop(String namespace) {
+        Watch watch =  watches.get(namespace)
+        if (watch != null) {
+            watch.close();
+            watches.remove(namespace);
+        }
+    }
+
+    public void onClose(KubernetesClientException e, String namespace) {
         //scans of fabric client confirm this call be called with null
         //we do not want to totally ignore this, as the closing of the
         //watch can effect responsiveness
-        LOGGER.info("Watch for type " + this.getClass().getName() + " closed for one of the following namespaces: " + watches.keySet().toString());
+        LOGGER.info("Watch for type " + this.getClass().getName() + " closed for namespace : " + namespace);
         if (e != null) {
-            LOGGER.warning(e.toString());
-
-            if (e.isHttpGone()) {
-                stop();
-                start();
+            synchronized (this.lock) {
+                LOGGER.warning(e.toString());
+                stop(namespace);
+                startAfterOnClose(namespace);
             }
         }
-        // clearing the watches here will signal the extending classes
-        // to attempt to re-establish the watch the next time they attempt
-        // to list; should shield from rapid/repeated close/reopen cycles
-        // doing it in this fashion
-        watches.remove(namespace);
     }
 
     public void addWatch(String key, Watch desiredWatch) {

@@ -51,35 +51,45 @@ public class ImageStreamWatcher extends BaseWatcher {
                     logger.fine("No Openshift Token credential defined.");
                     return;
                 }
-                for (String ns : namespaces) {
-                    ImageStreamList imageStreams = null;
-                    try {
-                        logger.fine("listing ImageStream resources");
-                        imageStreams = OpenShiftUtils.getOpenshiftClient().imageStreams().inNamespace(ns).list();
-                        onImageStreamInitialization(imageStreams);
-                        logger.fine("handled ImageStream resources");
-                    } catch (Exception e) {
-                        logger.log(SEVERE, "Failed to load ImageStreams: " + e, e);
-                    }
-                    try {
-                        String resourceVersion = "0";
-                        if (imageStreams == null) {
-                            logger.warning("Unable to get image stream list; impacts resource version used for watch");
-                        } else {
-                            resourceVersion = imageStreams.getMetadata().getResourceVersion();
-                        }
-                        if (watches.get(ns) == null) {
-                            logger.info("creating ImageStream watch for namespace " + ns + " and resource version " + resourceVersion);
-                            ImageStreamWatcher w = ImageStreamWatcher.this;
-                            WatcherCallback<ImageStream> watcher = new WatcherCallback<ImageStream>(w, ns);
-                            addWatch(ns, OpenShiftUtils.getOpenshiftClient().imageStreams().inNamespace(ns).withResourceVersion(resourceVersion).watch(watcher));
-                        }
-                    } catch (Exception e) {
-                        logger.log(SEVERE, "Failed to load ImageStreams: " + e, e);
-                    }
+                for (String namespace : namespaces) {
+                    addWatchForNamespace(namespace);
                 }
             }
         };
+    }
+
+    public void addWatchForNamespace(String namespace) {
+        ImageStreamList imageStreams = null;
+        try {
+            logger.fine("listing ImageStream resources");
+            imageStreams = OpenShiftUtils.getOpenshiftClient().imageStreams().inNamespace(namespace).list();
+            onImageStreamInitialization(imageStreams);
+            logger.fine("handled ImageStream resources");
+        } catch (Exception e) {
+            logger.log(SEVERE, "Failed to load ImageStreams: " + e, e);
+        }
+        try {
+            String resourceVersion = "0";
+            if (imageStreams == null) {
+                logger.warning("Unable to get image stream list; impacts resource version used for watch");
+            } else {
+                resourceVersion = imageStreams.getMetadata().getResourceVersion();
+            }
+            if (watches.get(namespace) == null) {
+                logger.info("creating ImageStream watch for namespace " + namespace + " and resource version " + resourceVersion);
+                ImageStreamWatcher w = ImageStreamWatcher.this;
+                WatcherCallback<ImageStream> watcher = new WatcherCallback<ImageStream>(w, namespace);
+                addWatch(namespace, OpenShiftUtils.getOpenshiftClient().imageStreams().inNamespace(namespace).withResourceVersion(resourceVersion).watch(watcher));
+            }
+        } catch (Exception e) {
+            logger.log(SEVERE, "Failed to load ImageStreams: " + e, e);
+        }
+    }
+
+    public void startAfterOnClose(String namespace) {
+        synchronized (this.lock) {
+             addWatchForNamespace(namespace);
+        }
     }
 
     public void start() {
