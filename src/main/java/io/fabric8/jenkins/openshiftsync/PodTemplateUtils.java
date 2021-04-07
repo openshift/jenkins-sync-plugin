@@ -41,7 +41,7 @@ public class PodTemplateUtils {
     static final String SLAVE_LABEL = "slave-label";
     private static final String SPECIAL_IST_PREFIX = "imagestreamtag:";
     private static final int SPECIAL_IST_PREFIX_IDX = SPECIAL_IST_PREFIX.length();
-    protected static ConcurrentHashMap<String, List<PodTemplate>> trackedPodTemplates = new ConcurrentHashMap<String, List<PodTemplate>>();
+    protected final static ConcurrentHashMap<String, List<PodTemplate>> trackedPodTemplates = new ConcurrentHashMap<String, List<PodTemplate>>();
     protected static ConcurrentHashMap<String, String> podTemplateToApiType = new ConcurrentHashMap<String, String>();
 
     protected static boolean hasOneAndOnlyOneWithSomethingAfter(String str, String substr) {

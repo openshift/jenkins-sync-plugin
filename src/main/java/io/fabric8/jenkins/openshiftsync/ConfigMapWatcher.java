@@ -129,9 +129,7 @@ public class ConfigMapWatcher extends BaseWatcher<ConfigMap> {
     private void onInitialConfigMaps(ConfigMapList configMaps) {
         if (configMaps == null)
             return;
-        if (PodTemplateUtils.trackedPodTemplates == null) {
-            PodTemplateUtils.trackedPodTemplates = new ConcurrentHashMap<>(configMaps.getItems().size());
-        }
+       
         List<ConfigMap> items = configMaps.getItems();
         if (items != null) {
             for (ConfigMap configMap : items) {

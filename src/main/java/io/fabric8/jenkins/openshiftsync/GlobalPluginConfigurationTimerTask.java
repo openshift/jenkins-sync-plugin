@@ -52,9 +52,9 @@ public class GlobalPluginConfigurationTimerTask extends SafeTimerTask {
                 buildWatcher.start();
                 watchers.add(buildWatcher);
 
-                ConfigMapWatcher configMapWatcher = new ConfigMapWatcher(namespace);
-                configMapWatcher.start();
-                watchers.add(configMapWatcher);
+                ConfigMapInformer configMapInformer = new ConfigMapInformer(namespace);
+                configMapInformer.start();
+                watchers.add(configMapInformer);
 
                 ImageStreamWatcher imageStreamWatcher = new ImageStreamWatcher(namespace);
                 imageStreamWatcher.start();
@@ -81,7 +81,7 @@ public class GlobalPluginConfigurationTimerTask extends SafeTimerTask {
                 }
             }
         } catch (Exception e) {
-            logger.severe("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" + e);
+            logger.severe(e.toString());
         }
     }
 }

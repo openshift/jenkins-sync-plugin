@@ -16,31 +16,34 @@
 package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenshiftClient;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.addPodTemplate;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.configMapContainsSlave;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.podTemplatesFromConfigMap;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForAddEvent;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForDeleteEvent;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForModifyEvent;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.trackedPodTemplates;
 import static java.util.logging.Level.SEVERE;
-import static java.util.logging.Level.WARNING;
 
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Logger;
 
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.fabric8.kubernetes.api.model.ConfigMap;
-import io.fabric8.kubernetes.api.model.ConfigMapList;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
+import io.fabric8.kubernetes.client.informers.cache.Lister;
 import io.fabric8.openshift.client.OpenShiftClient;
 
 public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEventHandler<ConfigMap> {
-    private static final Logger LOGGER = Logger.getLogger(ConfigMapWatcher.class.getName());
-    private static final long RESYNC_PERIOD = 1000L;
+    private static final Logger LOGGER = LoggerFactory.getLogger(ConfigMapWatcher.class);
+
+    private static final long RESYNC_PERIOD = 30 * 1000L;
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public ConfigMapInformer(String namespace) {
@@ -53,111 +56,22 @@ public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEvent
     }
 
     public void start() {
-        LOGGER.info("Now handling startup config maps for " + namespace + " !!");
-        ConfigMapList configMaps = null;
-        String ns = this.namespace;
-        try {
-            LOGGER.fine("listing ConfigMap resources");
-            OpenShiftClient client = getAuthenticatedOpenShiftClient();
-            SharedInformerFactory informerFactory = client.informers();
-            SharedIndexInformer<ConfigMap> informer = informerFactory.inNamespace(namespace)
-                    .sharedIndexInformerFor(ConfigMap.class, RESYNC_PERIOD);
-            informer.addEventHandler(this);
-            //configMaps = client.configMaps().inNamespace(ns).list();
-            //onInitialConfigMaps(configMaps);
-            LOGGER.fine("handled ConfigMap resources");
-        } catch (Exception e) {
-            LOGGER.log(SEVERE, "Failed to load ConfigMaps: " + e, e);
-        }
-        try {
-            String rv = "0";
-            if (configMaps == null) {
-                LOGGER.warning("Unable to get config map list; impacts resource version used for watch");
-            } else {
-                rv = configMaps.getMetadata().getResourceVersion();
-            }
-
-            if (this.watch == null) {
-                synchronized (this.lock) {
-                    if (this.watch == null) {
-                        LOGGER.info("creating ConfigMap watch for namespace " + ns + " and resource version " + rv);
-                        OpenShiftClient client = getOpenshiftClient();
-                        this.watch = client.configMaps().inNamespace(ns).withResourceVersion(rv).watch(this);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.log(SEVERE, "Failed to load ConfigMaps: " + e, e);
-        }
-
-    }
-
-    public void startAfterOnClose(String namespace) {
-        synchronized (this.lock) {
-            start();
-        }
-    }
-
-    @Override
-    public void eventReceived(Action action, ConfigMap configMap) {
-        try {
-            List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, configMap);
-            boolean hasSlaves = slavesFromCM.size() > 0;
-            String uid = configMap.getMetadata().getUid();
-            String cmname = configMap.getMetadata().getName();
-            String namespace = configMap.getMetadata().getNamespace();
-            switch (action) {
-            case ADDED:
-                if (hasSlaves) {
-                    processSlavesForAddEvent(this, slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
-                }
-                break;
-            case MODIFIED:
-                processSlavesForModifyEvent(this, slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
-                break;
-            case DELETED:
-                processSlavesForDeleteEvent(this, slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
-                break;
-            case ERROR:
-                LOGGER.warning("watch for configMap " + configMap.getMetadata().getName() + " received error event ");
-                break;
-            default:
-                LOGGER.warning("watch for configMap " + configMap.getMetadata().getName() + " received unknown event "
-                        + action);
-                break;
-            }
-        } catch (Exception e) {
-            LOGGER.log(WARNING, "Caught: " + e, e);
-        }
-    }
-
-    private void onInitialConfigMaps(ConfigMapList configMaps) {
-        if (configMaps == null)
-            return;
-        if (PodTemplateUtils.trackedPodTemplates == null) {
-            PodTemplateUtils.trackedPodTemplates = new ConcurrentHashMap<>(configMaps.getItems().size());
-        }
-        List<ConfigMap> items = configMaps.getItems();
-        if (items != null) {
-            for (ConfigMap configMap : items) {
-                try {
-                    if (PodTemplateUtils.configMapContainsSlave(configMap)
-                            && !PodTemplateUtils.trackedPodTemplates.containsKey(configMap.getMetadata().getUid())) {
-                        List<PodTemplate> templates = PodTemplateUtils.podTemplatesFromConfigMap(this, configMap);
-                        PodTemplateUtils.trackedPodTemplates.put(configMap.getMetadata().getUid(), templates);
-                        for (PodTemplate podTemplate : templates) {
-                            PodTemplateUtils.addPodTemplate(podTemplate);
-                        }
-                    }
-                } catch (Exception e) {
-                    LOGGER.log(SEVERE, "Failed to update ConfigMap PodTemplates", e);
-                }
-            }
-        }
+        LOGGER.info("Now handling startup config maps for {} !!", namespace);
+        LOGGER.trace("listing ConfigMap resources");
+        OpenShiftClient client = getAuthenticatedOpenShiftClient();
+        SharedInformerFactory informerFactory = client.informers();
+        SharedIndexInformer<ConfigMap> informer = informerFactory.inNamespace(namespace)
+                .sharedIndexInformerFor(ConfigMap.class, RESYNC_PERIOD);
+        informer.addEventHandler(this);
+        LOGGER.info("ConfigMap informer started for namespace: {}", namespace);
+        Lister<ConfigMap> list = new Lister<>(informer.getIndexer(), namespace);
+        onInit(list.list());
+        informerFactory.startAllRegisteredInformers();
     }
 
     @Override
     public void onAdd(ConfigMap obj) {
+        LOGGER.info("ConfigMap informer  received add event for: {}", obj);
         List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, obj);
         boolean hasSlaves = slavesFromCM.size() > 0;
         if (hasSlaves) {
@@ -171,22 +85,48 @@ public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEvent
 
     @Override
     public void onUpdate(ConfigMap oldObj, ConfigMap newObj) {
-        List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, newObj);
-        ObjectMeta metadata = newObj.getMetadata();
-        String uid = metadata.getUid();
-        String cmname = metadata.getName();
-        String namespace = metadata.getNamespace();
-        processSlavesForModifyEvent(this, slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
+        LOGGER.info("ConfigMap informer  received update event for: {} to: {}", oldObj, newObj);
+//        List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, newObj);
+//        ObjectMeta metadata = newObj.getMetadata();
+//        String uid = metadata.getUid();
+//        String cmname = metadata.getName();
+//        String namespace = metadata.getNamespace();
+//        processSlavesForModifyEvent(this, slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
     }
 
     @Override
     public void onDelete(ConfigMap obj, boolean deletedFinalStateUnknown) {
+        LOGGER.info("ConfigMap informer received delete event for: {}", obj);
         List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, obj);
         ObjectMeta metadata = obj.getMetadata();
         String uid = metadata.getUid();
         String cmname = metadata.getName();
         String namespace = metadata.getNamespace();
         processSlavesForDeleteEvent(this, slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
+    }
+
+    private void onInit(List<ConfigMap> list) {
+        if (list != null) {
+            for (ConfigMap configMap : list) {
+                addPodTemplateFromConfigMap(configMap);
+            }
+        }
+    }
+
+    private void addPodTemplateFromConfigMap(ConfigMap configMap) {
+        try {
+            String uid = configMap.getMetadata().getUid();
+            if (configMapContainsSlave(configMap) && !trackedPodTemplates.containsKey(uid)) {
+                List<PodTemplate> templates = podTemplatesFromConfigMap(this, configMap);
+                trackedPodTemplates.put(uid, templates);
+                for (PodTemplate podTemplate : templates) {
+                    LOGGER.info("Adding PodTemplate {}", podTemplate);
+                    addPodTemplate(podTemplate);
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to update ConfigMap PodTemplates", e);
+        }
     }
 
 }
