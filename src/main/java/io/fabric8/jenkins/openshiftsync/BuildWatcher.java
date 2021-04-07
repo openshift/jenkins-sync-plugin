@@ -33,7 +33,9 @@ import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenshiftClient
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isCancellable;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isCancelled;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isNew;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isPipelineStrategyBuild;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.updateOpenShiftBuildPhase;
+import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
 import java.io.IOException;
@@ -55,6 +57,9 @@ import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.security.ACL;
 import io.fabric8.kubernetes.api.model.OwnerReference;
+import io.fabric8.kubernetes.api.model.Status;
+import io.fabric8.kubernetes.client.KubernetesClientException;
+import io.fabric8.kubernetes.client.WatcherException;
 import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildConfig;
 import io.fabric8.openshift.api.model.BuildList;
@@ -125,9 +130,19 @@ public class BuildWatcher extends BaseWatcher<Build> {
                     }
                 }
             }
-
+        } catch (KubernetesClientException e) {
+            logger.log(SEVERE, "Failed to load initial Builds: " + e, e);
+            this.watch.close();
+            Status status = e.getStatus();
+            String message = status != null ? status.getMessage() : "Unknown status on query";
+            // TODO add a throttling mechancism to wait before retying in loop
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e1) {
+            }
+            this.onClose(new WatcherException(message, e));
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "Failed to load initial Builds: " + e, e);
+            logger.log(SEVERE, "Failed to load initial Builds: " + e, e);
         }
         reconcileRunsAndBuilds();
     }
@@ -141,29 +156,33 @@ public class BuildWatcher extends BaseWatcher<Build> {
     @SuppressFBWarnings("SF_SWITCH_NO_DEFAULT")
     @Override
     public void eventReceived(Action action, Build build) {
-        if (!OpenShiftUtils.isPipelineStrategyBuild(build))
+        if (build == null) {
+            logger.warning("Received  event with null Build: " + action + ", ignoring: " + this);
             return;
-        try {
-            switch (action) {
-            case ADDED:
-                addEventToJenkinsJobRun(build);
-                break;
-            case MODIFIED:
-                modifyEventToJenkinsJobRun(build);
-                break;
-            case DELETED:
-                deleteEventToJenkinsJobRun(build);
-                break;
-            case ERROR:
-                logger.warning("watch for build " + build.getMetadata().getName() + " received error event ");
-                break;
-            default:
-                logger.warning(
-                        "watch for build " + build.getMetadata().getName() + " received unknown event " + action);
-                break;
+        }
+        if (isPipelineStrategyBuild(build)) {
+            try {
+                String name = build.getMetadata().getName();
+                switch (action) {
+                case ADDED:
+                    addEventToJenkinsJobRun(build);
+                    break;
+                case MODIFIED:
+                    modifyEventToJenkinsJobRun(build);
+                    break;
+                case DELETED:
+                    deleteEventToJenkinsJobRun(build);
+                    break;
+                case ERROR:
+                    logger.warning("watch for build " + name + " received error event ");
+                    break;
+                default:
+                    logger.warning("watch for build " + name + " received unknown event " + action);
+                    break;
+                }
+            } catch (Exception e) {
+                logger.log(WARNING, "Caught: " + e, e);
             }
-        } catch (Exception e) {
-            logger.log(WARNING, "Caught: " + e, e);
         }
     }
 

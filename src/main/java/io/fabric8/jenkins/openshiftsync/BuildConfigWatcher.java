@@ -18,11 +18,13 @@ package io.fabric8.jenkins.openshiftsync;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.initializeBuildConfigToJobMap;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.removeJobWithBuildConfig;
+import static io.fabric8.jenkins.openshiftsync.BuildPhases.NEW;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_BUILD_STATUS_FIELD;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_LABELS_BUILD_CONFIG_NAME;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenshiftClient;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isPipelineStrategyBuildConfig;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.logging.Level.SEVERE;
 
 import java.util.List;
@@ -138,8 +140,15 @@ public class BuildConfigWatcher extends BaseWatcher<BuildConfig> {
 
     @SuppressFBWarnings("SF_SWITCH_NO_DEFAULT")
     @Override
+    @SuppressWarnings("deprecation")
     public void eventReceived(Action action, BuildConfig buildConfig) {
+        if (buildConfig == null) {
+            logger.warning("Received  event with null BuildConfig: " + action + ", ignoring: " + this);
+            return;
+        }
         try {
+            boolean buildConfigNameNotNull = buildConfig != null && buildConfig.getMetadata() != null;
+            String name = buildConfigNameNotNull ? buildConfig.getMetadata().getName() : "null";
             switch (action) {
             case ADDED:
                 upsertJob(buildConfig);
@@ -151,12 +160,10 @@ public class BuildConfigWatcher extends BaseWatcher<BuildConfig> {
                 modifyEventToJenkinsJob(buildConfig);
                 break;
             case ERROR:
-                logger.warning(
-                        "watch for buildconfig " + buildConfig.getMetadata().getName() + " received error event ");
+                logger.warning("watch for buildconfig " + name + " received error event ");
                 break;
             default:
-                logger.warning("watch for buildconfig " + buildConfig.getMetadata().getName()
-                        + " received unknown event " + action);
+                logger.warning("watch for buildconfig " + name + " received unknown event " + action);
                 break;
             }
             // we employ impersonation here to insure we have "full access";
@@ -166,19 +173,13 @@ public class BuildConfigWatcher extends BaseWatcher<BuildConfig> {
             ACL.impersonate(ACL.SYSTEM, new NotReallyRoleSensitiveCallable<Void, Exception>() {
                 @Override
                 public Void call() throws Exception {
-                    // if bc event came after build events, let's
-                    // poke the BuildWatcher builds with no BC list to
-                    // create job
-                    // runs
+                    // if bc event came after build events, let's poke the BuildWatcher builds with
+                    // no BC list to create job runs
                     BuildWatcher.flushBuildsWithNoBCList();
-                    // now, if the build event was lost and never
-                    // received, builds
-                    // will stay in
-                    // new for 5 minutes ... let's launch a background
-                    // thread to
-                    // clean them up
-                    // at a quicker interval than the default 5 minute
-                    // general build
+                    // now, if the build event was lost and never received, builds will stay in new
+                    // for 5 minutes ...
+                    // let's launch a background thread to clean them up at a quicker interval than
+                    // the default 5 minute general build
                     // relist function
                     if (action == Action.ADDED) {
                         Runnable backupBuildQuery = new SafeTimerTask() {
@@ -188,20 +189,16 @@ public class BuildConfigWatcher extends BaseWatcher<BuildConfig> {
                                     logger.fine("No Openshift Token credential defined.");
                                     return;
                                 }
-                                BuildList buildList = getAuthenticatedOpenShiftClient().builds()
-                                        .inNamespace(buildConfig.getMetadata().getNamespace())
-                                        .withField(OPENSHIFT_BUILD_STATUS_FIELD, BuildPhases.NEW)
-                                        .withLabel(OPENSHIFT_LABELS_BUILD_CONFIG_NAME,
-                                                buildConfig.getMetadata().getName())
-                                        .list();
+                                BuildList buildList = getAuthenticatedOpenShiftClient().builds().inNamespace(namespace)
+                                        .withField(OPENSHIFT_BUILD_STATUS_FIELD, NEW)
+                                        .withLabel(OPENSHIFT_LABELS_BUILD_CONFIG_NAME, name).list();
                                 if (buildList.getItems().size() > 0) {
-                                    logger.info("build backup query for " + buildConfig.getMetadata().getName()
-                                            + " found new builds");
+                                    logger.info("build backup query for " + name + " found new builds");
                                     BuildWatcher.onInitialBuilds(buildList);
                                 }
                             }
                         };
-                        Timer.get().schedule(backupBuildQuery, 10 * 1000, TimeUnit.MILLISECONDS);
+                        Timer.get().schedule(backupBuildQuery, 10 * 1000, MILLISECONDS);
                     }
                     return null;
                 }
@@ -275,17 +272,19 @@ public class BuildConfigWatcher extends BaseWatcher<BuildConfig> {
     // nondeterministic
     // order
     private void deleteEventToJenkinsJob(final BuildConfig buildConfig) throws Exception {
-        String bcUid = buildConfig.getMetadata().getUid();
-        if (bcUid != null && bcUid.length() > 0) {
-            // employ intern of the BC UID to facilitate sync'ing on the same
-            // actual object
-            bcUid = bcUid.intern();
-            synchronized (bcUid) {
-                innerDeleteEventToJenkinsJob(buildConfig);
-                return;
+        if (buildConfig != null) {
+            String bcUid = buildConfig.getMetadata().getUid();
+            if (bcUid != null && bcUid.length() > 0) {
+                // employ intern of the BC UID to facilitate sync'ing on the same
+                // actual object
+                bcUid = bcUid.intern();
+                synchronized (bcUid) {
+                    innerDeleteEventToJenkinsJob(buildConfig);
+                    return;
+                }
             }
+            // uid should not be null / empty, but just in case, still clean up
+            innerDeleteEventToJenkinsJob(buildConfig);
         }
-        // uid should not be null / empty, but just in case, still clean up
-        innerDeleteEventToJenkinsJob(buildConfig);
     }
 }

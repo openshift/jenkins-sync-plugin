@@ -17,6 +17,7 @@ package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenshiftClient;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.IMAGESTREAM_TYPE;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.addPodTemplate;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.getPodTemplatesListFromImageStreams;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.hasPodTemplate;
@@ -91,31 +92,36 @@ public class ImageStreamWatcher extends BaseWatcher<ImageStream> {
 
     @Override
     public void eventReceived(Action action, ImageStream imageStream) {
-        try {
-            List<PodTemplate> slaves = PodTemplateUtils.getPodTemplatesListFromImageStreams(imageStream);
-            ObjectMeta metadata = imageStream.getMetadata();
-            String uid = metadata.getUid();
-            String name = metadata.getName();
-            String namespace = metadata.getNamespace();
-            switch (action) {
-            case ADDED:
-                processSlavesForAddEvent(this, slaves, PodTemplateUtils.IMAGESTREAM_TYPE, uid, name, namespace);
-                break;
-            case MODIFIED:
-                processSlavesForModifyEvent(this, slaves, PodTemplateUtils.IMAGESTREAM_TYPE, uid, name, namespace);
-                break;
-            case DELETED:
-                processSlavesForDeleteEvent(this, slaves, PodTemplateUtils.IMAGESTREAM_TYPE, uid, name, namespace);
-                break;
-            case ERROR:
-                logger.warning("watch for imageStream " + name + " received error event ");
-                break;
-            default:
-                logger.warning("watch for imageStream " + name + " received unknown event " + action);
-                break;
+        String ns = this.namespace;
+        if (imageStream != null) {
+            try {
+                List<PodTemplate> slaves = PodTemplateUtils.getPodTemplatesListFromImageStreams(imageStream);
+                ObjectMeta metadata = imageStream.getMetadata();
+                String uid = metadata.getUid();
+                String name = metadata.getName();
+                String namespace = metadata.getNamespace();
+                switch (action) {
+                case ADDED:
+                    processSlavesForAddEvent(this, slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+                    break;
+                case MODIFIED:
+                    processSlavesForModifyEvent(this, slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+                    break;
+                case DELETED:
+                    processSlavesForDeleteEvent(this, slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+                    break;
+                case ERROR:
+                    logger.warning("watch for imageStream " + ns + "/" + name + " received error event ");
+                    break;
+                default:
+                    logger.warning("watch for imageStream " + ns + "/" + name + " received unknown event " + action);
+                    break;
+                }
+            } catch (Exception e) {
+                logger.log(WARNING, "Caught: " + e, e);
             }
-        } catch (Exception e) {
-            logger.log(WARNING, "Caught: " + e, e);
+        } else {
+            logger.log(SEVERE, "Received event with null imagestream " + ns + " and Action: " + action + "...ignoring");
         }
     }
 

@@ -53,7 +53,7 @@ public class SecretWatcher extends BaseWatcher<Secret> {
 
     public void start() {
         // lets process the initial state
-        //super.start();
+        // super.start();
         logger.info("Now handling startup secrets for " + namespace + " !!");
         SecretList secrets = null;
         String ns = this.namespace;
@@ -113,6 +113,10 @@ public class SecretWatcher extends BaseWatcher<Secret> {
     @SuppressFBWarnings("SF_SWITCH_NO_DEFAULT")
     @Override
     public void eventReceived(Action action, Secret secret) {
+        if (secret == null) {
+            logger.warning("Received  event with null Secret: " + action + ", ignoring: " + this);
+            return;
+        }
         try {
             switch (action) {
             case ADDED:

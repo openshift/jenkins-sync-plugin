@@ -91,6 +91,10 @@ public class ConfigMapWatcher extends BaseWatcher<ConfigMap> {
 
     @Override
     public void eventReceived(Action action, ConfigMap configMap) {
+        if (configMap == null) {
+            LOGGER.warning("Received  event with null Build: " + action + ", ignoring: " + this);
+            return;
+        }
         try {
             List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, configMap);
             boolean hasSlaves = slavesFromCM.size() > 0;

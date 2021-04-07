@@ -255,17 +255,19 @@ public class PodTemplateUtils {
 
     protected static List<PodTemplate> getPodTemplatesListFromImageStreams(ImageStream imageStream) {
         List<PodTemplate> results = new ArrayList<PodTemplate>();
-        // for IS, since we can check labels, check there
-        ObjectMeta metadata = imageStream.getMetadata();
-        String isName = metadata.getName();
-        if (hasSlaveLabelOrAnnotation(metadata.getLabels())) {
-            ImageStreamStatus status = imageStream.getStatus();
-            String repository = status.getDockerImageRepository();
-            Map<String, String> annotations = metadata.getAnnotations();
-            PodTemplate podTemplate = podTemplateFromData(isName, repository, annotations);
-            results.add(podTemplate);
+        if (imageStream != null) {
+            // for IS, since we can check labels, check there
+            ObjectMeta metadata = imageStream.getMetadata();
+            String isName = metadata.getName();
+            if (hasSlaveLabelOrAnnotation(metadata.getLabels())) {
+                ImageStreamStatus status = imageStream.getStatus();
+                String repository = status.getDockerImageRepository();
+                Map<String, String> annotations = metadata.getAnnotations();
+                PodTemplate podTemplate = podTemplateFromData(isName, repository, annotations);
+                results.add(podTemplate);
+            }
+            results.addAll(extractPodTemplatesFromImageStreamTags(imageStream));
         }
-        results.addAll(extractPodTemplatesFromImageStreamTags(imageStream));
         return results;
     }
 
@@ -426,10 +428,8 @@ public class PodTemplateUtils {
         return false;
     }
 
-    
-
-    protected static void processSlavesForAddEvent(BaseWatcher<?> watcher, List<PodTemplate> slaves, String type, String uid, String apiObjName,
-            String namespace) {
+    protected static void processSlavesForAddEvent(BaseWatcher<?> watcher, List<PodTemplate> slaves, String type,
+            String uid, String apiObjName, String namespace) {
         LOGGER.info("Adding PodTemplate(s) for ");
         List<PodTemplate> finalSlaveList = new ArrayList<PodTemplate>();
         for (PodTemplate podTemplate : slaves) {
@@ -438,8 +438,6 @@ public class PodTemplateUtils {
         updateTrackedPodTemplatesMap(uid, finalSlaveList);
     }
 
-    
-    
     protected static void processSlavesForModifyEvent(BaseWatcher<?> watcher, List<PodTemplate> slaves, String type,
             String uid, String apiObjName, String namespace) {
         LOGGER.info("Modifying PodTemplates");

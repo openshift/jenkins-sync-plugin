@@ -36,7 +36,6 @@ import com.cloudbees.plugins.credentials.common.StandardListBoxModel;
 import hudson.Extension;
 import hudson.Util;
 import hudson.util.ListBoxModel;
-import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.openshift.client.OpenShiftClient;
 import jenkins.model.GlobalConfiguration;
 import jenkins.model.Jenkins;
@@ -281,7 +280,7 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
             Runnable task = new GlobalPluginConfigurationTimerTask(this);
             // lets give jenkins a while to get started ;)
             this.schedule = Timer.get().schedule(task, 1, SECONDS);
-        } catch (KubernetesClientException e) {
+        } catch (Exception e) {
             Throwable exceptionOrCause = (e.getCause() != null) ? e.getCause() : e;
             logger.log(SEVERE, "Failed to configure OpenShift Jenkins Sync Plugin: " + exceptionOrCause);
         }
