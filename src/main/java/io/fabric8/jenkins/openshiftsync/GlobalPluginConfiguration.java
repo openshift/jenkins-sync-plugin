@@ -22,6 +22,9 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.logging.Level.SEVERE;
 import static jenkins.model.Jenkins.ADMINISTER;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ScheduledFuture;
 import java.util.logging.Logger;
 
 import org.apache.commons.lang.StringUtils;
@@ -34,6 +37,7 @@ import hudson.Extension;
 import hudson.Util;
 import hudson.util.ListBoxModel;
 import io.fabric8.kubernetes.client.KubernetesClientException;
+import io.fabric8.openshift.client.OpenShiftClient;
 import jenkins.model.GlobalConfiguration;
 import jenkins.model.Jenkins;
 import jenkins.util.Timer;
@@ -63,6 +67,14 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
     private transient SecretWatcher secretWatcher;
     private transient ConfigMapWatcher configMapWatcher;
     private transient ImageStreamWatcher imageStreamWatcher;
+
+    private final static List<BaseWatcher<?>> watchers = new ArrayList<>();
+
+    private transient ScheduledFuture<?> schedule;
+
+    public final static List<BaseWatcher<?>> getWatchers() {
+        return watchers;
+    }
 
     @DataBoundConstructor
     public GlobalPluginConfiguration(boolean enable, String server, String namespace, boolean foldersEnabled,
@@ -261,37 +273,40 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
 
     private synchronized void configChange() {
         logger.info("OpenShift Sync Plugin processing a newly supplied configuration");
-        if (this.buildConfigWatcher != null) {
-            this.buildConfigWatcher.stop();
+        synchronized (watchers) {
+            logger.info("Existing watchers: " + watchers);
+            for (BaseWatcher<?> watch : watchers) {
+                watch.stop();
+            }
+            watchers.clear();
+            logger.info("Existing watchers: stopped and cleared : " + watchers);
+            logger.info("Existing scheduled task:  " + schedule);
+
+            if (this.schedule != null && !this.schedule.isCancelled()) {
+                this.schedule.cancel(true);
+                logger.info("Existing scheduled task cancelled:  " + schedule);
+            }
         }
-        if (this.buildWatcher != null) {
-            this.buildWatcher.stop();
-        }
-        if (this.configMapWatcher != null) {
-            this.configMapWatcher.stop();
-        }
-        if (this.imageStreamWatcher != null) {
-            this.imageStreamWatcher.stop();
-        }
-        if (this.secretWatcher != null) {
-            this.secretWatcher.stop();
-        }
-        this.buildWatcher = null;
-        this.buildConfigWatcher = null;
-        this.configMapWatcher = null;
-        this.imageStreamWatcher = null;
-        this.secretWatcher = null;
+
+        OpenShiftClient client = OpenShiftUtils.getOpenShiftClient();
+        logger.info("Shutting down OpenShift Client: " + client + " ...");
         OpenShiftUtils.shutdownOpenShiftClient();
+        logger.info("!!! OpenShift Client has been shutdown ");
 
         if (!this.enabled) {
             logger.info("OpenShift Sync Plugin has been disabled");
             return;
         }
         try {
+            logger.info("Initializing OpenShift Client...");
             OpenShiftUtils.initializeOpenShiftClient(this.server);
-            this.namespaces = getNamespaceOrUseDefault(this.namespaces, getOpenShiftClient());
+            OpenShiftClient openShiftClient = getOpenShiftClient();
+            this.namespaces = getNamespaceOrUseDefault(this.namespaces, openShiftClient);
+            logger.info("OpenShift Client initialized: " + openShiftClient);
+
             Runnable task = new GlobalPluginConfigurationTimerTask(this);
-            Timer.get().schedule(task, 1, SECONDS); // lets give jenkins a while to get started ;)
+            // lets give jenkins a while to get started ;)
+            this.schedule = Timer.get().schedule(task, 1, SECONDS);
         } catch (KubernetesClientException e) {
             Throwable exceptionOrCause = (e.getCause() != null) ? e.getCause() : e;
             logger.log(SEVERE, "Failed to configure OpenShift Jenkins Sync Plugin: " + exceptionOrCause);

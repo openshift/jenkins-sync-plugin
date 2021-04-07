@@ -15,6 +15,14 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenshiftClient;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.addPodTemplate;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.getPodTemplatesListFromImageStreams;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.hasPodTemplate;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForAddEvent;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForDeleteEvent;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForModifyEvent;
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
@@ -24,18 +32,17 @@ import java.util.logging.Logger;
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import hudson.triggers.SafeTimerTask;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
-import io.fabric8.kubernetes.client.Watcher.Action;
 import io.fabric8.openshift.api.model.ImageStream;
 import io.fabric8.openshift.api.model.ImageStreamList;
+import io.fabric8.openshift.client.OpenShiftClient;
 
-public class ImageStreamWatcher extends BaseWatcher {
-  private final Logger logger = Logger.getLogger(getClass().getName());
+public class ImageStreamWatcher extends BaseWatcher<ImageStream> {
+    private final Logger logger = Logger.getLogger(getClass().getName());
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
-    public ImageStreamWatcher(String[] namespaces) {
-        super(namespaces);
+    public ImageStreamWatcher(String namespace) {
+        super(namespace);
     }
 
     @Override
@@ -43,43 +50,33 @@ public class ImageStreamWatcher extends BaseWatcher {
         return GlobalPluginConfiguration.get().getImageStreamListInterval();
     }
 
-    public Runnable getStartTimerTask() {
-        return new SafeTimerTask() {
-            @Override
-            public void doRun() {
-                if (!CredentialsUtils.hasCredentials()) {
-                    logger.fine("No Openshift Token credential defined.");
-                    return;
-                }
-                for (String namespace : namespaces) {
-                    addWatchForNamespace(namespace);
-                }
-            }
-        };
-    }
-
-    public void addWatchForNamespace(String namespace) {
+    public void start() {
+        logger.info("Now handling startup image streams for " + namespace + " !!");
         ImageStreamList imageStreams = null;
+        String ns = this.namespace;
         try {
             logger.fine("listing ImageStream resources");
-            imageStreams = OpenShiftUtils.getOpenshiftClient().imageStreams().inNamespace(namespace).list();
+            imageStreams = getAuthenticatedOpenShiftClient().imageStreams().inNamespace(ns).list();
             onImageStreamInitialization(imageStreams);
             logger.fine("handled ImageStream resources");
         } catch (Exception e) {
             logger.log(SEVERE, "Failed to load ImageStreams: " + e, e);
         }
         try {
-            String resourceVersion = "0";
+            String rv = "0";
             if (imageStreams == null) {
                 logger.warning("Unable to get image stream list; impacts resource version used for watch");
             } else {
-                resourceVersion = imageStreams.getMetadata().getResourceVersion();
+                rv = imageStreams.getMetadata().getResourceVersion();
             }
-            if (watches.get(namespace) == null) {
-                logger.info("creating ImageStream watch for namespace " + namespace + " and resource version " + resourceVersion);
-                ImageStreamWatcher w = ImageStreamWatcher.this;
-                WatcherCallback<ImageStream> watcher = new WatcherCallback<ImageStream>(w, namespace);
-                addWatch(namespace, OpenShiftUtils.getOpenshiftClient().imageStreams().inNamespace(namespace).withResourceVersion(resourceVersion).watch(watcher));
+            if (this.watch == null) {
+                synchronized (this.lock) {
+                    if (this.watch == null) {
+                        logger.info("creating ImageStream watch for namespace " + ns + " and resource version " + rv);
+                        OpenShiftClient client = getOpenshiftClient();
+                        this.watch = client.imageStreams().inNamespace(ns).withResourceVersion(rv).watch(this);
+                    }
+                }
             }
         } catch (Exception e) {
             logger.log(SEVERE, "Failed to load ImageStreams: " + e, e);
@@ -88,16 +85,11 @@ public class ImageStreamWatcher extends BaseWatcher {
 
     public void startAfterOnClose(String namespace) {
         synchronized (this.lock) {
-             addWatchForNamespace(namespace);
+            start();
         }
     }
 
-    public void start() {
-        // lets process the initial state
-        logger.info("Now handling startup image streams!!");
-        super.start();
-    }
-
+    @Override
     public void eventReceived(Action action, ImageStream imageStream) {
         try {
             List<PodTemplate> slaves = PodTemplateUtils.getPodTemplatesListFromImageStreams(imageStream);
@@ -107,13 +99,13 @@ public class ImageStreamWatcher extends BaseWatcher {
             String namespace = metadata.getNamespace();
             switch (action) {
             case ADDED:
-                processSlavesForAddEvent(slaves, PodTemplateUtils.IMAGESTREAM_TYPE, uid, name, namespace);
+                processSlavesForAddEvent(this, slaves, PodTemplateUtils.IMAGESTREAM_TYPE, uid, name, namespace);
                 break;
             case MODIFIED:
-                processSlavesForModifyEvent(slaves, PodTemplateUtils.IMAGESTREAM_TYPE, uid, name, namespace);
+                processSlavesForModifyEvent(this, slaves, PodTemplateUtils.IMAGESTREAM_TYPE, uid, name, namespace);
                 break;
             case DELETED:
-                processSlavesForDeleteEvent(slaves, PodTemplateUtils.IMAGESTREAM_TYPE, uid, name, namespace);
+                processSlavesForDeleteEvent(this, slaves, PodTemplateUtils.IMAGESTREAM_TYPE, uid, name, namespace);
                 break;
             case ERROR:
                 logger.warning("watch for imageStream " + name + " received error event ");
@@ -127,24 +119,18 @@ public class ImageStreamWatcher extends BaseWatcher {
         }
     }
 
-    @Override
-    public <T> void eventReceived(Action action, T resource) {
-        ImageStream imageStream = (ImageStream) resource;
-        eventReceived(action, imageStream);
-    }
-
-  private void onImageStreamInitialization(ImageStreamList imageStreams) {
+    private void onImageStreamInitialization(ImageStreamList imageStreams) {
         if (imageStreams != null) {
             List<ImageStream> items = imageStreams.getItems();
             if (items != null) {
                 for (ImageStream imageStream : items) {
                     try {
-                        List<PodTemplate> agents = PodTemplateUtils.getPodTemplatesListFromImageStreams(imageStream);
+                        List<PodTemplate> agents = getPodTemplatesListFromImageStreams(imageStream);
                         for (PodTemplate entry : agents) {
                             // watch event might beat the timer - put call is technically fine, but not
                             // addPodTemplate given k8s plugin issues
-                            if (!PodTemplateUtils.hasPodTemplate(entry)) {
-                                PodTemplateUtils.addPodTemplate(entry);
+                            if (!hasPodTemplate(entry)) {
+                                addPodTemplate(entry);
                             }
                         }
                     } catch (Exception e) {
@@ -154,5 +140,4 @@ public class ImageStreamWatcher extends BaseWatcher {
             }
         }
     }
-
 }

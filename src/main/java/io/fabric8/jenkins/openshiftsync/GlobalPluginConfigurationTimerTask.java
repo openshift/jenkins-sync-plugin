@@ -2,6 +2,8 @@ package io.fabric8.jenkins.openshiftsync;
 
 import static hudson.init.InitMilestone.COMPLETED;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.Logger;
 
 import hudson.init.InitMilestone;
@@ -30,36 +32,52 @@ public class GlobalPluginConfigurationTimerTask extends SafeTimerTask {
             if (initLevel == COMPLETED) {
                 break;
             }
-            logger.fine("Jenkins not ready...");
+            logger.info("Jenkins not ready...");
             try {
                 Thread.sleep(500);
             } catch (InterruptedException e) {
-                // ignore
+                logger.info("Interrupted while sleeping");
             }
         }
-        intializeAndStartWatchers();
-    }
-
-    private void intializeAndStartWatchers() {
+        logger.info("Initializing all the watchers...");
         String[] namespaces = globalPluginConfiguration.getNamespaces();
-        BuildConfigWatcher buildConfigWatcher = new BuildConfigWatcher(namespaces);
-        globalPluginConfiguration.setBuildConfigWatcher(buildConfigWatcher);
-        buildConfigWatcher.start();
+        List<BaseWatcher<?>> watchers = new ArrayList<>();
+        for (String namespace : namespaces) {
+            BuildConfigWatcher buildConfigWatcher = new BuildConfigWatcher(namespace);
+            watchers.add(buildConfigWatcher);
+            buildConfigWatcher.start();
 
-        BuildWatcher buildWatcher = new BuildWatcher(namespaces);
-        globalPluginConfiguration.setBuildWatcher(buildWatcher);
-        buildWatcher.start();
+            BuildWatcher buildWatcher = new BuildWatcher(namespace);
+            buildWatcher.start();
+            watchers.add(buildWatcher);
 
-        ConfigMapWatcher configMapWatcher = new ConfigMapWatcher(namespaces);
-        globalPluginConfiguration.setConfigMapWatcher(configMapWatcher);
-        configMapWatcher.start();
+            ConfigMapWatcher configMapWatcher = new ConfigMapWatcher(namespace);
+            configMapWatcher.start();
+            watchers.add(configMapWatcher);
 
-        ImageStreamWatcher imageStreamWatcher = new ImageStreamWatcher(namespaces);
-        globalPluginConfiguration.setImageStreamWatcher(imageStreamWatcher);
-        imageStreamWatcher.start();
+            ImageStreamWatcher imageStreamWatcher = new ImageStreamWatcher(namespace);
+            imageStreamWatcher.start();
+            watchers.add(imageStreamWatcher);
 
-        SecretWatcher secretWatcher = new SecretWatcher(namespaces);
-        globalPluginConfiguration.setSecretWatcher(secretWatcher);
-        secretWatcher.start();
+            SecretWatcher secretWatcher = new SecretWatcher(namespace);
+            secretWatcher.start();
+            watchers.add(secretWatcher);
+
+        }
+        logger.info("All the watchers have been initialized!!");
+        synchronized (watchers) {
+            List<BaseWatcher<?>> globalWatchers = GlobalPluginConfiguration.getWatchers();
+            synchronized (globalWatchers) {
+                logger.info("Existing watchers: " + globalWatchers);
+                for (BaseWatcher<?> watch : globalWatchers) {
+                    watch.stop();
+                }
+                globalWatchers.clear();
+                logger.info("Existing watchers: stopped and cleared : " + globalWatchers);
+                globalWatchers.addAll(watchers);
+                logger.info("New watchers created : " + globalWatchers.size());
+
+            }
+        }
     }
 }
