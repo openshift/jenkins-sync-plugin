@@ -62,12 +62,6 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
     private int configMapListInterval = 300;
     private int imageStreamListInterval = 300;
 
-    private transient BuildWatcher buildWatcher;
-    private transient BuildConfigWatcher buildConfigWatcher;
-    private transient SecretWatcher secretWatcher;
-    private transient ConfigMapWatcher configMapWatcher;
-    private transient ImageStreamWatcher imageStreamWatcher;
-
     private final static List<BaseWatcher<?>> watchers = new ArrayList<>();
 
     private transient ScheduledFuture<?> schedule;
@@ -249,26 +243,6 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
 
     void setNamespaces(String[] namespaces) {
         this.namespaces = namespaces;
-    }
-
-    void setBuildWatcher(BuildWatcher buildWatcher) {
-        this.buildWatcher = buildWatcher;
-    }
-
-    void setBuildConfigWatcher(BuildConfigWatcher buildConfigWatcher) {
-        this.buildConfigWatcher = buildConfigWatcher;
-    }
-
-    void setSecretWatcher(SecretWatcher secretWatcher) {
-        this.secretWatcher = secretWatcher;
-    }
-
-    void setConfigMapWatcher(ConfigMapWatcher configMapWatcher) {
-        this.configMapWatcher = configMapWatcher;
-    }
-
-    void setImageStreamWatcher(ImageStreamWatcher imageStreamWatcher) {
-        this.imageStreamWatcher = imageStreamWatcher;
     }
 
     private synchronized void configChange() {
