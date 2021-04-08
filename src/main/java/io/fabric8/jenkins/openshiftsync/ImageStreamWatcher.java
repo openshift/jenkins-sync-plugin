@@ -102,13 +102,13 @@ public class ImageStreamWatcher extends BaseWatcher<ImageStream> {
                 String namespace = metadata.getNamespace();
                 switch (action) {
                 case ADDED:
-                    processSlavesForAddEvent(this, slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+                    processSlavesForAddEvent(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
                     break;
                 case MODIFIED:
-                    processSlavesForModifyEvent(this, slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+                    processSlavesForModifyEvent(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
                     break;
                 case DELETED:
-                    processSlavesForDeleteEvent(this, slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+                    processSlavesForDeleteEvent(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
                     break;
                 case ERROR:
                     logger.warning("watch for imageStream " + ns + "/" + name + " received error event ");

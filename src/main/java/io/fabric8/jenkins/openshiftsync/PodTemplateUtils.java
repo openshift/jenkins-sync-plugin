@@ -161,8 +161,7 @@ public class PodTemplateUtils {
         }
     }
 
-    protected static void purgeTemplates(BaseWatcher baseWatcher, String type, String uid, String apiObjName,
-            String namespace) {
+    protected static void purgeTemplates(String type, String uid, String apiObjName, String namespace) {
         LOGGER.info("Purging PodTemplates for from Configmap with Uid " + uid);
         for (PodTemplate podTemplate : trackedPodTemplates.get(uid)) {
             // we should not have included any pod templates we did not
@@ -185,7 +184,7 @@ public class PodTemplateUtils {
 
     // Adds PodTemplate to the List<PodTemplate> correspoding to the ConfigMap of
     // given uid and Deletes from Jenkins
-    protected static List<PodTemplate> onlyTrackPodTemplate(BaseWatcher baseWatcher, String type, String apiObjName,
+    protected static List<PodTemplate> onlyTrackPodTemplate(String type, String apiObjName,
             String namespace, List<PodTemplate> podTemplates, PodTemplate podTemplate) {
         String name = podTemplate.getName();
         // we allow configmap overrides of maven and nodejs, but not imagestream ones
@@ -212,7 +211,7 @@ public class PodTemplateUtils {
     }
 
     // Adds PodTemplate from Jenkins
-    protected static void addPodTemplate(BaseWatcher baseWatcher, String type, String apiObjName, String namespace,
+    protected static void addPodTemplate(String type, String apiObjName, String namespace,
             List<PodTemplate> podTemplates, PodTemplate podTemplate) {
         String name = podTemplate.getName();
         // we allow configmap overrides of maven and nodejs, but not imagestream ones
@@ -428,17 +427,17 @@ public class PodTemplateUtils {
         return false;
     }
 
-    protected static void processSlavesForAddEvent(BaseWatcher<?> watcher, List<PodTemplate> slaves, String type,
-            String uid, String apiObjName, String namespace) {
+    protected static void processSlavesForAddEvent(List<PodTemplate> slaves, String type, String uid, String apiObjName,
+            String namespace) {
         LOGGER.info("Adding PodTemplate(s) for ");
         List<PodTemplate> finalSlaveList = new ArrayList<PodTemplate>();
         for (PodTemplate podTemplate : slaves) {
-            addPodTemplate(watcher, type, apiObjName, namespace, finalSlaveList, podTemplate);
+            addPodTemplate(type, apiObjName, namespace, finalSlaveList, podTemplate);
         }
         updateTrackedPodTemplatesMap(uid, finalSlaveList);
     }
 
-    protected static void processSlavesForModifyEvent(BaseWatcher<?> watcher, List<PodTemplate> slaves, String type,
+    protected static void processSlavesForModifyEvent(List<PodTemplate> slaves, String type,
             String uid, String apiObjName, String namespace) {
         LOGGER.info("Modifying PodTemplates");
         boolean alreadyTracked = trackedPodTemplates.containsKey(uid);
@@ -454,38 +453,38 @@ public class PodTemplateUtils {
                 // Check if there are new PodTemplates added or removed to the configmap,
                 // if they are, add them to or remove them from trackedPodTemplates
                 List<PodTemplate> podTemplatesToTrack = new ArrayList<PodTemplate>();
-                purgeTemplates(watcher, type, uid, apiObjName, namespace);
+                purgeTemplates(type, uid, apiObjName, namespace);
                 for (PodTemplate pt : slaves) {
-                    podTemplatesToTrack = PodTemplateUtils.onlyTrackPodTemplate(watcher, type, apiObjName, namespace,
+                    podTemplatesToTrack = PodTemplateUtils.onlyTrackPodTemplate(type, apiObjName, namespace,
                             podTemplatesToTrack, pt);
                 }
                 updateTrackedPodTemplatesMap(uid, podTemplatesToTrack);
                 for (PodTemplate podTemplate : podTemplatesToTrack) {
                     // still do put here in case this is a new item from the last
                     // update on this ConfigMap/ImageStream
-                    addPodTemplate(watcher, type, null, null, null, podTemplate);
+                    addPodTemplate(type, null, null, null, podTemplate);
                 }
             } else {
                 // The user modified the configMap to no longer be a
                 // jenkins-slave.
-                purgeTemplates(watcher, type, uid, apiObjName, namespace);
+                purgeTemplates(type, uid, apiObjName, namespace);
             }
         } else {
             if (hasSlaves) {
                 List<PodTemplate> finalSlaveList = new ArrayList<PodTemplate>();
                 for (PodTemplate podTemplate : slaves) {
                     // The user modified the api obj to be a jenkins-slave
-                    addPodTemplate(watcher, type, apiObjName, namespace, finalSlaveList, podTemplate);
+                    addPodTemplate(type, apiObjName, namespace, finalSlaveList, podTemplate);
                 }
                 updateTrackedPodTemplatesMap(uid, finalSlaveList);
             }
         }
     }
 
-    protected static void processSlavesForDeleteEvent(BaseWatcher<?> watcher, List<PodTemplate> slaves, String type,
-            String uid, String apiObjName, String namespace) {
+    protected static void processSlavesForDeleteEvent(List<PodTemplate> slaves, String type, String uid,
+            String apiObjName, String namespace) {
         if (trackedPodTemplates.containsKey(uid)) {
-            purgeTemplates(watcher, type, uid, apiObjName, namespace);
+            purgeTemplates(type, uid, apiObjName, namespace);
         }
     }
 

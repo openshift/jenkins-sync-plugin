@@ -23,13 +23,11 @@ import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesFor
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForDeleteEvent;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForModifyEvent;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.trackedPodTemplates;
-import static java.util.logging.Level.SEVERE;
 
 import java.util.List;
+import java.util.logging.Logger;
 
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.fabric8.kubernetes.api.model.ConfigMap;
@@ -41,7 +39,7 @@ import io.fabric8.kubernetes.client.informers.cache.Lister;
 import io.fabric8.openshift.client.OpenShiftClient;
 
 public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEventHandler<ConfigMap> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ConfigMapWatcher.class);
+    private final Logger LOGGER = Logger.getLogger(getClass().getName());
 
     private static final long RESYNC_PERIOD = 30 * 1000L;
 
@@ -56,14 +54,14 @@ public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEvent
     }
 
     public void start() {
-        LOGGER.info("Now handling startup config maps for {} !!", namespace);
-        LOGGER.trace("listing ConfigMap resources");
+        LOGGER.info("Now handling startup config maps for {} !!" + namespace);
+        LOGGER.fine("listing ConfigMap resources");
         OpenShiftClient client = getAuthenticatedOpenShiftClient();
         SharedInformerFactory informerFactory = client.informers();
         SharedIndexInformer<ConfigMap> informer = informerFactory.inNamespace(namespace)
                 .sharedIndexInformerFor(ConfigMap.class, RESYNC_PERIOD);
         informer.addEventHandler(this);
-        LOGGER.info("ConfigMap informer started for namespace: {}", namespace);
+        LOGGER.info("ConfigMap informer started for namespace: {}" + namespace);
         Lister<ConfigMap> list = new Lister<>(informer.getIndexer(), namespace);
         onInit(list.list());
         informerFactory.startAllRegisteredInformers();
@@ -71,7 +69,7 @@ public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEvent
 
     @Override
     public void onAdd(ConfigMap obj) {
-        LOGGER.info("ConfigMap informer  received add event for: {}", obj);
+        LOGGER.info("ConfigMap informer  received add event for: {}" + obj);
         List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, obj);
         boolean hasSlaves = slavesFromCM.size() > 0;
         if (hasSlaves) {
@@ -79,30 +77,33 @@ public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEvent
             String uid = metadata.getUid();
             String cmname = metadata.getName();
             String namespace = metadata.getNamespace();
-            processSlavesForAddEvent(this, slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
+            processSlavesForAddEvent( slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
         }
     }
 
     @Override
     public void onUpdate(ConfigMap oldObj, ConfigMap newObj) {
-        LOGGER.info("ConfigMap informer  received update event for: {} to: {}", oldObj, newObj);
-//        List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, newObj);
-//        ObjectMeta metadata = newObj.getMetadata();
-//        String uid = metadata.getUid();
-//        String cmname = metadata.getName();
-//        String namespace = metadata.getNamespace();
-//        processSlavesForModifyEvent(this, slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
+        LOGGER.fine("ConfigMap informer  received update event for: {} to: {}" + oldObj + newObj);
+        String oldResourceVersion = oldObj.getMetadata() != null ? oldObj.getMetadata().getResourceVersion() : null;
+        String newResourceVersion = newObj.getMetadata() != null ? newObj.getMetadata().getResourceVersion() : null;
+        LOGGER.info("Update event received resource versions: {} to: {}" + oldResourceVersion + newResourceVersion);
+        List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, newObj);
+        ObjectMeta metadata = newObj.getMetadata();
+        String uid = metadata.getUid();
+        String cmname = metadata.getName();
+        String namespace = metadata.getNamespace();
+        processSlavesForModifyEvent(slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
     }
 
     @Override
     public void onDelete(ConfigMap obj, boolean deletedFinalStateUnknown) {
-        LOGGER.info("ConfigMap informer received delete event for: {}", obj);
+        LOGGER.info("ConfigMap informer received delete event for: {}" + obj);
         List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, obj);
         ObjectMeta metadata = obj.getMetadata();
         String uid = metadata.getUid();
         String cmname = metadata.getName();
         String namespace = metadata.getNamespace();
-        processSlavesForDeleteEvent(this, slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
+        processSlavesForDeleteEvent(slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
     }
 
     private void onInit(List<ConfigMap> list) {
@@ -120,12 +121,12 @@ public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEvent
                 List<PodTemplate> templates = podTemplatesFromConfigMap(this, configMap);
                 trackedPodTemplates.put(uid, templates);
                 for (PodTemplate podTemplate : templates) {
-                    LOGGER.info("Adding PodTemplate {}", podTemplate);
+                    LOGGER.info("Adding PodTemplate {}" + podTemplate);
                     addPodTemplate(podTemplate);
                 }
             }
         } catch (Exception e) {
-            LOGGER.error("Failed to update ConfigMap PodTemplates", e);
+            LOGGER.severe("Failed to update ConfigMap PodTemplates" + e);
         }
     }
 

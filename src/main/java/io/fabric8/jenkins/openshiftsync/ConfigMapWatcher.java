@@ -24,7 +24,6 @@ import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
@@ -104,14 +103,14 @@ public class ConfigMapWatcher extends BaseWatcher<ConfigMap> {
             switch (action) {
             case ADDED:
                 if (hasSlaves) {
-                    processSlavesForAddEvent(this, slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
+                    processSlavesForAddEvent(slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
                 }
                 break;
             case MODIFIED:
-                processSlavesForModifyEvent(this, slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
+                processSlavesForModifyEvent(slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
                 break;
             case DELETED:
-                processSlavesForDeleteEvent(this, slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
+                processSlavesForDeleteEvent(slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
                 break;
             case ERROR:
                 LOGGER.warning("watch for configMap " + configMap.getMetadata().getName() + " received error event ");
@@ -129,7 +128,7 @@ public class ConfigMapWatcher extends BaseWatcher<ConfigMap> {
     private void onInitialConfigMaps(ConfigMapList configMaps) {
         if (configMaps == null)
             return;
-       
+
         List<ConfigMap> items = configMaps.getItems();
         if (items != null) {
             for (ConfigMap configMap : items) {
