@@ -15,35 +15,29 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
-import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.addPodTemplate;
-import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.configMapContainsSlave;
-import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.podTemplatesFromConfigMap;
-import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForAddEvent;
-import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForDeleteEvent;
-import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForModifyEvent;
-import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.trackedPodTemplates;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenshiftClient;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.CONFIGMAP;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.fabric8.kubernetes.api.model.ConfigMap;
+import io.fabric8.kubernetes.api.model.ConfigMapList;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
-import io.fabric8.kubernetes.client.informers.cache.Lister;
-import io.fabric8.openshift.client.OpenShiftClient;
 
 public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEventHandler<ConfigMap> {
-    private final Logger LOGGER = Logger.getLogger(getClass().getName());
+    private final static Logger LOGGER = Logger.getLogger(ConfigMapWatcher.class.getName());
 
     private static final long RESYNC_PERIOD = 30 * 1000L;
+    private SharedIndexInformer<ConfigMap> informer;
 
-    @SuppressFBWarnings("EI_EXPOSE_REP2")
     public ConfigMapInformer(String namespace) {
         super(namespace);
     }
@@ -54,31 +48,32 @@ public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEvent
     }
 
     public void start() {
-        LOGGER.info("Now handling startup config maps for {} !!" + namespace);
+        LOGGER.info("Starting configMap informer for {} !!" + namespace);
         LOGGER.fine("listing ConfigMap resources");
-        OpenShiftClient client = getAuthenticatedOpenShiftClient();
-        SharedInformerFactory informerFactory = client.informers();
-        SharedIndexInformer<ConfigMap> informer = informerFactory.inNamespace(namespace)
-                .sharedIndexInformerFor(ConfigMap.class, RESYNC_PERIOD);
+        SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
+        this.informer = factory.sharedIndexInformerFor(ConfigMap.class, RESYNC_PERIOD);
         informer.addEventHandler(this);
+        factory.startAllRegisteredInformers();
         LOGGER.info("ConfigMap informer started for namespace: {}" + namespace);
-        Lister<ConfigMap> list = new Lister<>(informer.getIndexer(), namespace);
-        onInit(list.list());
-        informerFactory.startAllRegisteredInformers();
+        ConfigMapList list = getOpenshiftClient().configMaps().inNamespace(namespace).list();
+        onInit(list.getItems());
+    }
+
+    public void stop() {
+        LOGGER.info("Stopping configMap informer {} !!" + namespace);
+        this.informer.stop();
     }
 
     @Override
     public void onAdd(ConfigMap obj) {
-        LOGGER.info("ConfigMap informer  received add event for: {}" + obj);
-        List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, obj);
-        boolean hasSlaves = slavesFromCM.size() > 0;
-        if (hasSlaves) {
-            ObjectMeta metadata = obj.getMetadata();
-            String uid = metadata.getUid();
-            String cmname = metadata.getName();
-            String namespace = metadata.getNamespace();
-            processSlavesForAddEvent( slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
-        }
+        LOGGER.fine("ConfigMap informer  received add event for: {}" + obj);
+        ObjectMeta metadata = obj.getMetadata();
+        String name = metadata.getName();
+        LOGGER.info("ConfigMap informer received add event for: {}" + name);
+        List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(obj);
+        String uid = metadata.getUid();
+        String namespace = metadata.getNamespace();
+        PodTemplateUtils.addAgents(podTemplates, CONFIGMAP, uid, name, namespace);
     }
 
     @Override
@@ -87,47 +82,41 @@ public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEvent
         String oldResourceVersion = oldObj.getMetadata() != null ? oldObj.getMetadata().getResourceVersion() : null;
         String newResourceVersion = newObj.getMetadata() != null ? newObj.getMetadata().getResourceVersion() : null;
         LOGGER.info("Update event received resource versions: {} to: {}" + oldResourceVersion + newResourceVersion);
-        List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, newObj);
+        List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(newObj);
         ObjectMeta metadata = newObj.getMetadata();
         String uid = metadata.getUid();
-        String cmname = metadata.getName();
+        String name = metadata.getName();
         String namespace = metadata.getNamespace();
-        processSlavesForModifyEvent(slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
+        PodTemplateUtils.updateAgents(podTemplates, CONFIGMAP, uid, name, namespace);
     }
 
     @Override
     public void onDelete(ConfigMap obj, boolean deletedFinalStateUnknown) {
-        LOGGER.info("ConfigMap informer received delete event for: {}" + obj);
-        List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, obj);
+        LOGGER.fine("ConfigMap informer received delete event for: {}" + obj);
+        List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(obj);
         ObjectMeta metadata = obj.getMetadata();
         String uid = metadata.getUid();
-        String cmname = metadata.getName();
+        String name = metadata.getName();
         String namespace = metadata.getNamespace();
-        processSlavesForDeleteEvent(slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
+        PodTemplateUtils.deleteAgents(podTemplates, CONFIGMAP, uid, name, namespace);
     }
 
     private void onInit(List<ConfigMap> list) {
         if (list != null) {
             for (ConfigMap configMap : list) {
-                addPodTemplateFromConfigMap(configMap);
+                PodTemplateUtils.addPodTemplateFromConfigMap(configMap);
             }
         }
     }
 
-    private void addPodTemplateFromConfigMap(ConfigMap configMap) {
-        try {
-            String uid = configMap.getMetadata().getUid();
-            if (configMapContainsSlave(configMap) && !trackedPodTemplates.containsKey(uid)) {
-                List<PodTemplate> templates = podTemplatesFromConfigMap(this, configMap);
-                trackedPodTemplates.put(uid, templates);
-                for (PodTemplate podTemplate : templates) {
-                    LOGGER.info("Adding PodTemplate {}" + podTemplate);
-                    addPodTemplate(podTemplate);
-                }
+    private void waitInformerSync(SharedIndexInformer<ConfigMap> informer) {
+        while (!informer.hasSynced()) {
+            LOGGER.info("Waiting informer to sync for " + namespace);
+            try {
+                TimeUnit.SECONDS.sleep(5);
+            } catch (InterruptedException e) {
+                LOGGER.info("Interrupted waiting thread: " + e);
             }
-        } catch (Exception e) {
-            LOGGER.severe("Failed to update ConfigMap PodTemplates" + e);
         }
     }
-
 }

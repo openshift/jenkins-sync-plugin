@@ -81,7 +81,7 @@ public class BuildWatcher extends BaseWatcher<Build> {
     // started seeing duplicate builds getting kicked off so quit depending on
     // so moved off of concurrent hash set to concurrent hash map using
     // namepace/name key
-    private static final ConcurrentHashMap<String, Build> buildsWithNoBCList = new ConcurrentHashMap<String, Build>();
+    protected static final ConcurrentHashMap<String, Build> buildsWithNoBCList = new ConcurrentHashMap<String, Build>();
 
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public BuildWatcher(String namespace) {

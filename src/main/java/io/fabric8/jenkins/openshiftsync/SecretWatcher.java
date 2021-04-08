@@ -20,10 +20,11 @@ import static io.fabric8.jenkins.openshiftsync.Constants.VALUE_SECRET_SYNC;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenshiftClient;
 import static java.util.logging.Level.SEVERE;
+import static java.util.logging.Level.WARNING;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -100,7 +101,7 @@ public class SecretWatcher extends BaseWatcher<Secret> {
             for (Secret secret : items) {
                 try {
                     if (validSecret(secret) && shouldProcessSecret(secret)) {
-                        upsertCredential(secret);
+                        insertOrUpdateCredentialFromSecret(secret);
                         trackedSecrets.put(secret.getMetadata().getUid(), secret.getMetadata().getResourceVersion());
                     }
                 } catch (Exception e) {
@@ -120,13 +121,13 @@ public class SecretWatcher extends BaseWatcher<Secret> {
         try {
             switch (action) {
             case ADDED:
-                upsertCredential(secret);
+                insertOrUpdateCredentialFromSecret(secret);
                 break;
             case DELETED:
                 deleteCredential(secret);
                 break;
             case MODIFIED:
-                modifyCredential(secret);
+                updateCredential(secret);
                 break;
             case ERROR:
                 logger.warning("watch for secret " + secret.getMetadata().getName() + " received error event ");
@@ -137,37 +138,47 @@ public class SecretWatcher extends BaseWatcher<Secret> {
                 break;
             }
         } catch (Exception e) {
-            logger.log(Level.WARNING, "Caught: " + e, e);
+            logger.log(WARNING, "Caught: " + e, e);
         }
     }
 
-    private void upsertCredential(final Secret secret) throws Exception {
+    protected void insertOrUpdateCredentialFromSecret(final Secret secret) {
         if (secret != null) {
             ObjectMeta metadata = secret.getMetadata();
             if (metadata != null) {
                 logger.info("Upserting Secret with Uid " + metadata.getUid() + " with Name " + metadata.getName());
                 if (validSecret(secret)) {
-                    CredentialsUtils.upsertCredential(secret);
-                    trackedSecrets.put(metadata.getUid(), metadata.getResourceVersion());
+                    try {
+                        CredentialsUtils.upsertCredential(secret);
+                        trackedSecrets.put(metadata.getUid(), metadata.getResourceVersion());
+                    } catch (IOException e) {
+                        logger.log(SEVERE, "Credential has not been saved: " + e, e);
+                        throw new RuntimeException(e);
+                    }
                 }
             }
         }
     }
 
-    private void modifyCredential(Secret secret) throws Exception {
+    protected void updateCredential(Secret secret) {
         if (secret != null) {
             ObjectMeta metadata = secret.getMetadata();
             if (metadata != null) {
                 logger.info("Modifying Secret with Uid " + metadata.getUid() + " with Name " + metadata.getName());
                 if (validSecret(secret) && shouldProcessSecret(secret)) {
-                    CredentialsUtils.upsertCredential(secret);
-                    trackedSecrets.put(metadata.getUid(), metadata.getResourceVersion());
+                    try {
+                        CredentialsUtils.upsertCredential(secret);
+                        trackedSecrets.put(metadata.getUid(), metadata.getResourceVersion());
+                    } catch (IOException e) {
+                        logger.log(SEVERE, "Secret has not been saved: " + e, e);
+                        throw new RuntimeException(e);
+                    }
                 }
             }
         }
     }
 
-    private boolean validSecret(Secret secret) {
+    protected boolean validSecret(Secret secret) {
         if (secret != null) {
             ObjectMeta metadata = secret.getMetadata();
             if (metadata != null) {
@@ -180,14 +191,14 @@ public class SecretWatcher extends BaseWatcher<Secret> {
         return false;
     }
 
-    private boolean shouldProcessSecret(Secret secret) {
+    protected boolean shouldProcessSecret(Secret secret) {
         if (secret != null) {
             ObjectMeta metadata = secret.getMetadata();
             if (metadata != null) {
                 String uid = metadata.getUid();
                 String rv = metadata.getResourceVersion();
-                String savedRV = trackedSecrets.get(uid);
-                if (savedRV == null || !savedRV.equals(rv)) {
+                String oldResourceVersion = trackedSecrets.get(uid);
+                if (oldResourceVersion == null || !oldResourceVersion.equals(rv)) {
                     return true;
                 }
             }

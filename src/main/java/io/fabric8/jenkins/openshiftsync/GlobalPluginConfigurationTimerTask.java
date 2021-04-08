@@ -1,6 +1,7 @@
 package io.fabric8.jenkins.openshiftsync;
 
 import static hudson.init.InitMilestone.COMPLETED;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -8,6 +9,8 @@ import java.util.logging.Logger;
 
 import hudson.init.InitMilestone;
 import hudson.triggers.SafeTimerTask;
+import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
+import io.fabric8.openshift.client.OpenShiftClient;
 import jenkins.model.Jenkins;
 
 public class GlobalPluginConfigurationTimerTask extends SafeTimerTask {
@@ -44,28 +47,32 @@ public class GlobalPluginConfigurationTimerTask extends SafeTimerTask {
             String[] namespaces = globalPluginConfiguration.getNamespaces();
             List<BaseWatcher<?>> watchers = new ArrayList<>();
             for (String namespace : namespaces) {
-                BuildConfigWatcher buildConfigWatcher = new BuildConfigWatcher(namespace);
-                watchers.add(buildConfigWatcher);
-                buildConfigWatcher.start();
+                BuildConfigInformer buildConfigInformer = new BuildConfigInformer(namespace);
+                watchers.add(buildConfigInformer);
+                buildConfigInformer.start();
 
-                BuildWatcher buildWatcher = new BuildWatcher(namespace);
-                buildWatcher.start();
-                watchers.add(buildWatcher);
+                BuildInformer buildInformer = new BuildInformer(namespace);
+                buildInformer.start();
+                watchers.add(buildInformer);
 
                 ConfigMapInformer configMapInformer = new ConfigMapInformer(namespace);
                 configMapInformer.start();
                 watchers.add(configMapInformer);
 
-                ImageStreamWatcher imageStreamWatcher = new ImageStreamWatcher(namespace);
-                imageStreamWatcher.start();
-                watchers.add(imageStreamWatcher);
+                ImageStreamInformer imageStreamInformer = new ImageStreamInformer(namespace);
+                imageStreamInformer.start();
+                watchers.add(imageStreamInformer);
 
-                SecretWatcher secretWatcher = new SecretWatcher(namespace);
-                secretWatcher.start();
-                watchers.add(secretWatcher);
+                SecretInformer secretInformer = new SecretInformer(namespace);
+                secretInformer.start();
+                watchers.add(secretInformer);
 
             }
             logger.info("All the watchers have been initialized!!");
+            OpenShiftClient client = getAuthenticatedOpenShiftClient();
+            SharedInformerFactory informerFactory = client.informers();
+            informerFactory.startAllRegisteredInformers();
+
             synchronized (watchers) {
                 List<BaseWatcher<?>> globalWatchers = GlobalPluginConfiguration.getWatchers();
                 synchronized (globalWatchers) {

@@ -60,6 +60,7 @@ import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.ServiceSpec;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.Version;
+import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildBuilder;
 import io.fabric8.openshift.api.model.BuildConfig;
@@ -83,6 +84,8 @@ public class OpenShiftUtils {
 
     private static OpenShiftClient openShiftClient;
     private static String jenkinsPodNamespace = null;
+
+    private static SharedInformerFactory factory;
 
     static {
         jenkinsPodNamespace = System.getProperty(Constants.OPENSHIFT_PROJECT_ENV_VAR_NAME);
@@ -156,6 +159,13 @@ public class OpenShiftUtils {
         }
 
         return openShiftClient;
+    }
+
+    public synchronized static SharedInformerFactory getInformerFactory() {
+        if (factory == null) {
+            factory = getAuthenticatedOpenShiftClient().informers();
+        }
+        return factory;
     }
 
     public synchronized static void shutdownOpenShiftClient() {

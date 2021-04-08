@@ -21,9 +21,9 @@ import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.IMAGESTREAM_TYPE
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.addPodTemplate;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.getPodTemplatesListFromImageStreams;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.hasPodTemplate;
-import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForAddEvent;
-import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForDeleteEvent;
-import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForModifyEvent;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.addAgents;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.deleteAgents;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.updateAgents;
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
@@ -102,13 +102,13 @@ public class ImageStreamWatcher extends BaseWatcher<ImageStream> {
                 String namespace = metadata.getNamespace();
                 switch (action) {
                 case ADDED:
-                    processSlavesForAddEvent(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+                    addAgents(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
                     break;
                 case MODIFIED:
-                    processSlavesForModifyEvent(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+                    updateAgents(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
                     break;
                 case DELETED:
-                    processSlavesForDeleteEvent(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+                    deleteAgents(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
                     break;
                 case ERROR:
                     logger.warning("watch for imageStream " + ns + "/" + name + " received error event ");

@@ -17,9 +17,10 @@ package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenshiftClient;
-import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForAddEvent;
-import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForDeleteEvent;
-import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.processSlavesForModifyEvent;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.CONFIGMAP;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.addAgents;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.deleteAgents;
+import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.updateAgents;
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
@@ -95,7 +96,7 @@ public class ConfigMapWatcher extends BaseWatcher<ConfigMap> {
             return;
         }
         try {
-            List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(this, configMap);
+            List<PodTemplate> slavesFromCM = PodTemplateUtils.podTemplatesFromConfigMap(configMap);
             boolean hasSlaves = slavesFromCM.size() > 0;
             String uid = configMap.getMetadata().getUid();
             String cmname = configMap.getMetadata().getName();
@@ -103,14 +104,14 @@ public class ConfigMapWatcher extends BaseWatcher<ConfigMap> {
             switch (action) {
             case ADDED:
                 if (hasSlaves) {
-                    processSlavesForAddEvent(slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
+                    addAgents(slavesFromCM, CONFIGMAP, uid, cmname, namespace);
                 }
                 break;
             case MODIFIED:
-                processSlavesForModifyEvent(slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
+                updateAgents(slavesFromCM, CONFIGMAP, uid, cmname, namespace);
                 break;
             case DELETED:
-                processSlavesForDeleteEvent(slavesFromCM, PodTemplateUtils.cmType, uid, cmname, namespace);
+                deleteAgents(slavesFromCM, CONFIGMAP, uid, cmname, namespace);
                 break;
             case ERROR:
                 LOGGER.warning("watch for configMap " + configMap.getMetadata().getName() + " received error event ");
@@ -135,7 +136,7 @@ public class ConfigMapWatcher extends BaseWatcher<ConfigMap> {
                 try {
                     if (PodTemplateUtils.configMapContainsSlave(configMap)
                             && !PodTemplateUtils.trackedPodTemplates.containsKey(configMap.getMetadata().getUid())) {
-                        List<PodTemplate> templates = PodTemplateUtils.podTemplatesFromConfigMap(this, configMap);
+                        List<PodTemplate> templates = PodTemplateUtils.podTemplatesFromConfigMap(configMap);
                         PodTemplateUtils.trackedPodTemplates.put(configMap.getMetadata().getUid(), templates);
                         for (PodTemplate podTemplate : templates) {
                             PodTemplateUtils.addPodTemplate(podTemplate);

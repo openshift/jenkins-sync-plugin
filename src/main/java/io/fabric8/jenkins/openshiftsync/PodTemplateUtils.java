@@ -1,5 +1,7 @@
 package io.fabric8.jenkins.openshiftsync;
 
+import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL;
+import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL_VALUE;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static java.util.logging.Level.FINE;
 
@@ -31,7 +33,9 @@ import jenkins.model.Jenkins;
 
 public class PodTemplateUtils {
 
-    protected static final String cmType = "ConfigMap";
+    private static final String MAVEN_POD_TEMPLATE_NAME = "maven";
+    private static final String NODEJS_POD_TEMPLATE_NAME = "nodejs";
+    protected static final String CONFIGMAP = "ConfigMap";
     protected static final String isType = "ImageStream";
     static final String IMAGESTREAM_TYPE = isType;
     private static final String PT_NAME_CLAIMED = "The event for %s | %s | %s that attempts to add the pod template %s was ignored because a %s previously created a pod template with the same name";
@@ -79,16 +83,17 @@ public class PodTemplateUtils {
     public static void removePodTemplate(PodTemplate podTemplate) {
         KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
         if (kubeCloud != null) {
-            LOGGER.info("Removing PodTemplate: " + podTemplate.getName());
+            String name = podTemplate.getName();
+            String namespace = podTemplate.getNamespace();
+            LOGGER.info("Removing PodTemplate: " + name + " in namespace:  " + namespace);
             // NOTE - PodTemplate does not currently override hashCode, equals,
-            // so
-            // the KubernetsCloud.removeTemplate currently is broken;
+            // so the KubernetsCloud.removeTemplate currently is broken;
             // kubeCloud.removeTemplate(podTemplate);
             List<PodTemplate> list = kubeCloud.getTemplates();
             Iterator<PodTemplate> iter = list.iterator();
             while (iter.hasNext()) {
                 PodTemplate pt = iter.next();
-                if (pt.getName().equals(podTemplate.getName())) {
+                if (pt.getName().equals(name)) {
                     iter.remove();
                 }
             }
@@ -114,29 +119,26 @@ public class PodTemplateUtils {
 
     public static synchronized List<PodTemplate> getPodTemplates() {
         KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
+        List<PodTemplate> list = new ArrayList<PodTemplate>();
         if (kubeCloud != null) {
-            // create copy of list for more flexiblity in loops
-            ArrayList<PodTemplate> list = new ArrayList<PodTemplate>();
+            // create copy of list for more flexibility in loops
             list.addAll(kubeCloud.getTemplates());
-            return list;
-        } else {
-            return null;
         }
+        return list;
     }
 
-    public static synchronized boolean hasPodTemplate(PodTemplate incomingPod) {
-        String name = incomingPod.getName();
-        if (name == null)
-            return false;
-        String image = incomingPod.getImage();
-        if (image == null)
-            return false;
-        KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
-        if (kubeCloud != null) {
-            List<PodTemplate> list = kubeCloud.getTemplates();
-            for (PodTemplate pod : list) {
-                if (name.equals(pod.getName()) && image.equals(pod.getImage()))
-                    return true;
+    @SuppressWarnings("deprecation")
+    public static synchronized boolean hasPodTemplate(PodTemplate podTemplate) {
+        String name = podTemplate.getName();
+        String image = podTemplate.getImage();
+        if (name != null && image != null) {
+            KubernetesCloud kubeCloud = JenkinsUtils.getKubernetesCloud();
+            if (kubeCloud != null) {
+                List<PodTemplate> list = kubeCloud.getTemplates();
+                for (PodTemplate pod : list) {
+                    if (name.equals(pod.getName()) && image.equals(pod.getImage()))
+                        return true;
+                }
             }
         }
         return false;
@@ -166,7 +168,7 @@ public class PodTemplateUtils {
         for (PodTemplate podTemplate : trackedPodTemplates.get(uid)) {
             // we should not have included any pod templates we did not
             // mark the type for, but we'll check just in case
-            removePodTemplate(LOGGER, PT_NOT_OWNED, type, apiObjName, namespace, podTemplate);
+            removePodTemplate(type, apiObjName, namespace, podTemplate);
         }
         trackedPodTemplates.remove(uid);
     }
@@ -184,8 +186,8 @@ public class PodTemplateUtils {
 
     // Adds PodTemplate to the List<PodTemplate> correspoding to the ConfigMap of
     // given uid and Deletes from Jenkins
-    protected static List<PodTemplate> onlyTrackPodTemplate(String type, String apiObjName,
-            String namespace, List<PodTemplate> podTemplates, PodTemplate podTemplate) {
+    protected static List<PodTemplate> onlyTrackPodTemplate(String type, String apiObjName, String namespace,
+            List<PodTemplate> podTemplates, PodTemplate podTemplate) {
         String name = podTemplate.getName();
         // we allow configmap overrides of maven and nodejs, but not imagestream ones
         // as they are less specific/defined wrt podTemplate fields
@@ -218,14 +220,15 @@ public class PodTemplateUtils {
         // as they are less specific/defined wrt podTemplate fields
         if (apiObjName != null && namespace != null && podTemplates != null) {
             if (isReservedPodTemplateName(name) && isType.equals(type)) {
+                LOGGER.info("PodTemplate " + name + " cannot be added because it has a reserved name...ignoring");
                 return;
             }
-            String ret = podTemplateToApiType.putIfAbsent(name, type);
-            if (ret == null || ret.equals(type)) {
+            String podTemplateAsXmlString = podTemplateToApiType.putIfAbsent(name, type);
+            if (podTemplateAsXmlString == null || podTemplateAsXmlString.equals(type)) {
                 addPodTemplate(podTemplate);
                 podTemplates.add(podTemplate);
             } else {
-                LOGGER.info(String.format(PT_NAME_CLAIMED, type, apiObjName, namespace, name, ret));
+                LOGGER.info(String.format(PT_NAME_CLAIMED, type, apiObjName, namespace, name, podTemplateAsXmlString));
             }
         } else {
             podTemplateToApiType.put(name, type);
@@ -234,8 +237,7 @@ public class PodTemplateUtils {
     }
 
     // Delete a PodTemplate from Jenkins
-    protected static void removePodTemplate(Logger LOGGER, String PT_NOT_OWNED, String type, String apiObjName,
-            String namespace, PodTemplate podTemplate) {
+    protected static void removePodTemplate(String type, String apiObjName, String namespace, PodTemplate podTemplate) {
         String name = podTemplate.getName();
         String t = podTemplateToApiType.get(name);
         if (t != null && t.equals(type)) {
@@ -247,9 +249,7 @@ public class PodTemplateUtils {
     }
 
     protected static boolean isReservedPodTemplateName(String name) {
-        if (name.equals("maven") || name.equals("nodejs"))
-            return true;
-        return false;
+        return (name.equals(MAVEN_POD_TEMPLATE_NAME) || name.equals(NODEJS_POD_TEMPLATE_NAME));
     }
 
     protected static List<PodTemplate> getPodTemplatesListFromImageStreams(ImageStream imageStream) {
@@ -323,7 +323,7 @@ public class PodTemplateUtils {
     // podTemplatesFromConfigMap takes every key from a ConfigMap and tries to
     // create a PodTemplate from the contained
     // XML.
-    public static List<PodTemplate> podTemplatesFromConfigMap(ConfigMapWatcher configMapWatcher, ConfigMap configMap) {
+    public static List<PodTemplate> podTemplatesFromConfigMap(ConfigMap configMap) {
         List<PodTemplate> results = new ArrayList<>();
         Map<String, String> data = configMap.getData();
 
@@ -422,14 +422,13 @@ public class PodTemplateUtils {
     }
 
     protected static boolean hasSlaveLabelOrAnnotation(Map<String, String> map) {
-        if (map != null)
-            return map.containsKey("role") && map.get("role").equals("jenkins-slave");
-        return false;
+        return map != null && map.containsKey(IMAGESTREAM_AGENT_LABEL)
+                && map.get(IMAGESTREAM_AGENT_LABEL).equals(IMAGESTREAM_AGENT_LABEL_VALUE);
     }
 
-    protected static void processSlavesForAddEvent(List<PodTemplate> slaves, String type, String uid, String apiObjName,
+    protected static void addAgents(List<PodTemplate> slaves, String type, String uid, String apiObjName,
             String namespace) {
-        LOGGER.info("Adding PodTemplate(s) for ");
+        LOGGER.info("Adding PodTemplate(s) for " + namespace);
         List<PodTemplate> finalSlaveList = new ArrayList<PodTemplate>();
         for (PodTemplate podTemplate : slaves) {
             addPodTemplate(type, apiObjName, namespace, finalSlaveList, podTemplate);
@@ -437,8 +436,8 @@ public class PodTemplateUtils {
         updateTrackedPodTemplatesMap(uid, finalSlaveList);
     }
 
-    protected static void processSlavesForModifyEvent(List<PodTemplate> slaves, String type,
-            String uid, String apiObjName, String namespace) {
+    protected static void updateAgents(List<PodTemplate> slaves, String type, String uid, String apiObjName,
+            String namespace) {
         LOGGER.info("Modifying PodTemplates");
         boolean alreadyTracked = trackedPodTemplates.containsKey(uid);
         boolean hasSlaves = slaves.size() > 0; // Configmap has podTemplates
@@ -481,10 +480,26 @@ public class PodTemplateUtils {
         }
     }
 
-    protected static void processSlavesForDeleteEvent(List<PodTemplate> slaves, String type, String uid,
-            String apiObjName, String namespace) {
+    protected static void deleteAgents(List<PodTemplate> slaves, String type, String uid, String apiObjName,
+            String namespace) {
         if (trackedPodTemplates.containsKey(uid)) {
             purgeTemplates(type, uid, apiObjName, namespace);
+        }
+    }
+
+    protected static void addPodTemplateFromConfigMap(ConfigMap configMap) {
+        try {
+            String uid = configMap.getMetadata().getUid();
+            if (configMapContainsSlave(configMap) && !trackedPodTemplates.containsKey(uid)) {
+                List<PodTemplate> templates = podTemplatesFromConfigMap(configMap);
+                trackedPodTemplates.put(uid, templates);
+                for (PodTemplate podTemplate : templates) {
+                    LOGGER.info("Adding PodTemplate {}" + podTemplate);
+                    addPodTemplate(podTemplate);
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.severe("Failed to update ConfigMap PodTemplates" + e);
         }
     }
 
