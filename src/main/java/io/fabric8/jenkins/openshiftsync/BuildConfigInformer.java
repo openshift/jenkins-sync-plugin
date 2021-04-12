@@ -22,13 +22,13 @@ import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_BUILD_STATUS_
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_LABELS_BUILD_CONFIG_NAME;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenshiftClient;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isPipelineStrategyBuildConfig;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.logging.Level.SEVERE;
 
 import java.util.List;
-import java.util.logging.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import hudson.model.Job;
 import hudson.security.ACL;
@@ -37,9 +37,7 @@ import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
-import io.fabric8.kubernetes.client.informers.cache.Lister;
 import io.fabric8.openshift.api.model.BuildConfig;
-import io.fabric8.openshift.api.model.BuildConfigList;
 import io.fabric8.openshift.api.model.BuildList;
 import io.fabric8.openshift.client.OpenShiftClient;
 import jenkins.model.Jenkins;
@@ -53,7 +51,7 @@ import jenkins.util.Timer;
  */
 public class BuildConfigInformer extends BuildConfigWatcher implements ResourceEventHandler<BuildConfig> {
 
-    private final static Logger LOGGER = Logger.getLogger(BuildConfigInformer.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(SecretInformer.class.getName());
     private SharedIndexInformer<BuildConfig> informer;
 
     public BuildConfigInformer(String namespace) {
@@ -67,15 +65,14 @@ public class BuildConfigInformer extends BuildConfigWatcher implements ResourceE
 
     public void start() {
         LOGGER.info("Starting BuildConfig informer for {} !!" + namespace);
-        LOGGER.fine("listing BuildConfig resources");
+        LOGGER.debug("listing BuildConfig resources");
         SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
         this.informer = factory.sharedIndexInformerFor(BuildConfig.class, getListIntervalInSeconds());
         informer.addEventHandler(this);
-        factory.startAllRegisteredInformers();
         LOGGER.info("BuildConfig informer started for namespace: {}" + namespace);
-        // waitInformerSync(informer);
-        BuildConfigList list = getOpenshiftClient().buildConfigs().inNamespace(namespace).list();
-        onInit(list.getItems());
+        // BuildConfigList list =
+        // getOpenshiftClient().buildConfigs().inNamespace(namespace).list();
+        // onInit(list.getItems());
     }
 
     public void stop() {
@@ -85,23 +82,32 @@ public class BuildConfigInformer extends BuildConfigWatcher implements ResourceE
 
     @Override
     public void onAdd(BuildConfig obj) {
-        LOGGER.fine("BuildConfig informer  received add event for: {}" + obj);
-        ObjectMeta metadata = obj.getMetadata();
-        String name = metadata.getName();
-        LOGGER.info("BuildConfig informer received add event for: {}" + name);
-        upsertJob(obj);
+        LOGGER.debug("BuildConfig informer  received add event for: {}" + obj);
+        if (obj != null) {
+            ObjectMeta metadata = obj.getMetadata();
+            String name = metadata.getName();
+            LOGGER.info("BuildConfig informer received add event for: {}" + name);
+            upsertJob(obj);
+        }
     }
 
     @Override
     public void onUpdate(BuildConfig oldObj, BuildConfig newObj) {
-        LOGGER.info("BuildConfig informer received update event for: {} to: {}" + oldObj + newObj);
-        modifyEventToJenkinsJob(newObj);
+        LOGGER.debug("BuildConfig informer received update event for: {} to: {}" + oldObj + " " + newObj);
+        if (newObj != null) {
+            String oldRv = oldObj.getMetadata().getResourceVersion();
+            String newRv = newObj.getMetadata().getResourceVersion();
+            LOGGER.info("BuildConfig informer received update event for: {} to: {}" + oldRv + " " + newRv);
+            modifyEventToJenkinsJob(newObj);
+        }
     }
 
     @Override
     public void onDelete(BuildConfig obj, boolean deletedFinalStateUnknown) {
         LOGGER.info("BuildConfig informer received delete event for: {}" + obj);
-        deleteEventToJenkinsJob(obj);
+        if (obj != null) {
+            deleteEventToJenkinsJob(obj);
+        }
     }
 
     @SuppressWarnings({ "deprecation", "serial" })
@@ -127,7 +133,7 @@ public class BuildConfigInformer extends BuildConfigWatcher implements ResourceE
                     @Override
                     public void doRun() {
                         if (!CredentialsUtils.hasCredentials()) {
-                            LOGGER.fine("No Openshift Token credential defined.");
+                            LOGGER.debug("No Openshift Token credential defined.");
                             return;
                         }
                         final OpenShiftClient client = getAuthenticatedOpenShiftClient();
@@ -154,7 +160,7 @@ public class BuildConfigInformer extends BuildConfigWatcher implements ResourceE
                 try {
                     ACL.impersonate(ACL.SYSTEM, new JobProcessor(this, buildConfig));
                 } catch (Exception e) {
-                    LOGGER.severe("Error while trying to insert JobRun: " + e);
+                    LOGGER.error("Error while trying to insert JobRun: " + e);
 
                 }
             }
@@ -162,7 +168,8 @@ public class BuildConfigInformer extends BuildConfigWatcher implements ResourceE
         try {
             cleanupJobsMissingStartBuildEvent(buildConfig);
         } catch (Exception e) {
-            LOGGER.severe("Error while trying to clean up orphan JobRuns: " + e);
+            LOGGER.error("Error while trying to clean up orphan JobRuns: " + e);
+            e.printStackTrace();
         }
     }
 
@@ -217,7 +224,7 @@ public class BuildConfigInformer extends BuildConfigWatcher implements ResourceE
             try {
                 upsertJob(buildConfig);
             } catch (Exception e) {
-                LOGGER.log(SEVERE, "Failed to update job", e);
+                LOGGER.error("Failed to update job", e);
             }
         }
         // poke the BuildWatcher builds with no BC list and see if we

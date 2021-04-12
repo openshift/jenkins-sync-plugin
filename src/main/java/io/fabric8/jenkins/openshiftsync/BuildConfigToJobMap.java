@@ -17,7 +17,7 @@ import static org.apache.commons.lang.StringUtils.isNotBlank;
 public class BuildConfigToJobMap {
 
     private final static Logger logger = Logger.getLogger(BuildConfigToJobMap.class.getName());
-    private static ConcurrentHashMap<String, WorkflowJob> buildConfigToJobMap;
+    private static ConcurrentHashMap<String, WorkflowJob> buildConfigToJobMap = new ConcurrentHashMap<String, WorkflowJob>();
 
     private BuildConfigToJobMap() {
     }

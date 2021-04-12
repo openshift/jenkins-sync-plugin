@@ -2,6 +2,7 @@ package io.fabric8.jenkins.openshiftsync;
 
 import static hudson.init.InitMilestone.COMPLETED;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,29 +67,29 @@ public class GlobalPluginConfigurationTimerTask extends SafeTimerTask {
                 SecretInformer secretInformer = new SecretInformer(namespace);
                 secretInformer.start();
                 watchers.add(secretInformer);
-
             }
-            logger.info("All the watchers have been initialized!!");
-            OpenShiftClient client = getAuthenticatedOpenShiftClient();
-            SharedInformerFactory informerFactory = client.informers();
-            informerFactory.startAllRegisteredInformers();
+   
+            logger.info("All the watchers have been registered!! ... starting all registered informers");
+            getInformerFactory().startAllRegisteredInformers();
+            logger.info("All registered informers have been started");
 
-            synchronized (watchers) {
-                List<BaseWatcher<?>> globalWatchers = GlobalPluginConfiguration.getWatchers();
-                synchronized (globalWatchers) {
-                    logger.info("Existing watchers: " + globalWatchers);
-                    for (BaseWatcher<?> watch : globalWatchers) {
-                        watch.stop();
-                    }
-                    globalWatchers.clear();
-                    logger.info("Existing watchers: stopped and cleared : " + globalWatchers);
-                    globalWatchers.addAll(watchers);
-                    logger.info("New watchers created : " + globalWatchers.size());
-
-                }
-            }
+//            synchronized (watchers) {
+//                List<BaseWatcher<?>> globalWatchers = GlobalPluginConfiguration.getWatchers();
+//                synchronized (globalWatchers) {
+//                    logger.info("Existing watchers: " + globalWatchers);
+//                    for (BaseWatcher<?> watch : globalWatchers) {
+//                        watch.stop();
+//                    }
+//                    globalWatchers.clear();
+//                    logger.info("Existing watchers: stopped and cleared : " + globalWatchers);
+//                    globalWatchers.addAll(watchers);
+//                    logger.info("New watchers created : " + globalWatchers.size());
+//
+//                }
+//            }
         } catch (Exception e) {
             logger.severe(e.toString());
+            e.printStackTrace();
         }
     }
 }

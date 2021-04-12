@@ -27,7 +27,6 @@ import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.triggerJob;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAnnotation;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenshiftClient;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isCancellable;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isCancelled;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isNew;
@@ -41,12 +40,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import hudson.security.ACL;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
@@ -64,22 +63,22 @@ import jenkins.security.NotReallyRoleSensitiveCallable;
 
 public class BuildInformer extends BuildWatcher implements ResourceEventHandler<Build> {
 
-    private static final Logger LOGGER = Logger.getLogger(BuildInformer.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(SecretInformer.class.getName());
     private final static BuildComparator BUILD_COMPARATOR = new BuildComparator();
-
-    // now that listing interval is 5 minutes (used to be 10 seconds), we have
-    // seen timing windows where if the build watch events come before build config
-    // watch events when both are created in a simultaneous fashion, there is an up
-    // to 5 minutes delay before the job run gets kicked off started seeing
-    // duplicate builds getting kicked off so quit depending on so moved off of
-    // concurrent hash set to concurrent hash map using namepace/name key
-
     private SharedIndexInformer<Build> informer;
 
     public BuildInformer(String namespace) {
         super(namespace);
     }
 
+    /**
+     * now that listing interval is 5 minutes (used to be 10 seconds), we have seen
+     * timing windows where if the build watch events come before build config watch
+     * events when both are created in a simultaneous fashion, there is an up to 5
+     * minutes delay before the job run gets kicked off started seeing duplicate
+     * builds getting kicked off so quit depending on so moved off of concurrent
+     * hash set to concurrent hash map using namepace/name key
+     */
     @Override
     public int getListIntervalInSeconds() {
         return 1_000 * GlobalPluginConfiguration.get().getBuildListInterval();
@@ -87,41 +86,43 @@ public class BuildInformer extends BuildWatcher implements ResourceEventHandler<
 
     public void start() {
         LOGGER.info("Starting Build informer for {} !!" + namespace);
-        LOGGER.fine("Listing Build resources");
+        LOGGER.debug("Listing Build resources");
         SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
         this.informer = factory.sharedIndexInformerFor(Build.class, getListIntervalInSeconds());
         this.informer.addEventHandler(this);
-        factory.startAllRegisteredInformers();
         LOGGER.info("Build informer started for namespace: {}" + namespace);
-        BuildList list = getOpenshiftClient().builds().inNamespace(namespace).list();
-        onInit(list.getItems());
-    }
-
-    public void startAfterOnClose(String namespace) {
-        synchronized (this.lock) {
-            start();
-        }
+//        BuildList list = getOpenshiftClient().builds().inNamespace(namespace).list();
+//        onInit(list.getItems());
     }
 
     @Override
     public void onAdd(Build obj) {
-        LOGGER.fine("Build informer  received add event for: {}" + obj);
-        ObjectMeta metadata = obj.getMetadata();
-        String name = metadata.getName();
-        LOGGER.info("Build informer received add event for: {}" + name);
-        addEventToJenkinsJobRun(obj);
+        LOGGER.debug("Build informer  received add event for: {}" + obj);
+        if (obj != null) {
+            ObjectMeta metadata = obj.getMetadata();
+            String name = metadata.getName();
+            LOGGER.info("Build informer received add event for: {}" + name);
+            addEventToJenkinsJobRun(obj);
+        }
     }
 
     @Override
     public void onUpdate(Build oldObj, Build newObj) {
-        LOGGER.info("Build informer received update event for: {} to: {}" + oldObj + newObj);
-        modifyEventToJenkinsJobRun(newObj);
+        LOGGER.debug("Build informer received update event for: {} to: {}" + oldObj + " " + newObj);
+        if (newObj != null) {
+            String oldRv = oldObj.getMetadata().getResourceVersion();
+            String newRv = newObj.getMetadata().getResourceVersion();
+            LOGGER.info("Build informer received update event for: {} to: {}" + oldRv + " " + newRv);
+            modifyEventToJenkinsJobRun(newObj);
+        }
     }
 
     @Override
     public void onDelete(Build obj, boolean deletedFinalStateUnknown) {
         LOGGER.info("Build informer received delete event for: {}" + obj);
-        deleteEventToJenkinsJobRun(obj);
+        if (obj != null) {
+            deleteEventToJenkinsJobRun(obj);
+        }
     }
 
     public static void onInit(List<Build> list) {
@@ -234,7 +235,7 @@ public class BuildInformer extends BuildWatcher implements ResourceEventHandler<
             try {
                 return triggerJob(job, build);
             } catch (IOException e) {
-                LOGGER.severe("Error while trying to trigger Job: " + e);
+                LOGGER.error("Error while trying to trigger Job: " + e);
             }
         }
         LOGGER.info("skipping watch event for build " + build.getMetadata().getName() + " no job at this time");
@@ -250,7 +251,7 @@ public class BuildInformer extends BuildWatcher implements ResourceEventHandler<
             buildsWithNoBCList.put(build.getMetadata().getNamespace() + build.getMetadata().getName(), build);
         } catch (ConcurrentModificationException | IllegalArgumentException | UnsupportedOperationException
                 | NullPointerException e) {
-            LOGGER.log(Level.WARNING, "Failed to add item " + build.getMetadata().getName(), e);
+            LOGGER.warn( "Failed to add item " + build.getMetadata().getName(), e);
         }
     }
 
@@ -274,7 +275,7 @@ public class BuildInformer extends BuildWatcher implements ResourceEventHandler<
                     LOGGER.info("triggering job run for previously skipped build " + build.getMetadata().getName());
                     triggerJob(job, build);
                 } catch (IOException e) {
-                    LOGGER.log(Level.WARNING, "flushBuildsWithNoBCList", e);
+                    LOGGER.warn( "flushBuildsWithNoBCList", e);
                 }
                 try {
                     synchronized (buildsWithNoBCList) {
@@ -289,7 +290,7 @@ public class BuildInformer extends BuildWatcher implements ResourceEventHandler<
                     // over extended usage ... probably can remove at some
                     // point
                     anyRemoveFailures = true;
-                    LOGGER.log(Level.WARNING, "flushBuildsWithNoBCList", t);
+                    LOGGER.warn( "flushBuildsWithNoBCList", t);
                 }
             }
 
@@ -345,7 +346,7 @@ public class BuildInformer extends BuildWatcher implements ResourceEventHandler<
                     try {
                         innerDeleteEventToJenkinsJobRun(build);
                     } catch (Exception e) {
-                        LOGGER.severe("Error while trying to delete JobRun: " + e);
+                        LOGGER.error("Error while trying to delete JobRun: " + e);
                     }
                     return;
                 }
@@ -355,7 +356,7 @@ public class BuildInformer extends BuildWatcher implements ResourceEventHandler<
         try {
             innerDeleteEventToJenkinsJobRun(build);
         } catch (Exception e) {
-            LOGGER.severe("Error while trying to delete JobRun: " + e);
+            LOGGER.error("Error while trying to delete JobRun: " + e);
         }
     }
 
@@ -366,7 +367,7 @@ public class BuildInformer extends BuildWatcher implements ResourceEventHandler<
      */
     @SuppressWarnings("deprecation")
     private static void reconcileRunsAndBuilds() {
-        LOGGER.fine("Reconciling job runs and builds");
+        LOGGER.debug("Reconciling job runs and builds");
         List<WorkflowJob> jobs = Jenkins.getActiveInstance().getAllItems(WorkflowJob.class);
         for (WorkflowJob job : jobs) {
             BuildConfigProjectProperty property = job.getProperty(BuildConfigProjectProperty.class);
@@ -374,7 +375,7 @@ public class BuildInformer extends BuildWatcher implements ResourceEventHandler<
                 String ns = property.getNamespace();
                 String name = property.getName();
                 if (StringUtils.isNotBlank(ns) && StringUtils.isNotBlank(name)) {
-                    LOGGER.fine("Checking job " + job + " runs for BuildConfig " + ns + "/" + name);
+                    LOGGER.debug("Checking job " + job + " runs for BuildConfig " + ns + "/" + name);
                     OpenShiftClient client = getAuthenticatedOpenShiftClient();
                     BuildList builds = client.builds().inNamespace(ns).withLabel("buildconfig=" + name).list();
                     for (WorkflowRun run : job.getBuilds()) {

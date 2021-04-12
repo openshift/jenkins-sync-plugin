@@ -20,6 +20,7 @@ import static io.fabric8.jenkins.openshiftsync.BuildPhases.PENDING;
 import static io.fabric8.jenkins.openshiftsync.BuildPhases.RUNNING;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_DEFAULT_NAMESPACE;
 import static java.util.logging.Level.FINE;
+import static java.util.logging.Level.INFO;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -75,6 +76,7 @@ import io.fabric8.openshift.client.DefaultOpenShiftClient;
 import io.fabric8.openshift.client.OpenShiftClient;
 import io.fabric8.openshift.client.OpenShiftConfigBuilder;
 import jenkins.model.Jenkins;
+import okhttp3.Dispatcher;
 
 /**
  */
@@ -84,8 +86,9 @@ public class OpenShiftUtils {
 
     private static OpenShiftClient openShiftClient;
     private static String jenkinsPodNamespace = null;
-
     private static SharedInformerFactory factory;
+    private static final Jenkins JENKINS_INSTANCE = Jenkins.getInstanceOrNull();
+    private static final Object lock = new Object();
 
     static {
         jenkinsPodNamespace = System.getProperty(Constants.OPENSHIFT_PROJECT_ENV_VAR_NAME);
@@ -130,18 +133,24 @@ public class OpenShiftUtils {
      *                  is running
      */
     public synchronized static void initializeOpenShiftClient(String serverUrl) {
+        if (openShiftClient != null) {
+            logger.log(INFO, "Closing already initialized openshift client");
+            openShiftClient.close();
+        }
         OpenShiftConfigBuilder configBuilder = new OpenShiftConfigBuilder();
         if (serverUrl != null && !serverUrl.isEmpty()) {
             configBuilder.withMasterUrl(serverUrl);
         }
         Config config = configBuilder.build();
-        config.setUserAgent("openshift-sync-plugin-"
-                + Jenkins.getInstance().getPluginManager().getPlugin("openshift-sync").getVersion() + "/fabric8-"
-                + Version.clientVersion());
+        String version = JENKINS_INSTANCE.getPluginManager().getPlugin("openshift-sync").getVersion();
+        config.setUserAgent("openshift-sync-plugin-" + version + "/fabric8-" + Version.clientVersion());
         openShiftClient = new DefaultOpenShiftClient(config);
+        logger.log(INFO, "New OpenShift client initialized: " + openShiftClient);
+
         DefaultOpenShiftClient defClient = (DefaultOpenShiftClient) openShiftClient;
-        defClient.getHttpClient().dispatcher().setMaxRequestsPerHost(100);
-        defClient.getHttpClient().dispatcher().setMaxRequests(100);
+        Dispatcher dispatcher = defClient.getHttpClient().dispatcher();
+        dispatcher.setMaxRequestsPerHost(100);
+        dispatcher.setMaxRequests(100);
     }
 
     public synchronized static OpenShiftClient getOpenShiftClient() {
@@ -157,13 +166,14 @@ public class OpenShiftUtils {
                 openShiftClient.getConfiguration().setOauthToken(token);
             }
         }
-
         return openShiftClient;
     }
 
-    public synchronized static SharedInformerFactory getInformerFactory() {
+    public static SharedInformerFactory getInformerFactory() {
         if (factory == null) {
-            factory = getAuthenticatedOpenShiftClient().informers();
+            synchronized (lock) {
+                factory = getAuthenticatedOpenShiftClient().informers();
+            }
         }
         return factory;
     }

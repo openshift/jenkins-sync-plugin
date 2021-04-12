@@ -15,6 +15,16 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
+import static hudson.model.Result.ABORTED;
+import static hudson.model.Result.FAILURE;
+import static hudson.model.Result.SUCCESS;
+import static hudson.model.Result.UNSTABLE;
+import static io.fabric8.jenkins.openshiftsync.BuildPhases.CANCELLED;
+import static io.fabric8.jenkins.openshiftsync.BuildPhases.COMPLETE;
+import static io.fabric8.jenkins.openshiftsync.BuildPhases.FAILED;
+import static io.fabric8.jenkins.openshiftsync.BuildPhases.NEW;
+import static io.fabric8.jenkins.openshiftsync.BuildPhases.PENDING;
+import static io.fabric8.jenkins.openshiftsync.BuildPhases.RUNNING;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_BLUEOCEAN_LOG_URL;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_BUILD_URI;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_JENKINS_CONSOLE_LOG_URL;
@@ -26,10 +36,6 @@ import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.maybeScheduleNext;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.formatTimestamp;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
-import static java.util.logging.Level.FINE;
-import static java.util.logging.Level.INFO;
-import static java.util.logging.Level.SEVERE;
-import static java.util.logging.Level.WARNING;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
@@ -42,8 +48,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import javax.annotation.Nonnull;
 
@@ -52,6 +56,8 @@ import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.jenkinsci.plugins.workflow.support.steps.input.InputAction;
 import org.jenkinsci.plugins.workflow.support.steps.input.InputStepExecution;
 import org.kohsuke.stapler.DataBoundConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.cloudbees.workflow.rest.external.AtomFlowNodeExt;
 import com.cloudbees.workflow.rest.external.FlowNodeExt;
@@ -85,10 +91,10 @@ import jenkins.util.Timer;
  * current status, logsURL and metrics
  */
 @Extension
+@SuppressWarnings({ "rawtypes", "unchecked", "deprecation" })
 public class BuildSyncRunListener extends RunListener<Run> {
     private static final String KUBERNETES_NAMESPACE = "KUBERNETES_NAMESPACE";
-
-    private static final Logger logger = Logger.getLogger(BuildSyncRunListener.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(BuildSyncRunListener.class.getName());
 
     private long pollPeriodMs = 1000 * 5; // 5 seconds
     private long delayPollPeriodMs = 1000; // 1 seconds
@@ -139,14 +145,14 @@ public class BuildSyncRunListener extends RunListener<Run> {
                     run.setDescription(cause.getShortDescription());
                 }
             } catch (IOException e) {
-                logger.log(WARNING, "Cannot set build description: " + e);
+                logger.warn("Cannot set build description: " + e);
             }
             if (runsToPoll.add(run)) {
                 logger.info("starting polling build " + run.getUrl());
             }
             checkTimerStarted();
         } else {
-            logger.fine("not polling polling build " + run.getUrl() + " as its not a WorkflowJob");
+            logger.trace("not polling polling build " + run.getUrl() + " as its not a WorkflowJob");
         }
         super.onStarted(run, listener);
     }
@@ -190,7 +196,8 @@ public class BuildSyncRunListener extends RunListener<Run> {
         if (shouldPollRun(run)) {
             runsToPoll.remove(run);
             pollRun(run);
-            logger.info("onFinalized " + run.getUrl());
+            String jenkinsURL = Jenkins.get().getRootUrl();
+            logger.info("Run COMPLETED: Build details can be accessed at: " + jenkinsURL + run.getUrl());
         }
         super.onFinalized(run);
     }
@@ -218,7 +225,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
             // bumped
             // by another dependency vs. our bumping it explicitly, I want to
             // find out quickly that we need to switch methods again
-            logger.log(Level.WARNING, "pollRun", t);
+            logger.warn("pollRun", t);
         }
 
         try {
@@ -226,7 +233,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
         } catch (KubernetesClientException e) {
             if (e.getCode() == HttpStatus.SC_UNPROCESSABLE_ENTITY) {
                 runsToPoll.remove(run);
-                logger.log(WARNING, "Cannot update status: {0}", e.getMessage());
+                logger.warn("Cannot update status: {0}", e.getMessage());
                 return;
             }
             throw e;
@@ -236,7 +243,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
     private boolean shouldUpdateOpenShiftBuild(BuildCause cause, int latestStageNum, int latestNumFlowNodes,
             StatusExt status) {
         long currTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime());
-        logger.fine(String.format(
+        logger.debug(String.format(
                 "shouldUpdateOpenShiftBuild curr time %s last update %s curr stage num %s last stage num %s"
                         + "curr flow num %s last flow num %s status %s",
                 String.valueOf(currTime), String.valueOf(cause.getLastUpdateToOpenshift()),
@@ -317,8 +324,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
                 }
             }
         } catch (Throwable t) {
-            if (logger.isLoggable(Level.FINE))
-                logger.log(Level.FINE, "upsertBuild", t);
+            logger.error("upsertBuild", t);
         }
 
         Map<String, BlueRunResult> blueRunResults = new HashMap<String, BlueRunResult>();
@@ -388,7 +394,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
         try {
             json = new ObjectMapper().writeValueAsString(wfRunExt);
         } catch (JsonProcessingException e) {
-            logger.log(SEVERE, "Failed to serialize workflow run. " + e, e);
+            logger.error("Failed to serialize workflow run. " + e, e);
             return;
         }
 
@@ -412,7 +418,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
         }
 
         String name = cause.getName();
-        logger.log(FINE, "Patching build {0}/{1}: setting phase to {2}", new Object[] { ns, name, phase });
+        logger.debug("Patching build {0}/{1}: setting phase to {2}", new Object[] { ns, name, phase });
         try {
 
             Map<String, String> annotations = new HashMap<String, String>();
@@ -430,7 +436,8 @@ public class BuildSyncRunListener extends RunListener<Run> {
             }
             final String finalStartTime = startTime;
             final String finalCompletionTime = completionTime;
-            logger.log(INFO, "Creating a new build builder: ");
+            logger.info("Setting build status values to: {}:[ {} ]: {}->{}", name, phase, startTime, completionTime);
+            logger.debug("Setting build annotations values to: {} ]", annotations);
             getAuthenticatedOpenShiftClient().builds().inNamespace(ns).withName(name)
                     .edit(b -> new BuildBuilder(b).editMetadata().withAnnotations(annotations).endMetadata()
                             .editStatus().withPhase(phase).withStartTimestamp(finalStartTime)
@@ -458,7 +465,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
             try {
                 executions = inputAction.getExecutions();
             } catch (Exception e) {
-                logger.log(SEVERE, "Failed to get Excecutions:" + e, e);
+                logger.error("Failed to get Excecutions:" + e, e);
                 return null;
             }
             if (executions != null && !executions.isEmpty()) {
@@ -470,7 +477,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
         try {
             return new ObjectMapper().writeValueAsString(pendingInputActions);
         } catch (JsonProcessingException e) {
-            logger.log(SEVERE, "Failed to serialize pending actions. " + e, e);
+            logger.error("Failed to serialize pending actions. " + e, e);
             return null;
         }
     }
@@ -486,25 +493,25 @@ public class BuildSyncRunListener extends RunListener<Run> {
     private String runToBuildPhase(Run run) {
         if (run != null && !run.hasntStartedYet()) {
             if (run.isBuilding()) {
-                return BuildPhases.RUNNING;
+                return RUNNING;
             } else {
                 Result result = run.getResult();
                 if (result != null) {
-                    if (result.equals(Result.SUCCESS)) {
-                        return BuildPhases.COMPLETE;
-                    } else if (result.equals(Result.ABORTED)) {
-                        return BuildPhases.CANCELLED;
-                    } else if (result.equals(Result.FAILURE)) {
-                        return BuildPhases.FAILED;
-                    } else if (result.equals(Result.UNSTABLE)) {
-                        return BuildPhases.FAILED;
+                    if (result.equals(SUCCESS)) {
+                        return COMPLETE;
+                    } else if (result.equals(ABORTED)) {
+                        return CANCELLED;
+                    } else if (result.equals(FAILURE)) {
+                        return FAILED;
+                    } else if (result.equals(UNSTABLE)) {
+                        return FAILED;
                     } else {
-                        return BuildPhases.PENDING;
+                        return PENDING;
                     }
                 }
             }
         }
-        return BuildPhases.NEW;
+        return NEW;
     }
 
     /**

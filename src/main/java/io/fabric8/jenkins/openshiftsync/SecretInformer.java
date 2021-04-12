@@ -18,19 +18,17 @@ package io.fabric8.jenkins.openshiftsync;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC;
 import static io.fabric8.jenkins.openshiftsync.Constants.VALUE_SECRET_SYNC;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenshiftClient;
 import static java.util.Collections.singletonMap;
-import static java.util.logging.Level.SEVERE;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Logger;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.Secret;
-import io.fabric8.kubernetes.api.model.SecretList;
 import io.fabric8.kubernetes.client.dsl.base.OperationContext;
 import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
@@ -38,34 +36,32 @@ import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 
 public class SecretInformer extends SecretWatcher implements ResourceEventHandler<Secret> {
 
-    private final static Logger LOGGER = Logger.getLogger(SecretInformer.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(SecretInformer.class.getName());
+
     private final static ConcurrentHashMap<String, String> trackedSecrets = new ConcurrentHashMap<String, String>();
-    private static final long RESYNC_PERIOD = 30 * 1000L;
 
     private SharedIndexInformer<Secret> informer;
 
-    @SuppressFBWarnings("EI_EXPOSE_REP2")
     public SecretInformer(String namespace) {
         super(namespace);
     }
 
     @Override
     public int getListIntervalInSeconds() {
-        return GlobalPluginConfiguration.get().getSecretListInterval();
+        return 1_000 * GlobalPluginConfiguration.get().getSecretListInterval();
     }
 
     public void start() {
         LOGGER.info("Starting secret informer {} !!" + namespace);
-        LOGGER.fine("listing Secret resources");
+        LOGGER.debug("listing Secret resources");
         SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
         Map<String, String> labels = singletonMap(OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC, VALUE_SECRET_SYNC);
         OperationContext withLabels = new OperationContext().withLabels(labels);
-        this.informer = factory.sharedIndexInformerFor(Secret.class, withLabels, RESYNC_PERIOD);
+        this.informer = factory.sharedIndexInformerFor(Secret.class, withLabels, getListIntervalInSeconds());
         informer.addEventHandler(this);
-        factory.startAllRegisteredInformers();
         LOGGER.info("Secret informer started for namespace: {}" + namespace);
-        SecretList list = getOpenshiftClient().secrets().inNamespace(namespace).withLabels(labels).list();
-        onInit(list.getItems());
+//        SecretList list = getOpenshiftClient().secrets().inNamespace(namespace).withLabels(labels).list();
+//        onInit(list.getItems());
     }
 
     public void stop() {
@@ -75,23 +71,29 @@ public class SecretInformer extends SecretWatcher implements ResourceEventHandle
 
     @Override
     public void onAdd(Secret obj) {
-        LOGGER.fine("Secret informer  received add event for: {}" + obj);
-        ObjectMeta metadata = obj.getMetadata();
-        String name = metadata.getName();
-        LOGGER.info("Secret informer received add event for: {}" + name);
-        insertOrUpdateCredentialFromSecret(obj);
+        LOGGER.debug("Secret informer  received add event for: {}" + obj);
+        if (obj != null) {
+            ObjectMeta metadata = obj.getMetadata();
+            String name = metadata.getName();
+            LOGGER.info("Secret informer received add event for: {}" + name);
+            insertOrUpdateCredentialFromSecret(obj);
+        }
     }
 
     @Override
     public void onUpdate(Secret oldObj, Secret newObj) {
         LOGGER.info("Secret informer received update event for: {} to: {}" + oldObj + newObj);
-        updateCredential(newObj);
+        if (oldObj != null) {
+            updateCredential(newObj);
+        }
     }
 
     @Override
     public void onDelete(Secret obj, boolean deletedFinalStateUnknown) {
         LOGGER.info("Secret informer received delete event for: {}" + obj);
-        CredentialsUtils.deleteCredential(obj);
+        if (obj != null) {
+            CredentialsUtils.deleteCredential(obj);
+        }
     }
 
     private void onInit(List<Secret> list) {
@@ -102,7 +104,7 @@ public class SecretInformer extends SecretWatcher implements ResourceEventHandle
                     trackedSecrets.put(secret.getMetadata().getUid(), secret.getMetadata().getResourceVersion());
                 }
             } catch (Exception e) {
-                LOGGER.log(SEVERE, "Failed to update secred", e);
+                LOGGER.error("Failed to update secred", e);
             }
         }
     }
