@@ -18,7 +18,10 @@ package io.fabric8.jenkins.openshiftsync;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.CONFIGMAP;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
@@ -31,47 +34,51 @@ import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 
-public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEventHandler<ConfigMap>, Lifecyclable {
+public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>, Lifecyclable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SecretInformer.class.getName());
     private SharedIndexInformer<ConfigMap> informer;
+    private Set<String> namespaces;
 
-    public ConfigMapInformer(String namespace) {
-        super(namespace);
+    public ConfigMapClusterInformer(String[] namespaces) {
+        this.namespaces = new HashSet<>(Arrays.asList(namespaces));
     }
 
-    @Override
     public int getListIntervalInSeconds() {
         return 1_000 * GlobalPluginConfiguration.get().getConfigMapListInterval();
     }
 
     public void start() {
-        LOGGER.info("Starting configMap informer for {} !!" + namespace);
+        LOGGER.info("Starting cluster wide configMap informer for {} !!" + namespaces);
         LOGGER.debug("listing ConfigMap resources");
-        SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
+        SharedInformerFactory factory = getInformerFactory();
         this.informer = factory.sharedIndexInformerFor(ConfigMap.class, getListIntervalInSeconds());
         informer.addEventHandler(this);
-        LOGGER.info("ConfigMap informer started for namespace: {}" + namespace);
+        LOGGER.info("ConfigMap informer started for namespaces: {}" + namespaces);
 //        ConfigMapList list = getOpenshiftClient().configMaps().inNamespace(namespace).list();
 //        onInit(list.getItems());
     }
 
     public void stop() {
-        LOGGER.info("Stopping configMap informer {} !!" + namespace);
+        LOGGER.info("Stopping configMap informer {} !!" + namespaces);
         this.informer.stop();
     }
 
     @Override
     public void onAdd(ConfigMap obj) {
-        LOGGER.debug("ConfigMap informer  received add event for: {}" + obj);
+        LOGGER.debug("ConfigMap informer received add event for: {}" + obj);
         if (obj != null) {
             ObjectMeta metadata = obj.getMetadata();
-            String name = metadata.getName();
-            LOGGER.info("ConfigMap informer received add event for: {}" + name);
-            List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(obj);
-            String uid = metadata.getUid();
             String namespace = metadata.getNamespace();
-            PodTemplateUtils.addAgents(podTemplates, CONFIGMAP, uid, name, namespace);
+            if (namespaces.contains(namespace)) {
+                String name = metadata.getName();
+                LOGGER.info("ConfigMap informer received add event for: {}" + name);
+                List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(obj);
+                String uid = metadata.getUid();
+                PodTemplateUtils.addAgents(podTemplates, CONFIGMAP, uid, name, namespace);
+            } else {
+                LOGGER.debug("Received event for a namespace we are not watching: {} ... ignoring", namespace);
+            }
         }
     }
 
@@ -79,16 +86,22 @@ public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEvent
     public void onUpdate(ConfigMap oldObj, ConfigMap newObj) {
         LOGGER.debug("ConfigMap informer  received update event for: {} to: {}" + oldObj + newObj);
         if (oldObj != null) {
-            String oldResourceVersion = oldObj.getMetadata() != null ? oldObj.getMetadata().getResourceVersion() : null;
-            String newResourceVersion = newObj.getMetadata() != null ? newObj.getMetadata().getResourceVersion() : null;
-            LOGGER.info("Update event received resource versions: {} to: {}" + oldResourceVersion + newResourceVersion);
-            List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(newObj);
-            ObjectMeta metadata = newObj.getMetadata();
-            String uid = metadata.getUid();
-            String name = metadata.getName();
-            String namespace = metadata.getNamespace();
-            LOGGER.info("ConfigMap informer received update event for: {}", name);
-            PodTemplateUtils.updateAgents(podTemplates, CONFIGMAP, uid, name, namespace);
+            ObjectMeta oldMetadata = oldObj.getMetadata();
+            String namespace = oldMetadata.getNamespace();
+            if (namespaces.contains(namespace)) {
+                String oldRv = oldMetadata != null ? oldMetadata.getResourceVersion() : null;
+                ObjectMeta newMetadata = newObj.getMetadata();
+                String newResourceVersion = newMetadata != null ? newMetadata.getResourceVersion() : null;
+                LOGGER.info("Update event received resource versions: {} to: {}" + oldRv + newResourceVersion);
+                List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(newObj);
+                ObjectMeta metadata = newMetadata;
+                String uid = metadata.getUid();
+                String name = metadata.getName();
+                LOGGER.info("ConfigMap informer received update event for: {}", name);
+                PodTemplateUtils.updateAgents(podTemplates, CONFIGMAP, uid, name, namespace);
+            } else {
+                LOGGER.debug("Received event for a namespace we are not watching: {} ... ignoring", namespace);
+            }
         }
     }
 
@@ -96,12 +109,16 @@ public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEvent
     public void onDelete(ConfigMap obj, boolean deletedFinalStateUnknown) {
         LOGGER.debug("ConfigMap informer received delete event for: {}" + obj);
         if (obj != null) {
-            List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(obj);
             ObjectMeta metadata = obj.getMetadata();
-            String uid = metadata.getUid();
-            String name = metadata.getName();
             String namespace = metadata.getNamespace();
-            PodTemplateUtils.deleteAgents(podTemplates, CONFIGMAP, uid, name, namespace);
+            if (namespaces.contains(namespace)) {
+                List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(obj);
+                String uid = metadata.getUid();
+                String name = metadata.getName();
+                PodTemplateUtils.deleteAgents(podTemplates, CONFIGMAP, uid, name, namespace);
+            } else {
+                LOGGER.debug("Received event for a namespace we are not watching: {} ... ignoring", namespace);
+            }
         }
     }
 
@@ -115,7 +132,7 @@ public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEvent
 
     private void waitInformerSync(SharedIndexInformer<ConfigMap> informer) {
         while (!informer.hasSynced()) {
-            LOGGER.info("Waiting informer to sync for " + namespace);
+            LOGGER.info("Waiting informer to sync for " + namespaces);
             try {
                 TimeUnit.SECONDS.sleep(5);
             } catch (InterruptedException e) {

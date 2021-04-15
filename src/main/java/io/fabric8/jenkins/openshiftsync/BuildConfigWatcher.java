@@ -120,7 +120,7 @@ public class BuildConfigWatcher extends BaseWatcher<BuildConfig> {
         // poke the BuildWatcher builds with no BC list and see if we
         // can create job
         // runs for premature builds
-        BuildWatcher.flushBuildsWithNoBCList();
+        BuildManager.flushBuildsWithNoBCList();
     }
 
     private void onInitialBuildConfigs(BuildConfigList buildConfigs) {
@@ -175,7 +175,7 @@ public class BuildConfigWatcher extends BaseWatcher<BuildConfig> {
                 public Void call() throws Exception {
                     // if bc event came after build events, let's poke the BuildWatcher builds with
                     // no BC list to create job runs
-                    BuildWatcher.flushBuildsWithNoBCList();
+                    BuildManager.flushBuildsWithNoBCList();
                     // now, if the build event was lost and never received, builds will stay in new
                     // for 5 minutes ...
                     // let's launch a background thread to clean them up at a quicker interval than
@@ -208,16 +208,16 @@ public class BuildConfigWatcher extends BaseWatcher<BuildConfig> {
         }
     }
 
-    private void upsertJob(final BuildConfig buildConfig) throws Exception {
+    static void upsertJob(final BuildConfig buildConfig) throws Exception {
         if (isPipelineStrategyBuildConfig(buildConfig)) {
             // sync on intern of name should guarantee sync on same actual obj
             synchronized (buildConfig.getMetadata().getUid().intern()) {
-                ACL.impersonate(ACL.SYSTEM, new JobProcessor(this, buildConfig));
+                ACL.impersonate(ACL.SYSTEM, new JobProcessor(buildConfig));
             }
         }
     }
 
-    private void modifyEventToJenkinsJob(BuildConfig buildConfig) throws Exception {
+    static void modifyEventToJenkinsJob(BuildConfig buildConfig) throws Exception {
         if (isPipelineStrategyBuildConfig(buildConfig)) {
             upsertJob(buildConfig);
             return;
@@ -230,7 +230,7 @@ public class BuildConfigWatcher extends BaseWatcher<BuildConfig> {
     // innerDeleteEventToJenkinsJob is the actual delete logic at the heart of
     // deleteEventToJenkinsJob
     // that is either in a sync block or not based on the presence of a BC uid
-    private void innerDeleteEventToJenkinsJob(final BuildConfig buildConfig) throws Exception {
+    private static void innerDeleteEventToJenkinsJob(final BuildConfig buildConfig) throws Exception {
         final Job job = getJobFromBuildConfig(buildConfig);
         if (job != null) {
             // employ intern of the BC UID to facilitate sync'ing on the same
@@ -271,7 +271,7 @@ public class BuildConfigWatcher extends BaseWatcher<BuildConfig> {
     // delete events and build delete events that arrive concurrently and in a
     // nondeterministic
     // order
-    private void deleteEventToJenkinsJob(final BuildConfig buildConfig) throws Exception {
+    static void deleteEventToJenkinsJob(final BuildConfig buildConfig) throws Exception {
         if (buildConfig != null) {
             String bcUid = buildConfig.getMetadata().getUid();
             if (bcUid != null && bcUid.length() > 0) {

@@ -16,6 +16,7 @@
 package io.fabric8.jenkins.openshiftsync;
 
 import static hudson.security.ACL.SYSTEM;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getNamespaceOrUseDefault;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenShiftClient;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -36,6 +37,7 @@ import com.cloudbees.plugins.credentials.common.StandardListBoxModel;
 import hudson.Extension;
 import hudson.Util;
 import hudson.util.ListBoxModel;
+import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 import io.fabric8.openshift.client.OpenShiftClient;
 import jenkins.model.GlobalConfiguration;
 import jenkins.model.Jenkins;
@@ -60,7 +62,7 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
     private int secretListInterval = 300;
     private int configMapListInterval = 300;
     private int imageStreamListInterval = 300;
-
+    private static GlobalPluginConfigurationTimerTask TASK;
     private final static List<BaseWatcher<?>> watchers = new ArrayList<>();
 
     private transient ScheduledFuture<?> schedule;
@@ -247,14 +249,20 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
     private synchronized void configChange() {
         logger.info("OpenShift Sync Plugin processing a newly supplied configuration");
         synchronized (watchers) {
-            logger.info("Existing watchers: " + watchers);
-            for (BaseWatcher<?> watch : watchers) {
-                watch.stop();
+            OpenShiftClient client = OpenShiftUtils.getOpenShiftClient();
+            if (client != null) {
+                if (TASK != null) {
+                    TASK.stop();
+                }
+                SharedInformerFactory informerFactory = getInformerFactory();
+                if (informerFactory != null) {
+                    informerFactory.stopAllRegisteredInformers(true);
+                }
+                logger.info("Existing watchers: stopped and cleared : " + watchers);
+                logger.info("Existing watchers: " + watchers);
             }
-            watchers.clear();
-            logger.info("Existing watchers: stopped and cleared : " + watchers);
-            logger.info("Existing scheduled task:  " + schedule);
 
+            logger.info("Existing scheduled task:  " + schedule);
             if (this.schedule != null && !this.schedule.isCancelled()) {
                 this.schedule.cancel(true);
                 logger.info("Existing scheduled task cancelled:  " + schedule);
@@ -277,9 +285,9 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
             this.namespaces = getNamespaceOrUseDefault(this.namespaces, openShiftClient);
             logger.info("OpenShift Client initialized: " + openShiftClient);
 
-            Runnable task = new GlobalPluginConfigurationTimerTask(this);
+            TASK = new GlobalPluginConfigurationTimerTask(this.namespaces);
             // lets give jenkins a while to get started ;)
-            this.schedule = Timer.get().schedule(task, 1, SECONDS);
+            this.schedule = Timer.get().schedule(TASK, 1, SECONDS);
         } catch (Exception e) {
             Throwable exceptionOrCause = (e.getCause() != null) ? e.getCause() : e;
             logger.log(SEVERE, "Failed to configure OpenShift Jenkins Sync Plugin: " + exceptionOrCause);

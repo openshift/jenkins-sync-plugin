@@ -27,8 +27,11 @@ import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.hasPodTemplate;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.updateAgents;
 import static java.util.Collections.singletonMap;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 import org.slf4j.Logger;
@@ -41,14 +44,14 @@ import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 import io.fabric8.openshift.api.model.ImageStream;
 
-public class ImageStreamInformer implements ResourceEventHandler<ImageStream>, Lifecyclable {
+public class ImageStreamClusterInformer implements ResourceEventHandler<ImageStream>, Lifecyclable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SecretInformer.class.getName());
     private SharedIndexInformer<ImageStream> informer;
-    private String namespace;
+    private Set<String> namespaces;
 
-    public ImageStreamInformer(String namespace) {
-        this.namespace = namespace;
+    public ImageStreamClusterInformer(String[] namespaces) {
+        this.namespaces = new HashSet<>(Arrays.asList(namespaces));
     }
 
     public int getListIntervalInSeconds() {
@@ -56,20 +59,20 @@ public class ImageStreamInformer implements ResourceEventHandler<ImageStream>, L
     }
 
     public void start() {
-        LOGGER.info("Starting ImageStream informer for {} !!" + namespace);
+        LOGGER.info("Starting ImageStream informer for {} !!" + namespaces);
         LOGGER.debug("Listing ImageStream resources");
-        SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
+        SharedInformerFactory factory = getInformerFactory();
         Map<String, String> labels = singletonMap(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUE);
         OperationContext withLabels = new OperationContext().withLabels(labels);
         this.informer = factory.sharedIndexInformerFor(ImageStream.class, withLabels, getListIntervalInSeconds());
         informer.addEventHandler(this);
-        LOGGER.info("ImageStream informer started for namespace: {}" + namespace);
+        LOGGER.info("ImageStream informer started for namespace: {}" + namespaces);
 //        ImageStreamList list = getOpenshiftClient().imageStreams().inNamespace(namespace).withLabels(labels).list();
 //        onInit(list.getItems());
     }
 
     public void stop() {
-        LOGGER.info("Stopping secret informer {} !!" + namespace);
+        LOGGER.info("Stopping secret informer {} !!" + namespaces);
         this.informer.stop();
     }
 
@@ -78,11 +81,16 @@ public class ImageStreamInformer implements ResourceEventHandler<ImageStream>, L
         LOGGER.debug("ImageStream informer  received add event for: {}" + obj);
         if (obj != null) {
             ObjectMeta metadata = obj.getMetadata();
-            String name = metadata.getName();
-            String uid = metadata.getUid();
-            LOGGER.info("ImageStream informer received add event for: {}" + name);
-            List<PodTemplate> slaves = PodTemplateUtils.getPodTemplatesListFromImageStreams(obj);
-            addAgents(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+            String namespace = metadata.getNamespace();
+            if (namespaces.contains(namespace)) {
+                String name = metadata.getName();
+                String uid = metadata.getUid();
+                LOGGER.info("ImageStream informer received add event for: {}" + name);
+                List<PodTemplate> slaves = PodTemplateUtils.getPodTemplatesListFromImageStreams(obj);
+                addAgents(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+            } else {
+                LOGGER.debug("Received event for a namespace we are not watching: {} ... ignoring", namespace);
+            }
         }
     }
 
@@ -92,10 +100,14 @@ public class ImageStreamInformer implements ResourceEventHandler<ImageStream>, L
         if (newObj != null) {
             List<PodTemplate> slaves = PodTemplateUtils.getPodTemplatesListFromImageStreams(newObj);
             ObjectMeta metadata = newObj.getMetadata();
-            String uid = metadata.getUid();
-            String name = metadata.getName();
             String namespace = metadata.getNamespace();
-            updateAgents(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+            if (namespaces.contains(namespace)) {
+                String uid = metadata.getUid();
+                String name = metadata.getName();
+                updateAgents(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+            } else {
+                LOGGER.debug("Received event for a namespace we are not watching: {} ... ignoring", namespace);
+            }
         }
     }
 
@@ -103,14 +115,17 @@ public class ImageStreamInformer implements ResourceEventHandler<ImageStream>, L
     public void onDelete(ImageStream obj, boolean deletedFinalStateUnknown) {
         LOGGER.info("ImageStream informer received delete event for: {}" + obj);
         if (obj != null) {
-            List<PodTemplate> slaves = PodTemplateUtils.getPodTemplatesListFromImageStreams(obj);
             ObjectMeta metadata = obj.getMetadata();
-            String uid = metadata.getUid();
-            String name = metadata.getName();
             String namespace = metadata.getNamespace();
-            deleteAgents(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+            if (namespaces.contains(namespace)) {
+                List<PodTemplate> slaves = PodTemplateUtils.getPodTemplatesListFromImageStreams(obj);
+                String uid = metadata.getUid();
+                String name = metadata.getName();
+                deleteAgents(slaves, IMAGESTREAM_TYPE, uid, name, namespace);
+            } else {
+                LOGGER.debug("Received event for a namespace we are not watching: {} ... ignoring", namespace);
+            }
         }
-
     }
 
     private void onInit(List<ImageStream> list) {
