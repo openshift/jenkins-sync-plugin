@@ -65,6 +65,7 @@ public class BuildClusterInformer implements ResourceEventHandler<Build>, Lifecy
         SharedInformerFactory factory = getInformerFactory();
         this.informer = factory.sharedIndexInformerFor(Build.class, getListIntervalInSeconds());
         this.informer.addEventHandler(this);
+        factory.startAllRegisteredInformers();
         LOGGER.info("Build informer started for namespace: {}" + namespaces);
 //        BuildList list = getOpenshiftClient().builds().inNamespace(namespace).list();
 //        onInit(list.getItems());

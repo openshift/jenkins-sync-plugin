@@ -54,6 +54,7 @@ public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>
         SharedInformerFactory factory = getInformerFactory();
         this.informer = factory.sharedIndexInformerFor(ConfigMap.class, getListIntervalInSeconds());
         informer.addEventHandler(this);
+        factory.startAllRegisteredInformers();
         LOGGER.info("ConfigMap informer started for namespaces: {}" + namespaces);
 //        ConfigMapList list = getOpenshiftClient().configMaps().inNamespace(namespace).list();
 //        onInit(list.getItems());

@@ -47,7 +47,7 @@ public class SecretInformer extends SecretWatcher implements ResourceEventHandle
     }
 
     @Override
-    public int getListIntervalInSeconds() {
+    public int getResyncPeriodMilliseconds() {
         return 1_000 * GlobalPluginConfiguration.get().getSecretListInterval();
     }
 
@@ -57,9 +57,11 @@ public class SecretInformer extends SecretWatcher implements ResourceEventHandle
         SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
         Map<String, String> labels = singletonMap(OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC, VALUE_SECRET_SYNC);
         OperationContext withLabels = new OperationContext().withLabels(labels);
-        this.informer = factory.sharedIndexInformerFor(Secret.class, withLabels, getListIntervalInSeconds());
+        this.informer = factory.sharedIndexInformerFor(Secret.class, withLabels, getResyncPeriodMilliseconds());
         informer.addEventHandler(this);
+        factory.startAllRegisteredInformers();
         LOGGER.info("Secret informer started for namespace: {}" + namespace);
+
 //        SecretList list = getOpenshiftClient().secrets().inNamespace(namespace).withLabels(labels).list();
 //        onInit(list.getItems());
     }

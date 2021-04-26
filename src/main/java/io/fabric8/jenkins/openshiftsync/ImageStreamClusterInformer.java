@@ -54,7 +54,7 @@ public class ImageStreamClusterInformer implements ResourceEventHandler<ImageStr
         this.namespaces = new HashSet<>(Arrays.asList(namespaces));
     }
 
-    public int getListIntervalInSeconds() {
+    public int getResyncPeriodMilliseconds() {
         return 1_000 * GlobalPluginConfiguration.get().getImageStreamListInterval();
     }
 
@@ -64,8 +64,9 @@ public class ImageStreamClusterInformer implements ResourceEventHandler<ImageStr
         SharedInformerFactory factory = getInformerFactory();
         Map<String, String> labels = singletonMap(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUE);
         OperationContext withLabels = new OperationContext().withLabels(labels);
-        this.informer = factory.sharedIndexInformerFor(ImageStream.class, withLabels, getListIntervalInSeconds());
+        this.informer = factory.sharedIndexInformerFor(ImageStream.class, withLabels, getResyncPeriodMilliseconds());
         informer.addEventHandler(this);
+        factory.startAllRegisteredInformers();
         LOGGER.info("ImageStream informer started for namespace: {}" + namespaces);
 //        ImageStreamList list = getOpenshiftClient().imageStreams().inNamespace(namespace).withLabels(labels).list();
 //        onInit(list.getItems());

@@ -43,7 +43,7 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
         this.namespace = namespace;
     }
 
-    public int getListIntervalInSeconds() {
+    public int getResyncPeriodMilliseconds() {
         return 1_000 * GlobalPluginConfiguration.get().getBuildConfigListInterval();
     }
 
@@ -51,8 +51,9 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
         LOGGER.info("Starting BuildConfig informer for {} !!" + namespace);
         LOGGER.debug("listing BuildConfig resources");
         SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
-        this.informer = factory.sharedIndexInformerFor(BuildConfig.class, getListIntervalInSeconds());
+        this.informer = factory.sharedIndexInformerFor(BuildConfig.class, getResyncPeriodMilliseconds());
         informer.addEventHandler(this);
+        factory.startAllRegisteredInformers();
         LOGGER.info("BuildConfig informer started for namespace: {}" + namespace);
         // BuildConfigList list =
         // getOpenshiftClient().buildConfigs().inNamespace(namespace).list();

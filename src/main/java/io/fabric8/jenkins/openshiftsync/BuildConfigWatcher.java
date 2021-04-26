@@ -79,7 +79,7 @@ public class BuildConfigWatcher extends BaseWatcher<BuildConfig> {
     }
 
     @Override
-    public int getListIntervalInSeconds() {
+    public int getResyncPeriodMilliseconds() {
         return GlobalPluginConfiguration.get().getBuildConfigListInterval();
     }
 

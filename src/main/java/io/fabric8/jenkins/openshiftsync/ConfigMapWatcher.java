@@ -43,7 +43,7 @@ public class ConfigMapWatcher extends BaseWatcher<ConfigMap> {
     }
 
     @Override
-    public int getListIntervalInSeconds() {
+    public int getResyncPeriodMilliseconds() {
         return GlobalPluginConfiguration.get().getConfigMapListInterval();
     }
 

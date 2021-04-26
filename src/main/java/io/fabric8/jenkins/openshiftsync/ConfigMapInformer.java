@@ -41,7 +41,7 @@ public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEvent
     }
 
     @Override
-    public int getListIntervalInSeconds() {
+    public int getResyncPeriodMilliseconds() {
         return 1_000 * GlobalPluginConfiguration.get().getConfigMapListInterval();
     }
 
@@ -49,8 +49,9 @@ public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEvent
         LOGGER.info("Starting configMap informer for {} !!" + namespace);
         LOGGER.debug("listing ConfigMap resources");
         SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
-        this.informer = factory.sharedIndexInformerFor(ConfigMap.class, getListIntervalInSeconds());
+        this.informer = factory.sharedIndexInformerFor(ConfigMap.class, getResyncPeriodMilliseconds());
         informer.addEventHandler(this);
+        factory.startAllRegisteredInformers();
         LOGGER.info("ConfigMap informer started for namespace: {}" + namespace);
 //        ConfigMapList list = getOpenshiftClient().configMaps().inNamespace(namespace).list();
 //        onInit(list.getItems());

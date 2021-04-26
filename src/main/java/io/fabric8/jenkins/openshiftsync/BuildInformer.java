@@ -52,7 +52,7 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
      * builds getting kicked off so quit depending on so moved off of concurrent
      * hash set to concurrent hash map using namepace/name key
      */
-    public int getListIntervalInSeconds() {
+    public int getResyncPeriodMilliseconds() {
         return 1_000 * GlobalPluginConfiguration.get().getBuildListInterval();
     }
 
@@ -60,8 +60,9 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
         LOGGER.info("Starting Build informer for {} !!" + namespace);
         LOGGER.debug("Listing Build resources");
         SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
-        this.informer = factory.sharedIndexInformerFor(Build.class, getListIntervalInSeconds());
+        this.informer = factory.sharedIndexInformerFor(Build.class, getResyncPeriodMilliseconds());
         this.informer.addEventHandler(this);
+        factory.startAllRegisteredInformers();
         LOGGER.info("Build informer started for namespace: {}" + namespace);
 //        BuildList list = getOpenshiftClient().builds().inNamespace(namespace).list();
 //        onInit(list.getItems());

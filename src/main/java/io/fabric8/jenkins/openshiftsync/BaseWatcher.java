@@ -42,7 +42,7 @@ public abstract class BaseWatcher<T> implements Watcher<T> {
         this.namespace = namespace;
     }
 
-    public abstract int getListIntervalInSeconds();
+    public abstract int getResyncPeriodMilliseconds();
 
     protected abstract void start();
 

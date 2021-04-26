@@ -137,9 +137,12 @@ public class BuildSyncRunListener extends RunListener<Run> {
 
     @Override
     public void onStarted(Run run, TaskListener listener) {
+        logger.info("Run started: " + run.getFullDisplayName());
         if (shouldPollRun(run)) {
+            logger.info("Processing run: " + run.getDisplayName());
             try {
                 BuildCause cause = (BuildCause) run.getCause(BuildCause.class);
+                logger.info("Build cause for the run is: " + cause);
                 if (cause != null) {
                     // TODO This should be a link to the OpenShift console.
                     run.setDescription(cause.getShortDescription());
@@ -152,7 +155,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
             }
             checkTimerStarted();
         } else {
-            logger.trace("not polling polling build " + run.getUrl() + " as its not a WorkflowJob");
+            logger.info("Not polling polling build " + run.getUrl() + " as its not a WorkflowJob");
         }
         super.onStarted(run, listener);
     }

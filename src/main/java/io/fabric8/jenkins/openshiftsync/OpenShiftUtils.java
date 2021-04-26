@@ -38,6 +38,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.builder.ReflectionToStringBuilder;
 import org.apache.tools.ant.filters.StringInputStream;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormatter;
@@ -86,9 +87,7 @@ public class OpenShiftUtils {
 
     private static OpenShiftClient openShiftClient;
     private static String jenkinsPodNamespace = null;
-    private static SharedInformerFactory factory;
     private static final Jenkins JENKINS_INSTANCE = Jenkins.getInstanceOrNull();
-    private static final Object lock = new Object();
 
     static {
         jenkinsPodNamespace = System.getProperty(Constants.OPENSHIFT_PROJECT_ENV_VAR_NAME);
@@ -131,8 +130,9 @@ public class OpenShiftUtils {
      *
      * @param serverUrl the optional URL of where the OpenShift cluster API server
      *                  is running
+     * @param maxConnections2 
      */
-    public synchronized static void initializeOpenShiftClient(String serverUrl) {
+    public synchronized static void initializeOpenShiftClient(String serverUrl, int maxConnections) {
         if (openShiftClient != null) {
             logger.log(INFO, "Closing already initialized openshift client");
             openShiftClient.close();
@@ -142,6 +142,8 @@ public class OpenShiftUtils {
             configBuilder.withMasterUrl(serverUrl);
         }
         Config config = configBuilder.build();
+        logger.log(INFO, "Current OpenShift Client Configuration: " + ReflectionToStringBuilder.toString(config));
+        
         String version = JENKINS_INSTANCE.getPluginManager().getPlugin("openshift-sync").getVersion();
         config.setUserAgent("openshift-sync-plugin-" + version + "/fabric8-" + Version.clientVersion());
         openShiftClient = new DefaultOpenShiftClient(config);
@@ -149,8 +151,9 @@ public class OpenShiftUtils {
 
         DefaultOpenShiftClient defClient = (DefaultOpenShiftClient) openShiftClient;
         Dispatcher dispatcher = defClient.getHttpClient().dispatcher();
-        dispatcher.setMaxRequestsPerHost(100);
-        dispatcher.setMaxRequests(100);
+//        int maxConnections = 100;//GlobalPluginConfiguration.get().getMaxConnections();
+        dispatcher.setMaxRequestsPerHost(maxConnections);
+        dispatcher.setMaxRequests(maxConnections);
     }
 
     public synchronized static OpenShiftClient getOpenShiftClient() {
@@ -160,6 +163,10 @@ public class OpenShiftUtils {
     // Get the current OpenShiftClient and configure to use the current Oauth
     // token.
     public synchronized static OpenShiftClient getAuthenticatedOpenShiftClient() {
+        if (openShiftClient == null) {
+            GlobalPluginConfiguration config = GlobalPluginConfiguration.get();
+            initializeOpenShiftClient(config.getServer(), config.getMaxConnections());
+        }
         if (openShiftClient != null) {
             String token = CredentialsUtils.getCurrentToken();
             if (token.length() > 0) {
@@ -170,18 +177,37 @@ public class OpenShiftUtils {
     }
 
     public static SharedInformerFactory getInformerFactory() {
-        if (factory == null) {
+        return getAuthenticatedOpenShiftClient().informers();
+/*        if (factory == null) {
             synchronized (lock) {
                 factory = getAuthenticatedOpenShiftClient().informers();
             }
         }
-        return factory;
+        return factory;*/
     }
 
     public synchronized static void shutdownOpenShiftClient() {
+        logger.info("Stopping openshift client: " + openShiftClient);
         if (openShiftClient != null) {
+            
+            // All this stuff is done by  openShiftClient.close();
+            
+//            DefaultOpenShiftClient client = (DefaultOpenShiftClient) openShiftClient;
+//            Dispatcher dispatcher = client.getHttpClient().dispatcher();
+//            ExecutorService executorService = dispatcher.executorService();
+//            try {
+//                dispatcher.cancelAll();
+//                client.getHttpClient().connectionPool().evictAll();
+//                //TODO Akram: shutting donw the executorService prevents other informers to re-attach to it.
+//                executorService.shutdown();
+//                TimeUnit.SECONDS.sleep(1);
+//            } catch (Exception e) {
+//                logger.warning("Error while stopping executor thread");
+//                executorService.shutdownNow();
+//            }
             openShiftClient.close();
             openShiftClient = null;
+//            factory = null;
         }
     }
 

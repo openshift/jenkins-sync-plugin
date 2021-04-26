@@ -46,7 +46,7 @@ public class SecretWatcher extends BaseWatcher<Secret> {
     }
 
     @Override
-    public int getListIntervalInSeconds() {
+    public int getResyncPeriodMilliseconds() {
         return GlobalPluginConfiguration.get().getSecretListInterval();
     }
 

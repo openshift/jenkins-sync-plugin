@@ -47,7 +47,7 @@ public class ImageStreamWatcher extends BaseWatcher<ImageStream> {
     }
 
     @Override
-    public int getListIntervalInSeconds() {
+    public int getResyncPeriodMilliseconds() {
         return GlobalPluginConfiguration.get().getImageStreamListInterval();
     }
 

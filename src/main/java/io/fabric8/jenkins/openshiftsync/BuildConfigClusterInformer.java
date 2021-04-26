@@ -56,6 +56,7 @@ public class BuildConfigClusterInformer implements ResourceEventHandler<BuildCon
         SharedInformerFactory factory = getInformerFactory();
         this.informer = factory.sharedIndexInformerFor(BuildConfig.class, getListIntervalInSeconds());
         informer.addEventHandler(this);
+        factory.startAllRegisteredInformers();
         LOGGER.info("BuildConfig informer started for namespace: {}" + namespaces);
         // BuildConfigList list =
         // getOpenshiftClient().buildConfigs().inNamespace(namespace).list();
