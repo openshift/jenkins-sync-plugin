@@ -73,7 +73,7 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
             String name = metadata.getName();
             LOGGER.info("BuildConfig informer received add event for: {}" + name);
             try {
-                BuildConfigWatcher.upsertJob(obj);
+                BuildConfigManager.upsertJob(obj);
             } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
@@ -89,7 +89,7 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
             String newRv = newObj.getMetadata().getResourceVersion();
             LOGGER.info("BuildConfig informer received update event for: {} to: {}" + oldRv + " " + newRv);
             try {
-                BuildConfigWatcher.modifyEventToJenkinsJob(newObj);
+                BuildConfigManager.modifyEventToJenkinsJob(newObj);
             } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
@@ -102,7 +102,7 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
         LOGGER.info("BuildConfig informer received delete event for: {}" + obj);
         if (obj != null) {
             try {
-                BuildConfigWatcher.deleteEventToJenkinsJob(obj);
+                BuildConfigManager.deleteEventToJenkinsJob(obj);
             } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
@@ -113,7 +113,7 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
     private void onInit(List<BuildConfig> list) {
         for (BuildConfig buildConfig : list) {
             try {
-                BuildConfigWatcher.upsertJob(buildConfig);
+                BuildConfigManager.upsertJob(buildConfig);
             } catch (Exception e) {
                 LOGGER.error("Failed to update job", e);
             }

@@ -31,17 +31,18 @@ import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 
-public class ConfigMapInformer extends ConfigMapWatcher implements ResourceEventHandler<ConfigMap>, Lifecyclable {
+public class ConfigMapInformer implements ResourceEventHandler<ConfigMap>, Lifecyclable,Resyncable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SecretInformer.class.getName());
     private SharedIndexInformer<ConfigMap> informer;
+    private String namespace;
 
     public ConfigMapInformer(String namespace) {
-        super(namespace);
+        this.namespace = namespace;
     }
 
     @Override
-    public int getResyncPeriodMilliseconds() {
+    public long getResyncPeriodMilliseconds() {
         return 1_000 * GlobalPluginConfiguration.get().getConfigMapListInterval();
     }
 

@@ -34,20 +34,20 @@ import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 
-public class SecretInformer extends SecretWatcher implements ResourceEventHandler<Secret>, Lifecyclable {
+public class SecretInformer implements ResourceEventHandler<Secret>, Lifecyclable, Resyncable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SecretInformer.class.getName());
 
     private final static ConcurrentHashMap<String, String> trackedSecrets = new ConcurrentHashMap<String, String>();
-
+    private String namespace;
     private SharedIndexInformer<Secret> informer;
 
     public SecretInformer(String namespace) {
-        super(namespace);
+        this.namespace = namespace;
     }
 
     @Override
-    public int getResyncPeriodMilliseconds() {
+    public long getResyncPeriodMilliseconds() {
         return 1_000 * GlobalPluginConfiguration.get().getSecretListInterval();
     }
 
@@ -105,8 +105,8 @@ public class SecretInformer extends SecretWatcher implements ResourceEventHandle
     private void onInit(List<Secret> list) {
         for (Secret secret : list) {
             try {
-                if ( SecretManager.validSecret(secret) &&  SecretManager.shouldProcessSecret(secret)) {
-                    SecretManager. insertOrUpdateCredentialFromSecret(secret);
+                if (SecretManager.validSecret(secret) && SecretManager.shouldProcessSecret(secret)) {
+                    SecretManager.insertOrUpdateCredentialFromSecret(secret);
                     trackedSecrets.put(secret.getMetadata().getUid(), secret.getMetadata().getResourceVersion());
                 }
             } catch (Exception e) {
