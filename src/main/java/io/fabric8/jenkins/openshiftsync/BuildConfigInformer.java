@@ -61,8 +61,10 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
     }
 
     public void stop() {
-        LOGGER.info("Stopping secret informer {} !!" + namespace);
-        this.informer.stop();
+        LOGGER.info("Stopping informer {} !!" + namespace);
+        if( this.informer != null ) {
+          this.informer.stop();
+        }
     }
 
     @Override

@@ -69,8 +69,10 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
     }
 
     public void stop() {
-        LOGGER.info("Stopping Builder informer {} !!" + namespace);
+      LOGGER.info("Stopping informer {} !!" + namespace);
+      if( this.informer != null ) {
         this.informer.stop();
+      }
     }
 
     @Override

@@ -72,9 +72,12 @@ public class BuildClusterInformer implements ResourceEventHandler<Build>, Lifecy
     }
 
     public void stop() {
-        LOGGER.info("Stopping Builder informer {} !!" + namespaces);
+      LOGGER.info("Stopping informer {} !!" + namespaces);
+      if( this.informer != null ) {
         this.informer.stop();
+      }
     }
+
 
     @Override
     public void onAdd(Build obj) {

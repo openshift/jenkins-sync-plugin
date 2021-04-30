@@ -69,9 +69,12 @@ public class SecretClusterInformer implements ResourceEventHandler<Secret>, Life
     }
 
     public void stop() {
-        LOGGER.info("Stopping secret informer {} !!" + namespaces);
+      LOGGER.info("Stopping informer {} !!" + namespaces);
+      if( this.informer != null ) {
         this.informer.stop();
+      }
     }
+
 
     @Override
     public void onAdd(Secret obj) {

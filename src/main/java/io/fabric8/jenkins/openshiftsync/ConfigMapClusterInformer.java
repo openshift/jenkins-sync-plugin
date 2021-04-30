@@ -61,8 +61,10 @@ public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>
     }
 
     public void stop() {
-        LOGGER.info("Stopping configMap informer {} !!" + namespaces);
+      LOGGER.info("Stopping informer {} !!" + namespaces);
+      if( this.informer != null ) {
         this.informer.stop();
+      }
     }
 
     @Override

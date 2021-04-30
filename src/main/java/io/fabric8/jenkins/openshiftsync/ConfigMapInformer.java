@@ -59,9 +59,12 @@ public class ConfigMapInformer implements ResourceEventHandler<ConfigMap>, Lifec
     }
 
     public void stop() {
-        LOGGER.info("Stopping configMap informer {} !!" + namespace);
+      LOGGER.info("Stopping informer {} !!" + namespace);
+      if( this.informer != null ) {
         this.informer.stop();
+      }
     }
+
 
     @Override
     public void onAdd(ConfigMap obj) {

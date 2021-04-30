@@ -67,9 +67,12 @@ public class SecretInformer implements ResourceEventHandler<Secret>, Lifecyclabl
     }
 
     public void stop() {
-        LOGGER.info("Stopping secret informer {} !!" + namespace);
+      LOGGER.info("Stopping informer {} !!" + namespace);
+      if( this.informer != null ) {
         this.informer.stop();
+      }
     }
+
 
     @Override
     public void onAdd(Secret obj) {
