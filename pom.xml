@@ -22,7 +22,7 @@
     <spotbugs.failOnError>false</spotbugs.failOnError>
     <animal.sniffer.skip>true</animal.sniffer.skip>
     <enforcer.skip>true</enforcer.skip>
-    <jenkins.version>2.277</jenkins.version>
+    <jenkins.version>2.289.1</jenkins.version>
     <java.level>8</java.level>
     <jenkins-test-harness.version>2.71</jenkins-test-harness.version>
     <openshift-client.version>5.4.1</openshift-client.version>
@@ -157,13 +157,18 @@
     <dependency>
       <groupId>org.csanchez.jenkins.plugins</groupId>
       <artifactId>kubernetes</artifactId>
-      <version>1.30.0-rc3234.042eaf349b13</version>
+      <version>1.30.0</version>
     </dependency>
-     <dependency>
-       <groupId>org.jenkins-ci.plugins</groupId>
-       <artifactId>kubernetes-client-api</artifactId>
-       <version>5.4.1-beta-1</version>
-     </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>kubernetes-client-api</artifactId>
+      <version>5.4.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>jackson2-api</artifactId>
+      <version>2.12.3</version>
+    </dependency> 
 
     <dependency>
       <groupId>org.eclipse.jetty</groupId>
@@ -176,8 +181,8 @@
     <dependencies>
       <dependency>
         <groupId>io.jenkins.tools.bom</groupId>
-        <artifactId>bom-2.263.x</artifactId>
-        <version>21</version>
+        <artifactId>bom-2.277.x</artifactId>
+        <version>26</version>
         <scope>import</scope>
         <type>pom</type>
       </dependency>
