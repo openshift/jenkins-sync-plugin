@@ -69,6 +69,10 @@
 
   <repositories>
     <repository>
+      <id>incremental-repo.jenkins-ci.org</id>
+      <url>https://repo.jenkins-ci.org/incrementals/</url>
+    </repository>
+    <repository>
       <id>repo.jenkins-ci.org</id>
       <url>https://repo.jenkins-ci.org/public/</url>
     </repository>
@@ -153,7 +157,7 @@
     <dependency>
       <groupId>org.csanchez.jenkins.plugins</groupId>
       <artifactId>kubernetes</artifactId>
-      <version>1.28.3</version>
+      <version>1.30.0-rc3234.042eaf349b13</version>
     </dependency>
      <dependency>
        <groupId>org.jenkins-ci.plugins</groupId>
