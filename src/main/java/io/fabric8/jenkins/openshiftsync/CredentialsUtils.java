@@ -48,7 +48,6 @@ import com.cloudbees.plugins.credentials.impl.CertificateCredentialsImpl;
 import com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.openshift.jenkins.plugins.OpenShiftTokenCredentials;
 
 import hudson.model.Fingerprint;
 import hudson.security.ACL;
