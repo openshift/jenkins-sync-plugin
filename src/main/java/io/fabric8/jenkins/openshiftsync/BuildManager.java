@@ -15,17 +15,17 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
-import static io.fabric8.jenkins.openshiftsync.Annotations.BUILDCONFIG_NAME;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfigNameNamespace;
 import static io.fabric8.jenkins.openshiftsync.BuildPhases.CANCELLED;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_BUILD_NUMBER;
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_LABELS_BUILD_CONFIG_NAME;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.cancelBuild;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.deleteRun;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.getJobFromBuild;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.handleBuildList;
 import static io.fabric8.jenkins.openshiftsync.JenkinsUtils.triggerJob;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAnnotation;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getLabel;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isCancellable;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isCancelled;
@@ -313,8 +313,8 @@ public class BuildManager {
                 // object
                 bcUid = ref.getUid().intern();
                 synchronized (bcUid) {
-                    // if entire job already deleted via bc delete, just return
-                    if (getJobFromBuildConfigNameNamespace(getAnnotation(build, BUILDCONFIG_NAME),
+                    // if entire job already deleted via bc delete, just return; NOTE: could just use ref.getName() vs.label
+                    if (getJobFromBuildConfigNameNamespace(getLabel(build, OPENSHIFT_LABELS_BUILD_CONFIG_NAME),
                             build.getMetadata().getNamespace()) == null) {
                         return;
                     }

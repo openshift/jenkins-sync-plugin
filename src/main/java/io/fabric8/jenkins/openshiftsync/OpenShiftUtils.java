@@ -610,6 +610,17 @@ public class OpenShiftUtils {
         return builder.toString();
     }
 
+    public static String getLabel(HasMetadata resource, String name) {
+      ObjectMeta metadata = resource.getMetadata();
+      if (metadata != null) {
+          Map<String, String> labels = metadata.getLabels();
+          if (labels != null) {
+              return labels.get(name);
+          }
+      }
+      return null;
+    }
+
     public static String getAnnotation(HasMetadata resource, String name) {
         ObjectMeta metadata = resource.getMetadata();
         if (metadata != null) {
