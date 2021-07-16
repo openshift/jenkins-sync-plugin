@@ -22,7 +22,6 @@ public class Annotations {
 	public static final String GENERATED_BY = "jenkins.openshift.io/generated-by";
 	public static final String GENERATED_BY_JENKINS = "jenkins";
 	public static final String DISABLE_SYNC_CREATE = "jenkins.openshift.io/disable-sync-create";
-	public static final String BUILDCONFIG_NAME = "openshift.io/build-config.name";
 	public static final String SECRET_NAME = "jenkins.openshift.io/secret.name";
 	public static final String AUTOSTART = "jenkins.openshift.io/autostart";
 }
