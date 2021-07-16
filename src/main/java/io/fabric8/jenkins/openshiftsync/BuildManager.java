@@ -37,7 +37,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.ConcurrentModificationException;
+import java.util.Iterator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -60,217 +62,217 @@ import jenkins.security.NotReallyRoleSensitiveCallable;
 
 @SuppressWarnings({ "deprecation", "serial" })
 public class BuildManager {
-    private static final Logger logger = Logger.getLogger(BuildManager.class.getName());
+  private static final Logger logger = Logger.getLogger(BuildManager.class.getName());
 
-    /**
-     * now that listing interval is 5 minutes (used to be 10 seconds), we have seen
-     * timing windows where if the build watch events come before build config watch
-     * events when both are created in a simultaneous fashion, there is an up to 5
-     * minute delay before the job run gets kicked off started seeing duplicate
-     * builds getting kicked off so quit depending on so moved off of concurrent
-     * hash set to concurrent hash map using namepace/name key
-     */
-    protected static final ConcurrentHashMap<String, Build> buildsWithNoBCList = new ConcurrentHashMap<String, Build>();
+  /**
+   * now that listing interval is 5 minutes (used to be 10 seconds), we have seen
+   * timing windows where if the build watch events come before build config watch
+   * events when both are created in a simultaneous fashion, there is an up to 5
+   * minute delay before the job run gets kicked off started seeing duplicate
+   * builds getting kicked off so quit depending on so moved off of concurrent
+   * hash set to concurrent hash map using namepace/name key
+   */
+  protected static final ConcurrentHashMap<String, Build> buildsWithNoBCList = new ConcurrentHashMap<String, Build>();
 
-    public static void onInitialBuilds(BuildList buildList) {
-        if (buildList == null)
-            return;
-        List<Build> items = buildList.getItems();
-        if (items != null) {
-            Collections.sort(items, new Comparator<Build>() {
-                @Override
-                public int compare(Build b1, Build b2) {
-                    if (b1.getMetadata().getAnnotations() == null
-                            || b1.getMetadata().getAnnotations().get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER) == null) {
-                        logger.warning("cannot compare build " + b1.getMetadata().getName() + " from namespace "
-                                + b1.getMetadata().getNamespace() + ", has bad annotations: "
-                                + b1.getMetadata().getAnnotations());
-                        return 0;
-                    }
-                    if (b2.getMetadata().getAnnotations() == null
-                            || b2.getMetadata().getAnnotations().get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER) == null) {
-                        logger.warning("cannot compare build " + b2.getMetadata().getName() + " from namespace "
-                                + b2.getMetadata().getNamespace() + ", has bad annotations: "
-                                + b2.getMetadata().getAnnotations());
-                        return 0;
-                    }
-                    int rc = 0;
-                    try {
-                        rc = Long.compare(
+  public static void onInitialBuilds(BuildList buildList) {
+    if (buildList == null)
+      return;
+    List<Build> items = buildList.getItems();
+    if (items != null) {
+      Collections.sort(items, new Comparator<Build>() {
+        @Override
+        public int compare(Build b1, Build b2) {
+          if (b1.getMetadata().getAnnotations() == null
+            || b1.getMetadata().getAnnotations().get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER) == null) {
+            logger.warning("cannot compare build " + b1.getMetadata().getName() + " from namespace "
+              + b1.getMetadata().getNamespace() + ", has bad annotations: "
+              + b1.getMetadata().getAnnotations());
+            return 0;
+          }
+          if (b2.getMetadata().getAnnotations() == null
+            || b2.getMetadata().getAnnotations().get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER) == null) {
+            logger.warning("cannot compare build " + b2.getMetadata().getName() + " from namespace "
+              + b2.getMetadata().getNamespace() + ", has bad annotations: "
+              + b2.getMetadata().getAnnotations());
+            return 0;
+          }
+          int rc = 0;
+          try {
+            rc = Long.compare(
 
-                                Long.parseLong(
-                                        b1.getMetadata().getAnnotations().get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER)),
-                                Long.parseLong(
-                                        b2.getMetadata().getAnnotations().get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER)));
-                    } catch (Throwable t) {
-                        logger.log(Level.FINE, "onInitialBuilds", t);
-                    }
-                    return rc;
-                }
-            });
-
-            // We need to sort the builds into their build configs so we can
-            // handle build run policies correctly.
-            Map<String, BuildConfig> buildConfigMap = new HashMap<>();
-            Map<BuildConfig, List<Build>> buildConfigBuildMap = new HashMap<>(items.size());
-            for (Build b : items) {
-                if (!OpenShiftUtils.isPipelineStrategyBuild(b))
-                    continue;
-                String buildConfigName = b.getStatus().getConfig().getName();
-                if (StringUtils.isEmpty(buildConfigName)) {
-                    continue;
-                }
-                String namespace = b.getMetadata().getNamespace();
-                String bcMapKey = namespace + "/" + buildConfigName;
-                BuildConfig bc = buildConfigMap.get(bcMapKey);
-                if (bc == null) {
-                    bc = getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace)
-                            .withName(buildConfigName).get();
-                    if (bc == null) {
-                        // if the bc is not there via a REST get, then it is not
-                        // going to be, and we are not handling manual creation
-                        // of pipeline build objects, so don't bother with "no bc list"
-                        continue;
-                    }
-                    buildConfigMap.put(bcMapKey, bc);
-                }
-                List<Build> bcBuilds = buildConfigBuildMap.get(bc);
-                if (bcBuilds == null) {
-                    bcBuilds = new ArrayList<>();
-                    buildConfigBuildMap.put(bc, bcBuilds);
-                }
-                bcBuilds.add(b);
-            }
-
-            // Now handle the builds.
-            for (Map.Entry<BuildConfig, List<Build>> buildConfigBuilds : buildConfigBuildMap.entrySet()) {
-                BuildConfig bc = buildConfigBuilds.getKey();
-                if (bc.getMetadata() == null) {
-                    // Should never happen but let's be safe...
-                    continue;
-                }
-                WorkflowJob job = getJobFromBuildConfig(bc);
-                if (job == null) {
-                    List<Build> builds = buildConfigBuilds.getValue();
-                    for (Build b : builds) {
-                        logger.info("skipping listed new build " + b.getMetadata().getName() + " no job at this time");
-                        addBuildToNoBCList(b);
-                    }
-                    continue;
-                }
-                BuildConfigProjectProperty bcp = job.getProperty(BuildConfigProjectProperty.class);
-                if (bcp == null) {
-                    List<Build> builds = buildConfigBuilds.getValue();
-                    for (Build b : builds) {
-                        logger.info("skipping listed new build " + b.getMetadata().getName() + " no prop at this time");
-                        addBuildToNoBCList(b);
-                    }
-                    continue;
-                }
-                List<Build> builds = buildConfigBuilds.getValue();
-                handleBuildList(job, builds, bcp);
-            }
+              Long.parseLong(
+                b1.getMetadata().getAnnotations().get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER)),
+              Long.parseLong(
+                b2.getMetadata().getAnnotations().get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER)));
+          } catch (Throwable t) {
+            logger.log(Level.FINE, "onInitialBuilds", t);
+          }
+          return rc;
         }
+      });
+
+      // We need to sort the builds into their build configs so we can
+      // handle build run policies correctly.
+      Map<String, BuildConfig> buildConfigMap = new HashMap<>();
+      Map<BuildConfig, List<Build>> buildConfigBuildMap = new HashMap<>(items.size());
+      for (Build b : items) {
+        if (!OpenShiftUtils.isPipelineStrategyBuild(b))
+          continue;
+        String buildConfigName = b.getStatus().getConfig().getName();
+        if (StringUtils.isEmpty(buildConfigName)) {
+          continue;
+        }
+        String namespace = b.getMetadata().getNamespace();
+        String bcMapKey = namespace + "/" + buildConfigName;
+        BuildConfig bc = buildConfigMap.get(bcMapKey);
+        if (bc == null) {
+          bc = getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(namespace)
+            .withName(buildConfigName).get();
+          if (bc == null) {
+            // if the bc is not there via a REST get, then it is not
+            // going to be, and we are not handling manual creation
+            // of pipeline build objects, so don't bother with "no bc list"
+            continue;
+          }
+          buildConfigMap.put(bcMapKey, bc);
+        }
+        List<Build> bcBuilds = buildConfigBuildMap.get(bc);
+        if (bcBuilds == null) {
+          bcBuilds = new ArrayList<>();
+          buildConfigBuildMap.put(bc, bcBuilds);
+        }
+        bcBuilds.add(b);
+      }
+
+      // Now handle the builds.
+      for (Map.Entry<BuildConfig, List<Build>> buildConfigBuilds : buildConfigBuildMap.entrySet()) {
+        BuildConfig bc = buildConfigBuilds.getKey();
+        if (bc.getMetadata() == null) {
+          // Should never happen but let's be safe...
+          continue;
+        }
+        WorkflowJob job = getJobFromBuildConfig(bc);
+        if (job == null) {
+          List<Build> builds = buildConfigBuilds.getValue();
+          for (Build b : builds) {
+            logger.info("skipping listed new build " + b.getMetadata().getName() + " no job at this time");
+            addBuildToNoBCList(b);
+          }
+          continue;
+        }
+        BuildConfigProjectProperty bcp = job.getProperty(BuildConfigProjectProperty.class);
+        if (bcp == null) {
+          List<Build> builds = buildConfigBuilds.getValue();
+          for (Build b : builds) {
+            logger.info("skipping listed new build " + b.getMetadata().getName() + " no prop at this time");
+            addBuildToNoBCList(b);
+          }
+          continue;
+        }
+        List<Build> builds = buildConfigBuilds.getValue();
+        handleBuildList(job, builds, bcp);
+      }
     }
+  }
 
-    static void modifyEventToJenkinsJobRun(Build build) {
-        BuildStatus status = build.getStatus();
-        if (status != null && isCancellable(status) && isCancelled(status)) {
-            WorkflowJob job = getJobFromBuild(build);
-            if (job != null) {
-                cancelBuild(job, build);
-            } else {
-                removeBuildFromNoBCList(build);
-            }
-        } else {
-            // see if any pre-BC cached builds can now be flushed
-            flushBuildsWithNoBCList();
-        }
+  static void modifyEventToJenkinsJobRun(Build build) {
+    BuildStatus status = build.getStatus();
+    if (status != null && isCancellable(status) && isCancelled(status)) {
+      WorkflowJob job = getJobFromBuild(build);
+      if (job != null) {
+        cancelBuild(job, build);
+      } else {
+        removeBuildFromNoBCList(build);
+      }
+    } else {
+      // see if any pre-BC cached builds can now be flushed
+      flushBuildsWithNoBCList();
     }
+  }
 
-    public static boolean addEventToJenkinsJobRun(Build build) throws IOException {
-        // should have been caught upstack, but just in case since public method
-        if (!OpenShiftUtils.isPipelineStrategyBuild(build))
-            return false;
-        BuildStatus status = build.getStatus();
-        if (status != null) {
-            if (isCancelled(status)) {
-                updateOpenShiftBuildPhase(build, CANCELLED);
-                return false;
-            }
-            if (!isNew(status)) {
-                return false;
-            }
-        }
-
-        WorkflowJob job = getJobFromBuild(build);
-        if (job != null) {
-            return triggerJob(job, build);
-        }
-        logger.info("skipping watch event for build " + build.getMetadata().getName() + " no job at this time");
-        addBuildToNoBCList(build);
+  public static boolean addEventToJenkinsJobRun(Build build) throws IOException {
+    // should have been caught upstack, but just in case since public method
+    if (!OpenShiftUtils.isPipelineStrategyBuild(build))
+      return false;
+    BuildStatus status = build.getStatus();
+    if (status != null) {
+      if (isCancelled(status)) {
+        updateOpenShiftBuildPhase(build, CANCELLED);
         return false;
+      }
+      if (!isNew(status)) {
+        return false;
+      }
     }
 
-    static void addBuildToNoBCList(Build build) {
-        // should have been caught upstack, but just in case since public method
-        if (!OpenShiftUtils.isPipelineStrategyBuild(build))
-            return;
+    WorkflowJob job = getJobFromBuild(build);
+    if (job != null) {
+      return triggerJob(job, build);
+    }
+    logger.info("skipping watch event for build " + build.getMetadata().getName() + " no job at this time");
+    addBuildToNoBCList(build);
+    return false;
+  }
+
+  static void addBuildToNoBCList(Build build) {
+    // should have been caught upstack, but just in case since public method
+    if (!OpenShiftUtils.isPipelineStrategyBuild(build))
+      return;
+    try {
+      buildsWithNoBCList.put(build.getMetadata().getNamespace() + build.getMetadata().getName(), build);
+    } catch (ConcurrentModificationException | IllegalArgumentException | UnsupportedOperationException
+      | NullPointerException e) {
+      logger.log(Level.WARNING, "Failed to add item " + build.getMetadata().getName(), e);
+    }
+  }
+
+  static void removeBuildFromNoBCList(Build build) {
+    buildsWithNoBCList.remove(build.getMetadata().getNamespace() + build.getMetadata().getName());
+  }
+
+  // trigger any builds whose watch events arrived before the
+  // corresponding build config watch events
+  public static void flushBuildsWithNoBCList() {
+
+    ConcurrentHashMap<String, Build> clone = null;
+    synchronized (buildsWithNoBCList) {
+      clone = new ConcurrentHashMap<String, Build>(buildsWithNoBCList);
+    }
+    boolean anyRemoveFailures = false;
+    for (Build build : clone.values()) {
+      WorkflowJob job = getJobFromBuild(build);
+      if (job != null) {
         try {
-            buildsWithNoBCList.put(build.getMetadata().getNamespace() + build.getMetadata().getName(), build);
-        } catch (ConcurrentModificationException | IllegalArgumentException | UnsupportedOperationException
-                | NullPointerException e) {
-            logger.log(Level.WARNING, "Failed to add item " + build.getMetadata().getName(), e);
+          logger.info("triggering job run for previously skipped build " + build.getMetadata().getName());
+          triggerJob(job, build);
+        } catch (IOException e) {
+          logger.log(Level.WARNING, "flushBuildsWithNoBCList", e);
         }
-    }
-
-    static void removeBuildFromNoBCList(Build build) {
-        buildsWithNoBCList.remove(build.getMetadata().getNamespace() + build.getMetadata().getName());
-    }
-
-    // trigger any builds whose watch events arrived before the
-    // corresponding build config watch events
-    public static void flushBuildsWithNoBCList() {
-
-        ConcurrentHashMap<String, Build> clone = null;
-        synchronized (buildsWithNoBCList) {
-            clone = new ConcurrentHashMap<String, Build>(buildsWithNoBCList);
+        try {
+          synchronized (buildsWithNoBCList) {
+            removeBuildFromNoBCList(build);
+          }
+        } catch (Throwable t) {
+          // TODO
+          // concurrent mod exceptions are not suppose to occur
+          // with concurrent hash set; this try/catch with log
+          // and the anyRemoveFailures post processing is a bit
+          // of safety paranoia until this proves to be true
+          // over extended usage ... probably can remove at some
+          // point
+          anyRemoveFailures = true;
+          logger.log(Level.WARNING, "flushBuildsWithNoBCList", t);
         }
-        boolean anyRemoveFailures = false;
-        for (Build build : clone.values()) {
-            WorkflowJob job = getJobFromBuild(build);
-            if (job != null) {
-                try {
-                    logger.info("triggering job run for previously skipped build " + build.getMetadata().getName());
-                    triggerJob(job, build);
-                } catch (IOException e) {
-                    logger.log(Level.WARNING, "flushBuildsWithNoBCList", e);
-                }
-                try {
-                    synchronized (buildsWithNoBCList) {
-                        removeBuildFromNoBCList(build);
-                    }
-                } catch (Throwable t) {
-                    // TODO
-                    // concurrent mod exceptions are not suppose to occur
-                    // with concurrent hash set; this try/catch with log
-                    // and the anyRemoveFailures post processing is a bit
-                    // of safety paranoia until this proves to be true
-                    // over extended usage ... probably can remove at some
-                    // point
-                    anyRemoveFailures = true;
-                    logger.log(Level.WARNING, "flushBuildsWithNoBCList", t);
-                }
-            }
+      }
 
-            synchronized (buildsWithNoBCList) {
-                if (anyRemoveFailures && buildsWithNoBCList.size() > 0) {
-                    buildsWithNoBCList.clear();
-                }
-
-            }
+      synchronized (buildsWithNoBCList) {
+        if (anyRemoveFailures && buildsWithNoBCList.size() > 0) {
+          buildsWithNoBCList.clear();
         }
+
+      }
     }
+  }
 
     // innerDeleteEventToJenkinsJobRun is the actual delete logic at the heart
     // of deleteEventToJenkinsJobRun

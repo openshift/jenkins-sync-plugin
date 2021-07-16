@@ -76,6 +76,7 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
             LOGGER.info("BuildConfig informer received add event for: {}" + name);
             try {
                 BuildConfigManager.upsertJob(obj);
+                BuildManager.flushBuildsWithNoBCList();
             } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
@@ -92,6 +93,7 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
             LOGGER.info("BuildConfig informer received update event for: {} to: {}" + oldRv + " " + newRv);
             try {
                 BuildConfigManager.modifyEventToJenkinsJob(newObj);
+                BuildManager.flushBuildsWithNoBCList();
             } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
