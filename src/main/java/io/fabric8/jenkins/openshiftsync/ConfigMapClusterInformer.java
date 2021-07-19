@@ -15,15 +15,16 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
+import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL;
+import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL_VALUE;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.CONFIGMAP;
+import static java.util.Collections.singletonMap;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+import io.fabric8.kubernetes.client.dsl.base.OperationContext;
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,7 +53,9 @@ public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>
         LOGGER.info("Starting cluster wide configMap informer for {} !!" + namespaces);
         LOGGER.debug("listing ConfigMap resources");
         SharedInformerFactory factory = getInformerFactory();
-        this.informer = factory.sharedIndexInformerFor(ConfigMap.class, getListIntervalInSeconds());
+        Map<String, String> labels = singletonMap(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUE);
+        OperationContext withLabels = new OperationContext().withLabels(labels);
+        this.informer = factory.sharedIndexInformerFor(ConfigMap.class, withLabels, getListIntervalInSeconds());
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
         LOGGER.info("ConfigMap informer started for namespaces: {}" + namespaces);
