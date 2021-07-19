@@ -1,4 +1,4 @@
-FROM openshift/jenkins-2-centos7:v3.11
+FROM quay.io/openshift/origin-jenkins:latest
 USER root
 COPY download-dependencies.sh /usr/local/bin
 COPY ./jpi /opt/openshift/plugins
