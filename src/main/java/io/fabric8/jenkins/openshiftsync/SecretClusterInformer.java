@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.Secret;
+import io.fabric8.kubernetes.api.model.SecretList;
 import io.fabric8.kubernetes.client.dsl.base.OperationContext;
 import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
@@ -64,8 +65,8 @@ public class SecretClusterInformer implements ResourceEventHandler<Secret>, Life
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
         LOGGER.info("Secret informer started for namespace: {}" + namespaces);
-//        SecretList list = getOpenshiftClient().secrets().inNamespace(namespace).withLabels(labels).list();
-//        onInit(list.getItems());
+        SecretList list = OpenShiftUtils.getOpenshiftClient().secrets().inAnyNamespace().withLabels(labels).list();
+        onInit(list.getItems());
     }
 
     public void stop() {

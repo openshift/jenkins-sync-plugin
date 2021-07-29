@@ -30,6 +30,7 @@ import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 import io.fabric8.openshift.api.model.BuildConfig;
+import io.fabric8.openshift.api.model.BuildConfigList;
 
 /**
  * Watches {@link BuildConfig} objects in OpenShift and for WorkflowJobs we
@@ -58,9 +59,8 @@ public class BuildConfigClusterInformer implements ResourceEventHandler<BuildCon
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
         LOGGER.info("BuildConfig informer started for namespace: {}" + namespaces);
-        // BuildConfigList list =
-        // getOpenshiftClient().buildConfigs().inNamespace(namespace).list();
-        // onInit(list.getItems());
+         BuildConfigList list = OpenShiftUtils.getOpenshiftClient().buildConfigs().inAnyNamespace().list();
+         onInit(list.getItems());
     }
 
     public void stop() {

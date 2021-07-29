@@ -25,13 +25,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import io.fabric8.kubernetes.client.dsl.base.OperationContext;
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.fabric8.kubernetes.api.model.ConfigMap;
+import io.fabric8.kubernetes.api.model.ConfigMapList;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.client.dsl.base.OperationContext;
 import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
@@ -61,8 +62,8 @@ public class ConfigMapInformer implements ResourceEventHandler<ConfigMap>, Lifec
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
         LOGGER.info("ConfigMap informer started for namespace: {}" + namespace);
-//        ConfigMapList list = getOpenshiftClient().configMaps().inNamespace(namespace).list();
-//        onInit(list.getItems());
+        ConfigMapList list = OpenShiftUtils.getOpenshiftClient().configMaps().inNamespace(namespace).list();
+        onInit(list.getItems());
     }
 
     public void stop() {

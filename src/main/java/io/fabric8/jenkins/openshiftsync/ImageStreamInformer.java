@@ -40,6 +40,7 @@ import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 import io.fabric8.openshift.api.model.ImageStream;
+import io.fabric8.openshift.api.model.ImageStreamList;
 
 public class ImageStreamInformer implements ResourceEventHandler<ImageStream>, Lifecyclable {
 
@@ -65,8 +66,8 @@ public class ImageStreamInformer implements ResourceEventHandler<ImageStream>, L
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
         LOGGER.info("ImageStream informer started for namespace: {}" + namespace);
-//        ImageStreamList list = getOpenshiftClient().imageStreams().inNamespace(namespace).withLabels(labels).list();
-//        onInit(list.getItems());
+        ImageStreamList list = OpenShiftUtils.getOpenshiftClient().imageStreams().inNamespace(namespace).withLabels(labels).list();
+        onInit(list.getItems());
     }
 
     public void stop() {

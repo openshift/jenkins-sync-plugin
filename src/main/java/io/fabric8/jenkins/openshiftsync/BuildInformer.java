@@ -32,6 +32,7 @@ import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildConfig;
+import io.fabric8.openshift.api.model.BuildList;
 
 public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable {
 
@@ -64,8 +65,8 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
         this.informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
         LOGGER.info("Build informer started for namespace: {}" + namespace);
-//        BuildList list = getOpenshiftClient().builds().inNamespace(namespace).list();
-//        onInit(list.getItems());
+        BuildList list = OpenShiftUtils.getOpenshiftClient().builds().inNamespace(namespace).list();
+        onInit(list.getItems());
     }
 
     public void stop() {

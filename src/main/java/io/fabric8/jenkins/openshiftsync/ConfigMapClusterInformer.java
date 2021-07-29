@@ -21,16 +21,21 @@ import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.CONFIGMAP;
 import static java.util.Collections.singletonMap;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import io.fabric8.kubernetes.client.dsl.base.OperationContext;
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.fabric8.kubernetes.api.model.ConfigMap;
+import io.fabric8.kubernetes.api.model.ConfigMapList;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.client.dsl.base.OperationContext;
 import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
@@ -59,8 +64,8 @@ public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
         LOGGER.info("ConfigMap informer started for namespaces: {}" + namespaces);
-//        ConfigMapList list = getOpenshiftClient().configMaps().inNamespace(namespace).list();
-//        onInit(list.getItems());
+        ConfigMapList list = OpenShiftUtils.getOpenshiftClient().configMaps().inAnyNamespace().list();
+        onInit(list.getItems());
     }
 
     public void stop() {
