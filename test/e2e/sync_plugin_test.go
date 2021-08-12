@@ -103,6 +103,7 @@ func instantiateTemplate(ta *testArgs) {
 				// Ready == True, stop watching.
 				if cond.Type == templatev1.TemplateInstanceReady &&
 					cond.Status == corev1.ConditionTrue {
+					ta.t.Logf("templateinstance %s/%s instantiation ready", ti.Namespace, ti.Name)
 					watcher.Stop()
 				}
 
@@ -117,7 +118,7 @@ func instantiateTemplate(ta *testArgs) {
 			}
 
 		default:
-			ta.t.Fatalf("unexpected event type %s", string(event.Type))
+			ta.t.Logf("unexpected event type %s: %#v", string(event.Type), event.Object)
 		}
 	}
 
