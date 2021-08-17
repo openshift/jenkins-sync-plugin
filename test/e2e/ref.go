@@ -65,13 +65,25 @@ func (j *JenkinsRef) DelRawPostPod() error {
 func (j *JenkinsRef) JobLogs(namespace, bcName string) (string, error) {
 	podName := "curl-job-pod"
 	fullURL := fmt.Sprintf("http://%s:%v/job/%s/job/%s-%s/lastBuild/consoleText", j.host, j.port, namespace, namespace, bcName)
-	j.t.Logf("full URL %s\n", fullURL)
+	j.t.Logf("getting latest job log for %s/%s: full URL %s\n", namespace, bcName, fullURL)
 	cmd := fmt.Sprintf("TOKEN=`cat /var/run/secrets/kubernetes.io/serviceaccount/token` && curl -X GET -H \"Authorization: Bearer $TOKEN\" %s", fullURL)
 	return podName, j.uri_tester.CreateExecPod(podName, cmd)
 }
 
 func (j *JenkinsRef) DelJobPod() error {
 	return j.kubeClient.CoreV1().Pods(j.namespace).Delete(context.Background(), "curl-job-pod", metav1.DeleteOptions{})
+}
+
+func (j *JenkinsRef) PastJobLogs(namespace, bcName string, num int) (string, error) {
+	podName := "curl-past-job-pod"
+	fullURL := fmt.Sprintf("http://%s:%v/job/%s/job/%s-%s/%d/consoleText", j.host, j.port, namespace, namespace, bcName, num)
+	j.t.Logf("getting job num %d job log for %s/%s: full URL %s\n", num, namespace, bcName, fullURL)
+	cmd := fmt.Sprintf("TOKEN=`cat /var/run/secrets/kubernetes.io/serviceaccount/token` && curl -X GET -H \"Authorization: Bearer $TOKEN\" %s", fullURL)
+	return podName, j.uri_tester.CreateExecPod(podName, cmd)
+}
+
+func (j *JenkinsRef) DelPastJobLogs() error {
+	return j.kubeClient.CoreV1().Pods(j.namespace).Delete(context.Background(), "curl-past-job-pod", metav1.DeleteOptions{})
 }
 
 func (j *JenkinsRef) Credential(namespace, secretName string) (string, error) {

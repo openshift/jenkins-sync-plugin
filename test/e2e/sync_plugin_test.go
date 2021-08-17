@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"net/url"
 	"strings"
 	"testing"
@@ -27,7 +28,8 @@ import (
 )
 
 const (
-	testNamespace = "jenkins-sync-plugin-test-namespace-"
+	testNamespace   = "jenkins-sync-plugin-test-namespace-"
+	finishedSuccess = "Finished: SUCCESS"
 )
 
 func instantiateTemplate(ta *testArgs) {
@@ -37,12 +39,12 @@ func instantiateTemplate(ta *testArgs) {
 		template, err = templateClient.TemplateV1().Templates(ta.templateNs).Get(context.Background(),
 			ta.template, metav1.GetOptions{})
 		if err != nil {
-			ta.t.Fatalf("%#v", err)
+			debugAndFailTest(ta, fmt.Sprintf("%#v", err))
 		}
 	} else {
 		template, err = templateClient.TemplateV1().Templates(ta.templateNs).Create(context.Background(), template, metav1.CreateOptions{})
 		if err != nil {
-			ta.t.Fatalf("%#v", err)
+			debugAndFailTest(ta, fmt.Sprintf("%#v", err))
 		}
 	}
 
@@ -59,7 +61,7 @@ func instantiateTemplate(ta *testArgs) {
 			StringData: ta.templateParams,
 		}, metav1.CreateOptions{})
 		if err != nil {
-			ta.t.Fatalf("%#v", err)
+			debugAndFailTest(ta, fmt.Sprintf("%#v", err))
 		}
 	}
 
@@ -81,7 +83,7 @@ func instantiateTemplate(ta *testArgs) {
 	ti, err = templateClient.TemplateV1().TemplateInstances(ta.ns).Create(context.Background(),
 		ti, metav1.CreateOptions{})
 	if err != nil {
-		ta.t.Fatalf("%#v", err)
+		debugAndFailTest(ta, fmt.Sprintf("%#v", err))
 	}
 
 	// Watch the TemplateInstance object until it indicates the Ready or
@@ -90,7 +92,7 @@ func instantiateTemplate(ta *testArgs) {
 		metav1.SingleObject(ti.ObjectMeta),
 	)
 	if err != nil {
-		ta.t.Fatalf("%#v", err)
+		debugAndFailTest(ta, fmt.Sprintf("%#v", err))
 	}
 
 	for event := range watcher.ResultChan() {
@@ -113,7 +115,7 @@ func instantiateTemplate(ta *testArgs) {
 					templatev1.TemplateInstanceInstantiateFailure &&
 					cond.Status == corev1.ConditionTrue &&
 					cond.Reason != "AlreadyExists" {
-					ta.t.Fatalf("templateinstance instantiation failed reason %s message %s", cond.Reason, cond.Message)
+					debugAndFailTest(ta, fmt.Sprintf("templateinstance instantiation failed reason %s message %s", cond.Reason, cond.Message))
 				}
 			}
 
@@ -139,7 +141,7 @@ func setupThroughJenkinsLaunch(t *testing.T, ta *testArgs) *testArgs {
 	}, metav1.CreateOptions{})
 
 	if err != nil {
-		ta.t.Fatalf("%#v", err)
+		debugAndFailTest(ta, fmt.Sprintf("%#v", err))
 	}
 
 	if len(ta.template) == 0 {
@@ -160,7 +162,7 @@ func waitForBuildSuccess(ta *testArgs, build *buildv1.Build) *buildv1.Build {
 	watcher, err := buildClient.BuildV1().Builds(ta.ns).Watch(context.Background(),
 		metav1.SingleObject(build.ObjectMeta))
 	if err != nil {
-		ta.t.Fatalf("%#v", err)
+		debugAndFailTest(ta, fmt.Sprintf("%#v", err))
 	}
 
 	for event := range watcher.ResultChan() {
@@ -171,8 +173,9 @@ func waitForBuildSuccess(ta *testArgs, build *buildv1.Build) *buildv1.Build {
 			switch build.Status.Phase {
 			case buildv1.BuildPhaseComplete:
 				if ta.expectFail {
-					ta.t.Fatalf("build %s worked when not expected", build.Name)
+					debugAndFailTest(ta, fmt.Sprintf("build %s worked when not expected", build.Name))
 				}
+				ta.t.Logf("build %s mark completed", build.Name)
 				watcher.Stop()
 			case buildv1.BuildPhaseError:
 				watcher.Stop()
@@ -183,11 +186,11 @@ func waitForBuildSuccess(ta *testArgs, build *buildv1.Build) *buildv1.Build {
 				ta.t.Log("dump job log")
 				_, err := NewRef(ta.t, kubeClient, ta.ns).JobLogs(ta.ns, ta.bc.Name)
 				if err != nil {
-					ta.t.Fatalf("error getting job logs: %s", err.Error())
+					debugAndFailTest(ta, fmt.Sprintf("error getting job logs: %s", err.Error()))
 				}
 				ta.t.Log("dump namespace pod logs")
 				dumpPods(ta)
-				ta.t.Fatal()
+				debugAndFailTest(ta, "")
 			case buildv1.BuildPhaseFailed:
 				watcher.Stop()
 				if ta.expectFail {
@@ -197,11 +200,11 @@ func waitForBuildSuccess(ta *testArgs, build *buildv1.Build) *buildv1.Build {
 				ta.t.Log("dump job log")
 				_, err := NewRef(ta.t, kubeClient, ta.ns).JobLogs(ta.ns, ta.bc.Name)
 				if err != nil {
-					ta.t.Fatalf("error getting job logs: %s", err.Error())
+					debugAndFailTest(ta, fmt.Sprintf("error getting job logs: %s", err.Error()))
 				}
 				ta.t.Log("dump namespace pod logs")
 				dumpPods(ta)
-				ta.t.Fatal()
+				debugAndFailTest(ta, "")
 			default:
 				ta.t.Logf("build phase %s", build.Status.Phase)
 			}
@@ -215,7 +218,7 @@ func instantiateBuild(ta *testArgs) *buildv1.Build {
 	if !ta.skipBCCreate {
 		_, err := buildClient.BuildV1().BuildConfigs(ta.ns).Create(context.Background(), ta.bc, metav1.CreateOptions{})
 		if err != nil {
-			ta.t.Fatalf("%#v", err)
+			debugAndFailTest(ta, fmt.Sprintf("%#v", err))
 		}
 	}
 	buildReq := &buildv1.BuildRequest{
@@ -225,7 +228,7 @@ func instantiateBuild(ta *testArgs) *buildv1.Build {
 	build, err := buildClient.BuildV1().BuildConfigs(ta.ns).Instantiate(context.Background(),
 		ta.bc.Name, buildReq, metav1.CreateOptions{})
 	if err != nil {
-		ta.t.Fatalf("%#v", err)
+		debugAndFailTest(ta, fmt.Sprintf("%#v", err))
 	}
 	if ta.returnBeforeBuildDone {
 		return build
@@ -249,8 +252,8 @@ func podTemplateTest(name string, ta *testArgs) {
 
 	ta.bc = bc
 
-	instantiateBuild(ta)
-	jobLogCheck(bc.Name, ta, "Finished: SUCCESS")
+	ta.jobLogSearch = finishedSuccess
+	basicPipelineInvocationAndValidation(ta)
 
 }
 
@@ -258,7 +261,7 @@ func dumpPods(ta *testArgs) {
 	podClient := kubeClient.CoreV1().Pods(ta.ns)
 	podList, err := podClient.List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		ta.t.Fatalf("error list pods %v", err)
+		debugAndFailTest(ta, fmt.Sprintf("error list pods %v", err))
 	}
 	ta.t.Logf("dumpPods have %d items in list", len(podList.Items))
 	for _, pod := range podList.Items {
@@ -268,11 +271,11 @@ func dumpPods(ta *testArgs) {
 			req := podClient.GetLogs(pod.Name, &corev1.PodLogOptions{Container: container.Name})
 			readCloser, err := req.Stream(context.TODO())
 			if err != nil {
-				ta.t.Fatalf("error getting pod logs for container %s: %s", container.Name, err.Error())
+				debugAndFailTest(ta, fmt.Sprintf("error getting pod logs for container %s: %s", container.Name, err.Error()))
 			}
 			b, err := ioutil.ReadAll(readCloser)
 			if err != nil {
-				ta.t.Fatalf("error reading pod stream %s", err.Error())
+				debugAndFailTest(ta, fmt.Sprintf("error reading pod stream %s", err.Error()))
 			}
 			podLog := string(b)
 			ta.t.Logf("pod logs for container %s in pod %s:  %s", container.Name, pod.Name, podLog)
@@ -282,12 +285,30 @@ func dumpPods(ta *testArgs) {
 	}
 }
 
+func debugAndFailTest(ta *testArgs, failMsg string) {
+	dumpPods(ta)
+	ta.t.Fatalf(failMsg)
+}
+
+func ensureBuildDeleted(buildName string, ta *testArgs) {
+	err := wait.PollImmediate(5*time.Second, 30*time.Second, func() (done bool, err error) {
+		_, err = buildClient.BuildV1().Builds(ta.ns).Get(context.Background(), buildName, metav1.GetOptions{})
+		if err != nil && kerrors.IsNotFound(err) {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		debugAndFailTest(ta, fmt.Sprintf("deleted build %s still present", buildName))
+	}
+}
+
 func checkPodsForText(podName, searchItem string, ta *testArgs) bool {
 	found := false
 	podClient := kubeClient.CoreV1().Pods(ta.ns)
 	pod, err := podClient.Get(context.TODO(), podName, metav1.GetOptions{})
 	if err != nil {
-		ta.t.Fatalf("error list pods %v", err)
+		debugAndFailTest(ta, fmt.Sprintf("error list pods %v", err))
 	}
 	ta.t.Logf("dumpPods looking at pod %s in phase %s", pod.Name, pod.Status.Phase)
 
@@ -295,11 +316,11 @@ func checkPodsForText(podName, searchItem string, ta *testArgs) bool {
 		req := podClient.GetLogs(pod.Name, &corev1.PodLogOptions{Container: container.Name})
 		readCloser, err := req.Stream(context.TODO())
 		if err != nil {
-			ta.t.Fatalf("error getting pod logs for container %s: %s", container.Name, err.Error())
+			debugAndFailTest(ta, fmt.Sprintf("error getting pod logs for container %s: %s", container.Name, err.Error()))
 		}
 		b, err := ioutil.ReadAll(readCloser)
 		if err != nil {
-			ta.t.Fatalf("error reading pod stream %s", err.Error())
+			debugAndFailTest(ta, fmt.Sprintf("error reading pod stream %s", err.Error()))
 		}
 		podLog := string(b)
 		ta.t.Logf("pod logs for container %s in pod %s:  %s", container.Name, pod.Name, podLog)
@@ -314,7 +335,7 @@ func checkPodsForText(podName, searchItem string, ta *testArgs) bool {
 }
 
 func rawURICheck(rawURI string, ta *testArgs, query ...string) {
-	err := wait.PollImmediate(1*time.Second, 5*time.Minute, func() (done bool, err error) {
+	err := wait.PollImmediate(30*time.Second, 5*time.Minute, func() (done bool, err error) {
 		j := NewRef(ta.t, kubeClient, ta.ns)
 		defer j.DelRawPod()
 		podName, err := j.RawURL(rawURI)
@@ -332,12 +353,12 @@ func rawURICheck(rawURI string, ta *testArgs, query ...string) {
 		return true, nil
 	})
 	if err != nil {
-		ta.t.Fatalf("unexpected results for %s", rawURI)
+		debugAndFailTest(ta, fmt.Sprintf("unexpected results for %s", rawURI))
 	}
 }
 
 func uriPost(rawURI string, ta *testArgs) {
-	err := wait.PollImmediate(1*time.Second, 30*time.Second, func() (done bool, err error) {
+	err := wait.PollImmediate(5*time.Second, 1*time.Minute, func() (done bool, err error) {
 		j := NewRef(ta.t, kubeClient, ta.ns)
 		defer j.DelRawPostPod()
 		podName, err := j.RawPost(rawURI)
@@ -350,12 +371,12 @@ func uriPost(rawURI string, ta *testArgs) {
 		return false, nil
 	})
 	if err != nil {
-		ta.t.Fatalf("unexpected post results %s", rawURI)
+		debugAndFailTest(ta, fmt.Sprintf("unexpected post results %s", rawURI))
 	}
 }
 
 func jobLogCheck(name string, ta *testArgs, query ...string) {
-	err := wait.PollImmediate(1*time.Second, 30*time.Second, func() (done bool, err error) {
+	err := wait.PollImmediate(5*time.Second, 1*time.Minute, func() (done bool, err error) {
 		j := NewRef(ta.t, kubeClient, ta.ns)
 		defer j.DelJobPod()
 		podName, err := j.JobLogs(ta.ns, name)
@@ -373,12 +394,12 @@ func jobLogCheck(name string, ta *testArgs, query ...string) {
 		return true, nil
 	})
 	if err != nil {
-		ta.t.Fatalf("jenkins job for bc %s still present", name)
+		debugAndFailTest(ta, fmt.Sprintf("jenkins job for bc %s still present", name))
 	}
 }
 
 func credCheck(name string, ta *testArgs, query ...string) {
-	err := wait.PollImmediate(1*time.Second, 30*time.Second, func() (done bool, err error) {
+	err := wait.PollImmediate(5*time.Second, 1*time.Minute, func() (done bool, err error) {
 		j := NewRef(ta.t, kubeClient, ta.ns)
 		defer j.DelCredentialPod()
 		podName, err := j.Credential(ta.ns, name)
@@ -396,7 +417,7 @@ func credCheck(name string, ta *testArgs, query ...string) {
 		return true, nil
 	})
 	if err != nil {
-		ta.t.Fatalf("cred for secret %s not available", name)
+		debugAndFailTest(ta, fmt.Sprintf("cred for secret %s not available", name))
 	}
 }
 
@@ -413,7 +434,7 @@ func labelValue(name string) string {
 
 func isPruningDone(ta *testArgs) {
 	var builds *buildv1.BuildList
-	err := wait.PollImmediate(1*time.Second, 1*time.Minute, func() (done bool, err error) {
+	err := wait.PollImmediate(5*time.Second, 1*time.Minute, func() (done bool, err error) {
 		builds, err = buildClient.BuildV1().Builds(ta.ns).List(context.Background(), metav1.ListOptions{LabelSelector: buildConfigSelector(ta.bc.Name).String()})
 		if err != nil {
 			ta.t.Logf("%s", err.Error())
@@ -431,7 +452,7 @@ func isPruningDone(ta *testArgs) {
 		return false, nil
 	})
 	if err != nil {
-		ta.t.Fatalf("problem with build pruning for %s, num of builds: %d", ta.bc.Name, len(builds.Items))
+		debugAndFailTest(ta, fmt.Sprintf("problem with build pruning for %s, num of builds: %d", ta.bc.Name, len(builds.Items)))
 	}
 }
 
@@ -442,14 +463,14 @@ func scaleJenkins(up bool, ta *testArgs) {
 	}
 	dc, err := appClient.AppsV1().DeploymentConfigs(ta.ns).Get(context.Background(), "jenkins", metav1.GetOptions{})
 	if err != nil {
-		ta.t.Fatalf("error getting dc jenkins scale: %s", err.Error())
+		debugAndFailTest(ta, fmt.Sprintf("error getting dc jenkins scale: %s", err.Error()))
 	}
 	dc.Spec.Replicas = int32(replicaCount)
 	_, err = appClient.AppsV1().DeploymentConfigs(ta.ns).Update(context.Background(), dc, metav1.UpdateOptions{})
 	if err != nil {
-		ta.t.Fatalf("error updating dc jenkins scale to %d: %s", replicaCount, err.Error())
+		debugAndFailTest(ta, fmt.Sprintf("error updating dc jenkins scale to %d: %s", replicaCount, err.Error()))
 	}
-	err = wait.PollImmediate(1*time.Second, 30*time.Second, func() (done bool, err error) {
+	err = wait.PollImmediate(5*time.Second, 1*time.Minute, func() (done bool, err error) {
 		dc, err := appClient.AppsV1().DeploymentConfigs(ta.ns).Get(context.Background(), "jenkins", metav1.GetOptions{})
 		if err != nil {
 			ta.t.Logf("error getting dc jenkins: %s", err.Error())
@@ -462,7 +483,7 @@ func scaleJenkins(up bool, ta *testArgs) {
 		return true, nil
 	})
 	if err != nil {
-		ta.t.Fatalf("dc scale problems")
+		debugAndFailTest(ta, "dc scale problems")
 	}
 }
 
@@ -495,24 +516,13 @@ type testArgs struct {
 	expectFail            bool
 }
 
-func basicPipelineInvocationAndValidation(ta *testArgs) {
-	ta = setupThroughJenkinsLaunch(ta.t, ta)
-	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
-
-	instantiateBuild(ta)
+func basicPipelineInvocationAndValidation(ta *testArgs) *buildv1.Build {
+	bld := instantiateBuild(ta)
 
 	if len(ta.jobLogSearch) > 0 {
-		// check job log
-		podName, err := NewRef(ta.t, kubeClient, ta.ns).JobLogs(ta.ns, ta.bc.Name)
-		if err != nil {
-			ta.t.Fatalf("error getting job logs: %s", err.Error())
-		}
-		found := checkPodsForText(podName, ta.jobLogSearch, ta)
-		if !found {
-			ta.t.Fatalf("did not find %s", ta.jobLogSearch)
-		}
-
+		jobLogCheck(ta.bc.Name, ta, ta.jobLogSearch)
 	}
+	return bld
 }
 
 func TestEnvVarOverride(t *testing.T) {
@@ -545,9 +555,13 @@ func TestEnvVarOverride(t *testing.T) {
 		bc:           &bc,
 		jobLogSearch: "FOO1 is BAR1",
 	}
+	ta = setupThroughJenkinsLaunch(ta.t, ta)
+	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
+
 	basicPipelineInvocationAndValidation(ta)
 	ta.env = []corev1.EnvVar{{Name: "FOO1", Value: "BAR2"}}
 	ta.jobLogSearch = "FOO1 is BAR2"
+	ta.skipBCCreate = true
 	basicPipelineInvocationAndValidation(ta)
 }
 
@@ -572,7 +586,8 @@ func TestCreateThenDeleteBC(t *testing.T) {
 	setupThroughJenkinsLaunch(t, ta)
 	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
 
-	instantiateBuild(ta)
+	ta.jobLogSearch = finishedSuccess
+	basicPipelineInvocationAndValidation(ta)
 
 	err := buildClient.BuildV1().BuildConfigs(ta.ns).Delete(context.Background(), bc.Name, metav1.DeleteOptions{})
 	if err != nil {
@@ -762,11 +777,12 @@ func TestPruningSuccessfulPipeline(t *testing.T) {
 	ta.skipBCCreate = true
 	var err error
 	if ta.bc, err = buildClient.BuildV1().BuildConfigs(ta.ns).Create(context.Background(), bc, metav1.CreateOptions{}); err != nil {
-		ta.t.Fatalf("error creating bc: %s", err.Error())
+		debugAndFailTest(ta, fmt.Sprintf("error creating bc: %s", err.Error()))
 	}
 
+	ta.jobLogSearch = finishedSuccess
 	for i := 0; i < 4; i++ {
-		instantiateBuild(ta)
+		basicPipelineInvocationAndValidation(ta)
 	}
 
 	isPruningDone(ta)
@@ -796,7 +812,7 @@ func TestPruningFailedPipeline(t *testing.T) {
 	ta.expectFail = true
 	var err error
 	if ta.bc, err = buildClient.BuildV1().BuildConfigs(ta.ns).Create(context.Background(), bc, metav1.CreateOptions{}); err != nil {
-		ta.t.Fatalf("error creating bc: %s", err.Error())
+		debugAndFailTest(ta, fmt.Sprintf("error creating bc: %s", err.Error()))
 	}
 
 	for i := 0; i < 4; i++ {
@@ -827,13 +843,13 @@ func TestDeclarativePlusNodejs(t *testing.T) {
 	ta.skipBCCreate = true
 	var err error
 	if ta.bc, err = buildClient.BuildV1().BuildConfigs(ta.ns).Create(context.Background(), bc, metav1.CreateOptions{}); err != nil {
-		ta.t.Fatalf("error creating bc: %s", err.Error())
+		debugAndFailTest(ta, fmt.Sprintf("error creating bc: %s", err.Error()))
 	}
 
-	instantiateBuild(ta)
-	jobLogCheck(bc.Name, ta, "Finished: SUCCESS")
+	ta.jobLogSearch = finishedSuccess
+	basicPipelineInvocationAndValidation(ta)
 
-	err = wait.PollImmediate(1*time.Second, 1*time.Minute, func() (done bool, err error) {
+	err = wait.PollImmediate(5*time.Second, 1*time.Minute, func() (done bool, err error) {
 		ep, err := kubeClient.CoreV1().Endpoints(ta.ns).Get(context.Background(), "nodejs-postgresql-example", metav1.GetOptions{})
 		if err != nil {
 			ta.t.Logf("%s", err.Error())
@@ -875,7 +891,7 @@ func TestDeletedBuildDeletesRun(t *testing.T) {
 	ta.skipBCCreate = true
 	var err error
 	if ta.bc, err = buildClient.BuildV1().BuildConfigs(ta.ns).Create(context.Background(), bc, metav1.CreateOptions{}); err != nil {
-		ta.t.Fatalf("error creating bc: %s", err.Error())
+		debugAndFailTest(ta, fmt.Sprintf("error creating bc: %s", err.Error()))
 	}
 
 	type buildInfo struct {
@@ -884,13 +900,13 @@ func TestDeletedBuildDeletesRun(t *testing.T) {
 	}
 	buildNameToBuildInfoMap := map[string]buildInfo{}
 
+	ta.jobLogSearch = finishedSuccess
 	for i := 1; i <= 5; i++ {
-		bld := instantiateBuild(ta)
-		jobLogCheck(bc.Name, ta, "Finished: SUCCESS")
+		bld := basicPipelineInvocationAndValidation(ta)
 
 		jenkinsBuildURI, err := url.Parse(bld.Annotations[buildv1.BuildJenkinsBuildURIAnnotation])
 		if err != nil {
-			t.Fatalf("error with build uri annotation for build %s: %s", bld.Name, err.Error())
+			debugAndFailTest(ta, fmt.Sprintf("error with build uri annotation for build %s: %s", bld.Name, err.Error()))
 		}
 		buildNameToBuildInfoMap[bld.Name] = buildInfo{number: i, jenkinsBuildURI: jenkinsBuildURI.Path}
 	}
@@ -899,13 +915,21 @@ func TestDeletedBuildDeletesRun(t *testing.T) {
 		if buildInfo.number%2 == 0 {
 			err = buildClient.BuildV1().Builds(ta.ns).Delete(context.Background(), buildName, metav1.DeleteOptions{})
 			if err != nil {
-				t.Fatalf("error deleting %s: %s", buildName, err.Error())
+				debugAndFailTest(ta, fmt.Sprintf("error deleting %s: %s", buildName, err.Error()))
 			}
-
+			ta.t.Logf("build %s deleted at time %s", buildName, time.Now().String())
+			ensureBuildDeleted(buildName, ta)
 		}
 	}
 
+	dbg := func(num int) {
+		j := NewRef(ta.t, kubeClient, ta.ns)
+		defer j.DelPastJobLogs()
+		j.PastJobLogs(ta.ns, ta.bc.Name, num)
+		ta.t.Logf("see job log for %s/%s/%d above ^^", ta.ns, ta.bc.Name, num)
+	}
 	for _, buildInfo := range buildNameToBuildInfoMap {
+		dbg(buildInfo.number)
 		if buildInfo.number%2 == 0 {
 			rawURICheck(buildInfo.jenkinsBuildURI, ta, "<body><h2>HTTP ERROR 404 Not Found</h2>")
 		} else {
@@ -946,7 +970,7 @@ func TestBlueGreen(t *testing.T) {
 
 		jenkinsBuildURI := b.Annotations[buildv1.BuildJenkinsBuildURIAnnotation]
 		if len(jenkinsBuildURI) == 0 {
-			err = wait.PollImmediate(1*time.Second, 30*time.Second, func() (done bool, err error) {
+			err = wait.PollImmediate(5*time.Second, 1*time.Minute, func() (done bool, err error) {
 				b, err = buildClient.BuildV1().Builds(ta.ns).Get(context.Background(), b.Name, metav1.GetOptions{})
 				if err != nil {
 					t.Logf("build get error: %s", err.Error())
@@ -973,7 +997,7 @@ func TestBlueGreen(t *testing.T) {
 		t.Logf("approval post for %s done", newColor)
 
 		waitForBuildSuccess(ta, b)
-		jobLogCheck("bluegreen-pipeline", ta, "Finished: SUCCESS")
+		jobLogCheck("bluegreen-pipeline", ta, finishedSuccess)
 
 		// verify route color
 		r, err := routeClient.RouteV1().Routes(ta.ns).Get(context.Background(), "nodejs-postgresql-example", metav1.GetOptions{})
@@ -1041,7 +1065,7 @@ func TestPersistentVolumes(t *testing.T) {
 	ta.bc = bc
 	ta.skipBCCreate = true
 	if ta.bc, err = buildClient.BuildV1().BuildConfigs(ta.ns).Create(context.Background(), bc, metav1.CreateOptions{}); err != nil {
-		ta.t.Fatalf("error creating bc: %s", err.Error())
+		debugAndFailTest(ta, fmt.Sprintf("error creating bc: %s", err.Error()))
 	}
 
 	type buildInfo struct {
@@ -1050,9 +1074,9 @@ func TestPersistentVolumes(t *testing.T) {
 	}
 	buildNameToBuildInfoMap := map[string]buildInfo{}
 
+	ta.jobLogSearch = finishedSuccess
 	for i := 1; i <= 5; i++ {
-		bld := instantiateBuild(ta)
-		jobLogCheck(bc.Name, ta, "Finished: SUCCESS")
+		bld := basicPipelineInvocationAndValidation(ta)
 
 		jenkinsBuildURI, err := url.Parse(bld.Annotations[buildv1.BuildJenkinsBuildURIAnnotation])
 		if err != nil {
@@ -1069,16 +1093,26 @@ func TestPersistentVolumes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("error deleting %s: %s", buildName, err.Error())
 			}
-
+			ta.t.Logf("build %s deleted at time %s", buildName, time.Now().String())
+			ensureBuildDeleted(buildName, ta)
 		}
 	}
 
 	scaleJenkins(true, ta)
 
 	// make sure jenkins is up
+	ta.t.Log("making sure jenkins is up via http get to jenkins console")
 	rawURICheck("", ta, "<title>")
+	ta.t.Log("http get to jenkins console came back OK")
 
+	dbg := func(num int) {
+		j := NewRef(ta.t, kubeClient, ta.ns)
+		defer j.DelPastJobLogs()
+		j.PastJobLogs(ta.ns, ta.bc.Name, num)
+		ta.t.Logf("see job log for %s/%s/%d above ^^", ta.ns, ta.bc.Name, num)
+	}
 	for _, buildInfo := range buildNameToBuildInfoMap {
+		dbg(buildInfo.number)
 		if buildInfo.number%2 == 0 {
 			rawURICheck(buildInfo.jenkinsBuildURI, ta, "<body><h2>HTTP ERROR 404 Not Found</h2>")
 		} else {

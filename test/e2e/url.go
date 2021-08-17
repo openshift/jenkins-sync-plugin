@@ -30,10 +30,10 @@ func (ut *Tester) CreateExecPod(name, cmd string) error {
 	client := ut.client.CoreV1()
 	_, err := client.Pods(ut.namespace).Get(context.Background(), name, metav1.GetOptions{})
 	if err == nil {
-		ut.t.Log("curl job logs pod already exists")
+		ut.t.Logf("curl pod %s already exists", name)
 		return nil
 	}
-	ut.t.Logf("Creating new curl pod")
+	ut.t.Logf("Creating new curl pod %s", name)
 	immediate := int64(0)
 	execPod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -60,17 +60,16 @@ func (ut *Tester) CreateExecPod(name, cmd string) error {
 	}
 	err = wait.PollImmediate(1*time.Second, 5*time.Minute, func() (bool, error) {
 		retrievedPod, err := client.Pods(execPod.Namespace).Get(context.Background(), created.Name, metav1.GetOptions{})
-		ut.t.Logf("get of curl pod %s got err %#v", created.Name, err)
 		if err != nil {
+			ut.t.Logf("get of curl pod %s got err %#v", created.Name, err)
 			return false, nil
 		}
 		for _, status := range retrievedPod.Status.ContainerStatuses {
-			ut.t.Logf("looking at pod state %#v", status.State)
 			if status.State.Terminated != nil {
+				ut.t.Logf("curl pod %s terminated", name)
 				return true, nil
 			}
 		}
-		ut.t.Logf("done with container state, still cehcking")
 		return false, nil
 	})
 	return err
