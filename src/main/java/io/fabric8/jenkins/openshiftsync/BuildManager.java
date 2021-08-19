@@ -37,9 +37,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.ConcurrentModificationException;
-import java.util.Iterator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -63,6 +61,10 @@ import jenkins.security.NotReallyRoleSensitiveCallable;
 @SuppressWarnings({ "deprecation", "serial" })
 public class BuildManager {
   private static final Logger logger = Logger.getLogger(BuildManager.class.getName());
+  
+  static {
+      reconcileRunsAndBuilds();
+  }
 
   /**
    * now that listing interval is 5 minutes (used to be 10 seconds), we have seen
@@ -334,7 +336,7 @@ public class BuildManager {
      * Deletes all job runs that do not have an associated build in OpenShift
      */
     static void reconcileRunsAndBuilds() {
-        logger.fine("Reconciling job runs and builds");
+        logger.info("Reconciling job runs and builds");
         List<WorkflowJob> jobs = Jenkins.getActiveInstance().getAllItems(WorkflowJob.class);
         for (WorkflowJob job : jobs) {
             BuildConfigProjectProperty property = job.getProperty(BuildConfigProjectProperty.class);
@@ -342,9 +344,9 @@ public class BuildManager {
                 String ns = property.getNamespace();
                 String name = property.getName();
                 if (StringUtils.isNotBlank(ns) && StringUtils.isNotBlank(name)) {
-                    logger.fine("Checking job " + job + " runs for BuildConfig " + ns + "/" + name);
+                    logger.info("Checking job " + job + " runs for BuildConfig " + ns + "/" + name);
                     OpenShiftClient client = getAuthenticatedOpenShiftClient();
-                    BuildList builds = client.builds().inNamespace(ns).withLabel("buildconfig=" + name).list();
+                    BuildList builds = client.builds().inNamespace(ns).withLabel(OPENSHIFT_LABELS_BUILD_CONFIG_NAME + "=" + name).list();
                     for (WorkflowRun run : job.getBuilds()) {
                         boolean found = false;
                         BuildCause cause = run.getCause(BuildCause.class);

@@ -18,10 +18,6 @@ package io.fabric8.jenkins.openshiftsync;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +27,6 @@ import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 import io.fabric8.openshift.api.model.Build;
-import io.fabric8.openshift.api.model.BuildConfig;
 
 public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable {
 
@@ -64,8 +59,6 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
         this.informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
         LOGGER.info("Build informer started for namespace: {}" + namespace);
-//        BuildList list = getOpenshiftClient().builds().inNamespace(namespace).list();
-//        onInit(list.getItems());
     }
 
     public void stop() {
@@ -113,17 +106,6 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
                 e.printStackTrace();
             }
         }
-    }
-
-    private static void onInit(List<Build> list) {
-        Collections.sort(list, BUILD_COMPARATOR);
-        // We need to sort the builds into their build configs so we can
-        // handle build run policies correctly.
-        Map<String, BuildConfig> buildConfigMap = new HashMap<>();
-        Map<BuildConfig, List<Build>> buildConfigBuildMap = new HashMap<>(list.size());
-//        BuildManager.mapBuildToBuildConfigs(list, buildConfigMap, buildConfigBuildMap);
-//        BuildManager.mapBuildsToBuildConfigs(buildConfigBuildMap);
-        BuildManager.reconcileRunsAndBuilds();
     }
 
 }

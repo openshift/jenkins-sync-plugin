@@ -17,8 +17,6 @@ package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
 
-import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,9 +53,6 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
         LOGGER.info("BuildConfig informer started for namespace: {}" + namespace);
-        // BuildConfigList list =
-        // getOpenshiftClient().buildConfigs().inNamespace(namespace).list();
-        // onInit(list.getItems());
     }
 
     public void stop() {
@@ -114,18 +109,5 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
         }
     }
 
-    private void onInit(List<BuildConfig> list) {
-        for (BuildConfig buildConfig : list) {
-            try {
-                BuildConfigManager.upsertJob(buildConfig);
-            } catch (Exception e) {
-                LOGGER.error("Failed to update job", e);
-            }
-        }
-        // poke the BuildWatcher builds with no BC list and see if we
-        // can create job
-        // runs for premature builds
-        BuildManager.flushBuildsWithNoBCList();
-    }
 
 }

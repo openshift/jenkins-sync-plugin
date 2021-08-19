@@ -2,17 +2,32 @@ package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
 import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.removeJobWithBuildConfig;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.removeJobWithBuildConfigNameNamespace;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isPipelineStrategyBuildConfig;
 
+import org.apache.commons.lang.StringUtils;
 import org.eclipse.jetty.util.ConcurrentHashSet;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
+
+import java.util.logging.Logger;
+import java.util.List;
+import java.util.logging.Level;
 
 import hudson.model.Job;
 import hudson.security.ACL;
 import io.fabric8.openshift.api.model.BuildConfig;
+import io.fabric8.openshift.client.OpenShiftClient;
 import jenkins.model.Jenkins;
 import jenkins.security.NotReallyRoleSensitiveCallable;
 
 public class BuildConfigManager {
+    private static final Logger logger = Logger.getLogger(BuildConfigManager.class.getName());
+    
+    static {
+        reconcileJobsAndBuildConfigs();
+    }
+    
     /**
      * for coordinating between ItemListener.onUpdate and onDeleted both getting
      * called when we delete a job; ID should be combo of namespace and name for BC
@@ -111,6 +126,47 @@ public class BuildConfigManager {
 
         }
 
+    }
+    
+    static void reconcileJobsAndBuildConfigs() {
+        logger.info("Reconciling jobs and build configs");
+        List<WorkflowJob> jobs = Jenkins.getActiveInstance().getAllItems(WorkflowJob.class);
+        for (WorkflowJob job : jobs) {
+            BuildConfigProjectProperty property = job.getProperty(BuildConfigProjectProperty.class);
+            if (property != null) {
+                String ns = property.getNamespace();
+                String name = property.getName();
+                if (StringUtils.isNotBlank(ns) && StringUtils.isNotBlank(name)) {
+                    logger.info("Checking job " + job + " runs for BuildConfig " + ns + "/" + name);
+                    OpenShiftClient client = getAuthenticatedOpenShiftClient();
+                    BuildConfig bc = client.buildConfigs().inNamespace(ns).withName(name).get();
+                    if (bc == null) {
+                        try {
+                            ACL.impersonate(ACL.SYSTEM, new NotReallyRoleSensitiveCallable<Void, Exception>() {
+                                @Override
+                                public Void call() throws Exception {
+                                    try {
+                                        deleteInProgress(ns + name);
+                                        job.delete();
+                                    } finally {
+                                        removeJobWithBuildConfigNameNamespace(name, ns);
+                                        Jenkins.getActiveInstance().rebuildDependencyGraphAsync();
+                                        deleteCompleted(ns + name);
+                                    }
+                                    return null;
+                                }
+                            });
+                        } catch (Exception e) {
+                            // we do not throw error, so as to continue on to next BC; any exception thrown
+                            // here will be of a flavor on the jenkins end of things that we cannot immeidately 
+                            // recover from
+                            logger.log(Level.INFO, "reconcileJobsAndBuildConfigs", e);
+                        }
+                       
+                    }
+                }
+            }
+        }
     }
 
 }
