@@ -1088,6 +1088,11 @@ func TestPersistentVolumes(t *testing.T) {
 
 	scaleJenkins(false, ta)
 
+	// make sure jenkins is down
+  ta.t.Log("making sure jenkins is down via http get to jenkins console")
+  rawURICheck("", ta, "Failed connect to")
+  ta.t.Log("http get to jenkins console came back OK")
+
 	for buildName, buildInfo := range buildNameToBuildInfoMap {
 		if buildInfo.number%2 == 0 {
 			err = buildClient.BuildV1().Builds(ta.ns).Delete(context.Background(), buildName, metav1.DeleteOptions{})
