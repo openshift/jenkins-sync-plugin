@@ -335,7 +335,8 @@ func checkPodsForText(podName, searchItem string, ta *testArgs) bool {
 }
 
 func rawURICheck(rawURI string, ta *testArgs, query ...string) {
-	err := wait.PollImmediate(30*time.Second, 5*time.Minute, func() (done bool, err error) {
+	// made this 10 minutes to line up with sync plugin relist interval
+	err := wait.PollImmediate(30*time.Second, 10*time.Minute, func() (done bool, err error) {
 		j := NewRef(ta.t, kubeClient, ta.ns)
 		defer j.DelRawPod()
 		podName, err := j.RawURL(rawURI)
