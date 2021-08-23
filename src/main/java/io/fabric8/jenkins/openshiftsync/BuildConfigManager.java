@@ -6,16 +6,17 @@ import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.removeJobWith
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isPipelineStrategyBuildConfig;
 
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 import org.apache.commons.lang.StringUtils;
 import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 
-import java.util.logging.Logger;
-import java.util.List;
-import java.util.logging.Level;
-
 import hudson.model.Job;
 import hudson.security.ACL;
+import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.openshift.api.model.BuildConfig;
 import io.fabric8.openshift.client.OpenShiftClient;
 import jenkins.model.Jenkins;
@@ -36,14 +37,40 @@ public class BuildConfigManager {
      **/
     private static final ConcurrentHashSet<String> deletesInProgress = new ConcurrentHashSet<String>();
 
+
+    public static boolean isDeleteInProgress(String ns, String bcName) {
+      return deletesInProgress.contains(ns + "/" + bcName);
+    }
+
+    public static void deleteCompleted(String ns, String bcName) {
+      deletesInProgress.remove(ns + "/" + bcName);
+    }
+
+    public static void deleteInProgress(String ns, String bcName) {
+      deletesInProgress.add(ns + "/" + bcName);
+    }
+
+    /**
+     * @deprecated use isDeleteInProgress(String ns, String bcName)
+     * @param bcName
+     */
+    @Deprecated
     public static boolean isDeleteInProgress(String bcID) {
         return deletesInProgress.contains(bcID);
     }
-
+    /**
+     * @deprecated use deleteCompleted(String ns, String bcName)
+     * @param bcName
+     */
+    @Deprecated
     public static void deleteCompleted(String bcID) {
         deletesInProgress.remove(bcID);
     }
-
+    /**
+     * @deprecated use deleteInProgress(String ns, String bcName)
+     * @param bcName
+     */
+    @Deprecated
     public static void deleteInProgress(String bcName) {
         deletesInProgress.add(bcName);
     }
@@ -53,7 +80,6 @@ public class BuildConfigManager {
             upsertJob(buildConfig);
             return;
         }
-
         // no longer a Jenkins build so lets delete it if it exists
         deleteEventToJenkinsJob(buildConfig);
     }
@@ -105,15 +131,14 @@ public class BuildConfigManager {
                 ACL.impersonate(ACL.SYSTEM, new NotReallyRoleSensitiveCallable<Void, Exception>() {
                     @Override
                     public Void call() throws Exception {
+                        ObjectMeta metadata = buildConfig.getMetadata();
                         try {
-                            deleteInProgress(
-                                    buildConfig.getMetadata().getNamespace() + buildConfig.getMetadata().getName());
+                            deleteInProgress(metadata.getNamespace(), metadata.getName());
                             job.delete();
                         } finally {
                             removeJobWithBuildConfig(buildConfig);
                             Jenkins.getActiveInstance().rebuildDependencyGraphAsync();
-                            deleteCompleted(
-                                    buildConfig.getMetadata().getNamespace() + buildConfig.getMetadata().getName());
+                            deleteCompleted(metadata.getNamespace(), metadata.getName());
                         }
                         return null;
                     }
@@ -146,12 +171,12 @@ public class BuildConfigManager {
                                 @Override
                                 public Void call() throws Exception {
                                     try {
-                                        deleteInProgress(ns + name);
+                                        deleteInProgress(ns, name);
                                         job.delete();
                                     } finally {
                                         removeJobWithBuildConfigNameNamespace(name, ns);
                                         Jenkins.getActiveInstance().rebuildDependencyGraphAsync();
-                                        deleteCompleted(ns + name);
+                                        deleteCompleted(ns, name);
                                     }
                                     return null;
                                 }

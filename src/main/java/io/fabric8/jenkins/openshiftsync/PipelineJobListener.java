@@ -65,7 +65,6 @@ public class PipelineJobListener extends ItemListener {
     @DataBoundConstructor
     @SuppressFBWarnings("EI_EXPOSE_REP2")
     public PipelineJobListener(String server, String[] namespaces, String jobNamePattern) {
-
         this.server = server;
         this.namespace = namespaces[0];
         this.jobNamePattern = jobNamePattern;
@@ -167,8 +166,10 @@ public class PipelineJobListener extends ItemListener {
 
     private void upsertWorkflowJob(WorkflowJob job) {
         BuildConfigProjectProperty property = buildConfigProjectForJob(job);
-        if (property != null && (!BuildConfigManager.isDeleteInProgress(property.getNamespace() + property.getName()))) {
-            logger.info("Upsert WorkflowJob " + job.getName() + " to BuildConfig: " + property.getNamespace() + "/" + property.getName() + " in OpenShift");
+        String ns = property.getNamespace();
+        String bcName = property.getName();
+        if (property != null && (!BuildConfigManager.isDeleteInProgress(ns, bcName))) {
+            logger.info("Upsert WorkflowJob " + job.getName() + " to BuildConfig: " + ns + "/" + bcName + " in OpenShift");
             upsertBuildConfigForJob(job, property);
         }
     }
