@@ -16,6 +16,10 @@
 package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
+import static io.fabric8.jenkins.openshiftsync.BuildManager.addEventToJenkinsJobRun;
+import static io.fabric8.jenkins.openshiftsync.BuildManager.modifyEventToJenkinsJobRun;
+import static io.fabric8.jenkins.openshiftsync.BuildManager.deleteEventToJenkinsJobRun;
+import static io.fabric8.jenkins.openshiftsync.BuildManager.reconcileRunsAndBuilds;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -61,6 +65,7 @@ public class BuildClusterInformer implements ResourceEventHandler<Build>, Lifecy
         this.informer = factory.sharedIndexInformerFor(Build.class, getListIntervalInSeconds());
         this.informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
+        reconcileRunsAndBuilds();
         LOGGER.info("Build informer started for namespaces: {}" + namespaces);
     }
 
@@ -82,7 +87,7 @@ public class BuildClusterInformer implements ResourceEventHandler<Build>, Lifecy
                 String name = metadata.getName();
                 LOGGER.info("Build informer received add event for: {}" + name);
                 try {
-                    BuildManager.addEventToJenkinsJobRun(obj);
+                    addEventToJenkinsJobRun(obj);
                 } catch (IOException e) {
                     // TODO Auto-generated catch block
                     e.printStackTrace();
@@ -101,7 +106,7 @@ public class BuildClusterInformer implements ResourceEventHandler<Build>, Lifecy
                 String oldRv = oldObj.getMetadata().getResourceVersion();
                 String newRv = newObj.getMetadata().getResourceVersion();
                 LOGGER.info("Build informer received update event for: {} to: {}" + oldRv + " " + newRv);
-                BuildManager.modifyEventToJenkinsJobRun(newObj);
+                modifyEventToJenkinsJobRun(newObj);
             }
         }
     }
@@ -114,7 +119,7 @@ public class BuildClusterInformer implements ResourceEventHandler<Build>, Lifecy
             String namespace = metadata.getNamespace();
             if (namespaces.contains(namespace)) {
                 try {
-                    BuildManager.deleteEventToJenkinsJobRun(obj);
+                    deleteEventToJenkinsJobRun(obj);
                 } catch (Exception e) {
                     // TODO Auto-generated catch block
                     e.printStackTrace();

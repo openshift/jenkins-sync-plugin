@@ -16,6 +16,10 @@
 package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigManager.upsertJob;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigManager.modifyEventToJenkinsJob;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigManager.deleteEventToJenkinsJob;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigManager.reconcileJobsAndBuildConfigs;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +56,7 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
         this.informer = factory.sharedIndexInformerFor(BuildConfig.class, getResyncPeriodMilliseconds());
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
+        reconcileJobsAndBuildConfigs();
         LOGGER.info("BuildConfig informer started for namespace: {}" + namespace);
     }
 
@@ -70,7 +75,7 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
             String name = metadata.getName();
             LOGGER.info("BuildConfig informer received add event for: {}" + name);
             try {
-                BuildConfigManager.upsertJob(obj);
+                upsertJob(obj);
                 BuildManager.flushBuildsWithNoBCList();
             } catch (Exception e) {
                 // TODO Auto-generated catch block
@@ -87,7 +92,7 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
             String newRv = newObj.getMetadata().getResourceVersion();
             LOGGER.info("BuildConfig informer received update event for: {} to: {}" + oldRv + " " + newRv);
             try {
-                BuildConfigManager.modifyEventToJenkinsJob(newObj);
+                modifyEventToJenkinsJob(newObj);
                 BuildManager.flushBuildsWithNoBCList();
             } catch (Exception e) {
                 // TODO Auto-generated catch block
@@ -101,7 +106,7 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
         LOGGER.info("BuildConfig informer received delete event for: {}" + obj);
         if (obj != null) {
             try {
-                BuildConfigManager.deleteEventToJenkinsJob(obj);
+                deleteEventToJenkinsJob(obj);
             } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();

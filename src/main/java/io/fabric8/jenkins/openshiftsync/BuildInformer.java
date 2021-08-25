@@ -16,6 +16,11 @@
 package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
+import static io.fabric8.jenkins.openshiftsync.BuildManager.addEventToJenkinsJobRun;
+import static io.fabric8.jenkins.openshiftsync.BuildManager.modifyEventToJenkinsJobRun;
+import static io.fabric8.jenkins.openshiftsync.BuildManager.deleteEventToJenkinsJobRun;
+import static io.fabric8.jenkins.openshiftsync.BuildManager.reconcileRunsAndBuilds;
+
 
 import java.io.IOException;
 
@@ -58,6 +63,7 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
         this.informer = factory.sharedIndexInformerFor(Build.class, getResyncPeriodMilliseconds());
         this.informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
+        reconcileRunsAndBuilds();
         LOGGER.info("Build informer started for namespace: {}" + namespace);
     }
 
@@ -76,7 +82,7 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
             String name = metadata.getName();
             LOGGER.info("Build informer received add event for: {}" + name);
             try {
-                BuildManager.addEventToJenkinsJobRun(obj);
+                addEventToJenkinsJobRun(obj);
             } catch (IOException e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
@@ -91,7 +97,7 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
             String oldRv = oldObj.getMetadata().getResourceVersion();
             String newRv = newObj.getMetadata().getResourceVersion();
             LOGGER.info("Build informer received update event for: {} to: {}" + oldRv + " " + newRv);
-            BuildManager.modifyEventToJenkinsJobRun(newObj);
+            modifyEventToJenkinsJobRun(newObj);
         }
     }
 
@@ -100,7 +106,7 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
         LOGGER.info("Build informer received delete event for: {}" + obj);
         if (obj != null) {
             try {
-                BuildManager.deleteEventToJenkinsJobRun(obj);
+                deleteEventToJenkinsJobRun(obj);
             } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();

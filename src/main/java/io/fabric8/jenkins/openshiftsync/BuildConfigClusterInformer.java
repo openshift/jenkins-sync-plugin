@@ -16,6 +16,10 @@
 package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigManager.upsertJob;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigManager.modifyEventToJenkinsJob;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigManager.deleteEventToJenkinsJob;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigManager.reconcileJobsAndBuildConfigs;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -56,6 +60,7 @@ public class BuildConfigClusterInformer implements ResourceEventHandler<BuildCon
         this.informer = factory.sharedIndexInformerFor(BuildConfig.class, getListIntervalInSeconds());
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
+        reconcileJobsAndBuildConfigs();
         BuildManager.flushBuildsWithNoBCList();
         LOGGER.info("BuildConfig informer started for namespace: {}" + namespaces);
     }
@@ -79,7 +84,7 @@ public class BuildConfigClusterInformer implements ResourceEventHandler<BuildCon
                 String name = metadata.getName();
                 LOGGER.info("BuildConfig informer received add event for: {}" + name);
                 try {
-                    BuildConfigManager.upsertJob(obj);
+                    upsertJob(obj);
                 } catch (Exception e) {
                     // TODO Auto-generated catch block
                     e.printStackTrace();
@@ -99,7 +104,7 @@ public class BuildConfigClusterInformer implements ResourceEventHandler<BuildCon
                 String newRv = newObj.getMetadata().getResourceVersion();
                 LOGGER.info("BuildConfig informer received update event for: {} to: {}" + oldRv + " " + newRv);
                 try {
-                    BuildConfigManager.modifyEventToJenkinsJob(newObj);
+                    modifyEventToJenkinsJob(newObj);
                 } catch (Exception e) {
                     // TODO Auto-generated catch block
                     e.printStackTrace();
@@ -116,7 +121,7 @@ public class BuildConfigClusterInformer implements ResourceEventHandler<BuildCon
             String namespace = metadata.getNamespace();
             if (namespaces.contains(namespace)) {
                 try {
-                    BuildConfigManager.deleteEventToJenkinsJob(obj);
+                    deleteEventToJenkinsJob(obj);
                 } catch (Exception e) {
                     // TODO Auto-generated catch block
                     e.printStackTrace();
