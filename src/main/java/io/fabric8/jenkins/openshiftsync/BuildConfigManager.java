@@ -52,7 +52,6 @@ public class BuildConfigManager {
 
     /**
      * @deprecated use isDeleteInProgress(String ns, String bcName)
-     * @param bcName
      */
     @Deprecated
     public static boolean isDeleteInProgress(String bcID) {
@@ -60,7 +59,6 @@ public class BuildConfigManager {
     }
     /**
      * @deprecated use deleteCompleted(String ns, String bcName)
-     * @param bcName
      */
     @Deprecated
     public static void deleteCompleted(String bcID) {
@@ -68,7 +66,6 @@ public class BuildConfigManager {
     }
     /**
      * @deprecated use deleteInProgress(String ns, String bcName)
-     * @param bcName
      */
     @Deprecated
     public static void deleteInProgress(String bcName) {
