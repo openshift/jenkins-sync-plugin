@@ -834,7 +834,7 @@ func TestDeclarativePlusNodejs(t *testing.T) {
 			Strategy: buildv1.BuildStrategy{
 				Type: buildv1.JenkinsPipelineBuildStrategyType,
 				JenkinsPipelineStrategy: &buildv1.JenkinsPipelineBuildStrategy{
-					Jenkinsfile: nodejsDeclarative,
+					Jenkinsfile: fmt.Sprintf(nodejsDeclarative, ta.ns),
 				},
 			},
 		},
@@ -959,7 +959,7 @@ func TestBlueGreen(t *testing.T) {
 	ta.template = bgt.Name
 	ta.templateNs = ta.ns
 	ta.templateObj = bgt
-	ta.templateParams = map[string]string{"VERBOSE": "true"}
+	ta.templateParams = map[string]string{"VERBOSE": "true", "APPLICATION_DOMAIN": fmt.Sprintf("nodejs-%s.ocp.io", ta.ns)}
 	instantiateTemplate(ta)
 
 	ta.skipBCCreate = true
@@ -1089,9 +1089,9 @@ func TestPersistentVolumes(t *testing.T) {
 	scaleJenkins(false, ta)
 
 	// make sure jenkins is down
-  ta.t.Log("making sure jenkins is down via http get to jenkins console")
-  rawURICheck("", ta, "Failed connect to")
-  ta.t.Log("http get to jenkins console came back OK")
+	ta.t.Log("making sure jenkins is down via http get to jenkins console")
+	rawURICheck("", ta, "Failed connect to")
+	ta.t.Log("http get to jenkins console came back OK")
 
 	for buildName, buildInfo := range buildNameToBuildInfoMap {
 		if buildInfo.number%2 == 0 {

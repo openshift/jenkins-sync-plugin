@@ -106,7 +106,7 @@ const (
                             openshift.withCluster() {
                                 openshift.withProject() {
                                     // create a new application from the templatePath
-                                    openshift.newApp(templatePath)
+                                    openshift.newApp(templatePath, "-p", "APPLICATION_DOMAIN=rails-%s.ocp.io")
                                 }
                             }
                         } // script
@@ -263,6 +263,7 @@ objects:
   metadata:
     name: blue-${NAME}
   spec:
+    host: blue-${APPLICATION_DOMAIN}
     to:
       kind: Service
       name: ${NAME}-blue
@@ -271,6 +272,7 @@ objects:
   metadata:
     name: green-${NAME}
   spec:
+    host: green-${APPLICATION_DOMAIN}
     to:
       kind: Service
       name: ${NAME}-green
@@ -282,6 +284,7 @@ objects:
     alternateBackends:
     - name: ${NAME}-green
       weight: 0
+    host: n-p-e-${APPLICATION_DOMAIN}
     to:
       kind: Service
       name: ${NAME}-blue
