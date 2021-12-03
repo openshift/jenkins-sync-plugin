@@ -257,6 +257,46 @@ func podTemplateTest(name string, ta *testArgs) {
 
 }
 
+func javaBuilderPodTemplateTest(name string, ta *testArgs) {
+	bc := &buildv1.BuildConfig{}
+	bc.Name = name
+	bc.Spec = buildv1.BuildConfigSpec{
+		CommonSpec: buildv1.CommonSpec{
+			Strategy: buildv1.BuildStrategy{
+				Type: buildv1.JenkinsPipelineBuildStrategyType,
+				JenkinsPipelineStrategy: &buildv1.JenkinsPipelineBuildStrategy{
+					Jenkinsfile: javabuilder,
+				},
+			},
+		},
+	}
+
+	ta.bc = bc
+
+	ta.jobLogSearch = finishedSuccess
+	basicPipelineInvocationAndValidation(ta)
+}
+
+func nodejsBuilderPodTemplateTest(name string, ta *testArgs) {
+	bc := &buildv1.BuildConfig{}
+	bc.Name = name
+	bc.Spec = buildv1.BuildConfigSpec{
+		CommonSpec: buildv1.CommonSpec{
+			Strategy: buildv1.BuildStrategy{
+				Type: buildv1.JenkinsPipelineBuildStrategyType,
+				JenkinsPipelineStrategy: &buildv1.JenkinsPipelineBuildStrategy{
+					Jenkinsfile: nodejsbuilder,
+				},
+			},
+		},
+	}
+
+	ta.bc = bc
+
+	ta.jobLogSearch = finishedSuccess
+	basicPipelineInvocationAndValidation(ta)
+}
+
 func dumpPods(ta *testArgs) {
 	podClient := kubeClient.CoreV1().Pods(ta.ns)
 	podList, err := podClient.List(context.TODO(), metav1.ListOptions{})
@@ -753,6 +793,18 @@ func TestImageStreamTagPodTemplate(t *testing.T) {
 	}
 
 	podTemplateTest("sync-plugin-imagestreamtag-pod-template", ta)
+}
+
+func TestJavaBuilderPodTemplate(t *testing.T) {
+	ta := setupThroughJenkinsLaunch(t, nil)
+	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
+	javaBuilderPodTemplateTest("sync-plugin-java-builder-pod-template", ta)
+}
+
+func TestNodeJSBuilderPodTemplate(t *testing.T) {
+	ta := setupThroughJenkinsLaunch(t, nil)
+	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
+	nodejsBuilderPodTemplateTest("sync-plugin-nodejs-builder-pod-template", ta)
 }
 
 func TestPruningSuccessfulPipeline(t *testing.T) {
