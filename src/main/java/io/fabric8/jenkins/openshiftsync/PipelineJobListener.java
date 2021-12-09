@@ -166,11 +166,13 @@ public class PipelineJobListener extends ItemListener {
 
     private void upsertWorkflowJob(WorkflowJob job) {
         BuildConfigProjectProperty property = buildConfigProjectForJob(job);
-        String ns = property.getNamespace();
-        String bcName = property.getName();
-        if (property != null && (!BuildConfigManager.isDeleteInProgress(ns, bcName))) {
-            logger.info("Upsert WorkflowJob " + job.getName() + " to BuildConfig: " + ns + "/" + bcName + " in OpenShift");
-            upsertBuildConfigForJob(job, property);
+        if (property != null) {
+            String ns = property.getNamespace();
+            String bcName = property.getName();
+            if (!BuildConfigManager.isDeleteInProgress(ns, bcName)) {
+                logger.info("Upsert WorkflowJob " + job.getName() + " to BuildConfig: " + ns + "/" + bcName + " in OpenShift");
+                upsertBuildConfigForJob(job, property);        		
+            }
         }
     }
 
