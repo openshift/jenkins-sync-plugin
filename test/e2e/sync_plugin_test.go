@@ -134,14 +134,15 @@ func setupThroughJenkinsLaunch(t *testing.T, ta *testArgs) *testArgs {
 	}
 	setupClients(ta.t)
 
-	randomTestNamespaceName := generateName(testNamespace)
-	ta.ns = randomTestNamespaceName
-	_, err := projectClient.ProjectV1().ProjectRequests().Create(context.Background(), &projectv1.ProjectRequest{
-		ObjectMeta: metav1.ObjectMeta{Name: randomTestNamespaceName},
-	}, metav1.CreateOptions{})
+	if len(ta.ns) == 0 {
+		ta.ns = generateName(testNamespace)
+		_, err := projectClient.ProjectV1().ProjectRequests().Create(context.Background(), &projectv1.ProjectRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: ta.ns},
+		}, metav1.CreateOptions{})
 
-	if err != nil {
-		debugAndFailTest(ta, fmt.Sprintf("%#v", err))
+		if err != nil {
+			debugAndFailTest(ta, fmt.Sprintf("%#v", err))
+		}
 	}
 
 	if len(ta.template) == 0 {
@@ -637,6 +638,38 @@ func TestSecretCredentialSync(t *testing.T) {
 	}
 
 	credCheck(secret.Name, ta, "<body><h2>HTTP ERROR 404 Not Found</h2>")
+}
+
+func TestSecretCredentialSyncAfterStartup(t *testing.T) {
+	ta := &testArgs{
+		t: t,
+	}
+
+	setupClients(t)
+
+	ta.ns = generateName(testNamespace)
+	_, err := projectClient.ProjectV1().ProjectRequests().Create(context.Background(), &projectv1.ProjectRequest{
+		ObjectMeta: metav1.ObjectMeta{Name: ta.ns},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		debugAndFailTest(ta, fmt.Sprintf("%#v", err))
+	}
+
+	secret := &corev1.Secret{
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"password": []byte("c2VjcmV0Y3JlZHN5bmMK"),
+			"username": []byte("c2VjcmV0Y3JlZHN5bmMK"),
+		},
+	}
+	secret.Name = "secret-to-credential"
+	secret.Labels = map[string]string{"credential.sync.jenkins.openshift.io": "true"}
+	secret, err = kubeClient.CoreV1().Secrets(ta.ns).Create(context.Background(), secret, metav1.CreateOptions{})
+
+	setupThroughJenkinsLaunch(t, ta)
+	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
+
+	credCheck(secret.Name, ta, "secret-to-credential", "c2VjcmV0Y3JlZHN5bmMK")
 }
 
 func TestConfMapPodTemplate(t *testing.T) {
