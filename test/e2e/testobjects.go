@@ -40,7 +40,7 @@ const (
           try {
              timeout(time: 20, unit: 'MINUTES') {
         
-                node("jenkins-agent") {
+                node("POD_TEMPLATE_NAME") {
                   sh "mvn --version"
                 }
 

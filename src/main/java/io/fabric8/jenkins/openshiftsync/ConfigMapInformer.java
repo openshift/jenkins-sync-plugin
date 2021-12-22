@@ -16,7 +16,7 @@
 package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL;
-import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL_VALUE;
+import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL_VALUES;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.CONFIGMAP;
 import static java.util.Collections.singletonMap;
@@ -55,8 +55,8 @@ public class ConfigMapInformer implements ResourceEventHandler<ConfigMap>, Lifec
         LOGGER.info("Starting configMap informer for {} !!" + namespace);
         LOGGER.debug("listing ConfigMap resources");
         SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
-        Map<String, String> labels = singletonMap(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUE);
-        OperationContext withLabels = new OperationContext().withLabels(labels);
+        Map<String, String[]> labels = singletonMap(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUES);
+        OperationContext withLabels = new OperationContext().withLabelsIn(labels);
         this.informer = factory.sharedIndexInformerFor(ConfigMap.class, withLabels, getResyncPeriodMilliseconds());
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();

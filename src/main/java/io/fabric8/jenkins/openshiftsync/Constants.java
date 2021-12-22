@@ -59,7 +59,9 @@ public class Constants {
     public static final String OPENSHIFT_PROJECT_ENV_VAR_NAME = "PROJECT_NAME";
     public static final String OPENSHIFT_PROJECT_FILE = "/run/secrets/kubernetes.io/serviceaccount/namespace";
 
-    public static final String IMAGESTREAM_AGENT_LABEL_VALUE = "jenkins-slave";
+    public static final String IMAGESTREAM_AGENT_LABEL_VALUE =  "jenkins-slave";
+    public static final String IMAGESTREAM_AGENT_ALTERNATE_LABEL_VALUE = "jenkins-agent";
+    protected static final String[] IMAGESTREAM_AGENT_LABEL_VALUES = {IMAGESTREAM_AGENT_LABEL_VALUE, IMAGESTREAM_AGENT_ALTERNATE_LABEL_VALUE};
     public static final String IMAGESTREAM_AGENT_LABEL = "role";
 
 }

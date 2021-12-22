@@ -2,6 +2,7 @@ package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL;
 import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL_VALUE;
+import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_ALTERNATE_LABEL_VALUE;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
 import static java.util.logging.Level.FINE;
 
@@ -423,7 +424,8 @@ public class PodTemplateUtils {
 
     protected static boolean hasSlaveLabelOrAnnotation(Map<String, String> map) {
         return map != null && map.containsKey(IMAGESTREAM_AGENT_LABEL)
-                && map.get(IMAGESTREAM_AGENT_LABEL).equals(IMAGESTREAM_AGENT_LABEL_VALUE);
+                && (map.get(IMAGESTREAM_AGENT_LABEL).equals(IMAGESTREAM_AGENT_LABEL_VALUE) ||
+                        map.get(IMAGESTREAM_AGENT_LABEL).equals(IMAGESTREAM_AGENT_ALTERNATE_LABEL_VALUE));
     }
 
     protected static void addAgents(List<PodTemplate> slaves, String type, String uid, String apiObjName,

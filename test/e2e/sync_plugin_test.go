@@ -237,15 +237,16 @@ func instantiateBuild(ta *testArgs) *buildv1.Build {
 	return waitForBuildSuccess(ta, build)
 }
 
-func podTemplateTest(name string, ta *testArgs) {
+func podTemplateTest(podTemplateName string, ta *testArgs) {
 	bc := &buildv1.BuildConfig{}
-	bc.Name = name
+	bc.Name = strings.ReplaceAll(podTemplateName, ":", ".")
+	pipelineDefinition := strings.ReplaceAll(simplemaven, "POD_TEMPLATE_NAME", podTemplateName)
 	bc.Spec = buildv1.BuildConfigSpec{
 		CommonSpec: buildv1.CommonSpec{
 			Strategy: buildv1.BuildStrategy{
 				Type: buildv1.JenkinsPipelineBuildStrategyType,
 				JenkinsPipelineStrategy: &buildv1.JenkinsPipelineBuildStrategy{
-					Jenkinsfile: simplemaven,
+					Jenkinsfile: pipelineDefinition,
 				},
 			},
 		},
@@ -712,52 +713,73 @@ func TestSecretCredentialSyncAfterStartup(t *testing.T) {
 	credCheck(secret.Name, ta, "secret-to-credential", "c2VjcmV0Y3JlZHN5bmMK")
 }
 
-func TestConfMapPodTemplate(t *testing.T) {
+func TestConfigMapPodTemplate(t *testing.T) {
 	ta := setupThroughJenkinsLaunch(t, nil)
 	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
-
-	cm := &corev1.ConfigMap{Data: map[string]string{"jenkins-agent": `
-      <org.csanchez.jenkins.plugins.kubernetes.PodTemplate>
-        <inheritFrom></inheritFrom>
-        <name>jenkins-agent</name>
-        <instanceCap>2147483647</instanceCap>
-        <idleMinutes>0</idleMinutes>
-        <label>jenkins-agent</label>
-        <serviceAccount>jenkins</serviceAccount>
-        <nodeSelector></nodeSelector>
-        <volumes/>
-        <containers>
-          <org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
-            <name>jnlp</name>
-            <image>image-registry.openshift-image-registry.svc:5000/openshift/jenkins-agent-maven:latest</image>
-            <privileged>false</privileged>
-            <alwaysPullImage>false</alwaysPullImage>
-            <workingDir>/tmp</workingDir>
-            <command></command>
-            <args>${computer.jnlpmac} ${computer.name}</args>
-            <ttyEnabled>false</ttyEnabled>
-            <resourceRequestCpu></resourceRequestCpu>
-            <resourceRequestMemory></resourceRequestMemory>
-            <resourceLimitCpu></resourceLimitCpu>
-            <resourceLimitMemory></resourceLimitMemory>
-            <envVars/>
-          </org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
-        </containers>
-        <envVars/>
-        <annotations/>
-        <imagePullSecrets/>
-        <nodeProperties/>
-      </org.csanchez.jenkins.plugins.kubernetes.PodTemplate>
-`}}
-	cm.Labels = map[string]string{"role": "jenkins-slave"}
-	cm.Name = "config-map-with-podtemplate"
-
+	labels := map[string]string{"role": "jenkins-agent"}
+	cmName := "config-map-with-podtemplate"
+	podTemplateName := "jenkins-agent"
+	cm := newPodTemplateConfigMap(cmName, podTemplateName, labels)
 	cm, err := kubeClient.CoreV1().ConfigMaps(ta.ns).Create(context.Background(), cm, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatalf("error creating pod template cm: %s", err.Error())
 	}
+	podTemplateTest(podTemplateName, ta)
+}
 
-	podTemplateTest("sync-plugin-configmap-pod-template", ta)
+func TestConfigMapLegacyPodTemplate(t *testing.T) {
+	ta := setupThroughJenkinsLaunch(t, nil)
+	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
+	labels := map[string]string{"role": "jenkins-slave"}
+	cmName := "config-map-with-legacy-podtemplate"
+	podTemplateName := "jenkins-slave"
+	cm := newPodTemplateConfigMap(cmName, podTemplateName, labels)
+	cm, err := kubeClient.CoreV1().ConfigMaps(ta.ns).Create(context.Background(), cm, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("error creating pod template cm: %s", err.Error())
+	}
+	podTemplateTest(podTemplateName, ta)
+}
+
+func newPodTemplateConfigMap(configMapName string, podTemplateName string, templateLabels map[string]string) *corev1.ConfigMap {
+	templateDefinition := `
+	      <org.csanchez.jenkins.plugins.kubernetes.PodTemplate>
+	        <inheritFrom></inheritFrom>
+	        <name>POD_TEMPLATE_NAME</name>
+	        <instanceCap>2147483647</instanceCap>
+	        <idleMinutes>0</idleMinutes>
+	        <label>POD_TEMPLATE_NAME</label>
+	        <serviceAccount>jenkins</serviceAccount>
+	        <nodeSelector></nodeSelector>
+	        <volumes/>
+	        <containers>
+	          <org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
+	            <name>jnlp</name>
+	            <image>image-registry.openshift-image-registry.svc:5000/openshift/jenkins-agent-maven:latest</image>
+	            <privileged>false</privileged>
+	            <alwaysPullImage>false</alwaysPullImage>
+	            <workingDir>/tmp</workingDir>
+	            <command></command>
+	            <args>${computer.jnlpmac} ${computer.name}</args>
+	            <ttyEnabled>false</ttyEnabled>
+	            <resourceRequestCpu></resourceRequestCpu>
+	            <resourceRequestMemory></resourceRequestMemory>
+	            <resourceLimitCpu></resourceLimitCpu>
+	            <resourceLimitMemory></resourceLimitMemory>
+	            <envVars/>
+	          </org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
+	        </containers>
+	        <envVars/>
+	        <annotations/>
+	        <imagePullSecrets/>
+	        <nodeProperties/>
+	      </org.csanchez.jenkins.plugins.kubernetes.PodTemplate>
+	`
+	templateDefinition = strings.ReplaceAll(templateDefinition, "POD_TEMPLATE_NAME", podTemplateName)
+	cm := &corev1.ConfigMap{Data: map[string]string{podTemplateName: templateDefinition}}
+	cm.Labels = templateLabels
+	cm.Name = configMapName
+	return cm
 }
 
 func TestImageStreamPodTemplate(t *testing.T) {
@@ -765,7 +787,8 @@ func TestImageStreamPodTemplate(t *testing.T) {
 	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
 
 	is := &imagev1.ImageStream{}
-	is.Name = "jenkins-agent"
+        podTemplateName := "sync-plugin-imagestream-pod-template"
+	is.Name = podTemplateName
 	is.Labels = map[string]string{"role": "jenkins-slave"}
 	is.Spec.Tags = []imagev1.TagReference{
 		{
@@ -790,7 +813,7 @@ func TestImageStreamPodTemplate(t *testing.T) {
 		t.Fatalf("error creating pod template stream: %s", err.Error())
 	}
 
-	podTemplateTest("sync-plugin-imagestream-pod-template", ta)
+	podTemplateTest(podTemplateName, ta)
 }
 
 func TestImageStreamTagPodTemplate(t *testing.T) {
@@ -798,7 +821,9 @@ func TestImageStreamTagPodTemplate(t *testing.T) {
 	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
 
 	is := &imagev1.ImageStream{}
-	is.Name = "jenkins-agent"
+        podTemplateName := "sync-plugin-imagestreamtag-pod-template"
+        podTemplateTag := "latest"
+	is.Name = podTemplateName
 	is.Labels = map[string]string{"role": "jenkins-slave"}
 	is.Spec.Tags = []imagev1.TagReference{
 		{
@@ -817,7 +842,7 @@ func TestImageStreamTagPodTemplate(t *testing.T) {
 			Annotations: map[string]string{
 				"role": "jenkins-slave",
 			},
-			Name: "latest",
+			Name: podTemplateTag,
 		},
 	}
 
@@ -825,7 +850,7 @@ func TestImageStreamTagPodTemplate(t *testing.T) {
 		t.Fatalf("error creating pod template stream: %s", err.Error())
 	}
 
-	podTemplateTest("sync-plugin-imagestreamtag-pod-template", ta)
+	podTemplateTest(podTemplateName + ":" + podTemplateTag, ta)
 }
 
 func TestJavaBuilderPodTemplate(t *testing.T) {
