@@ -176,8 +176,8 @@ public class BuildSyncRunListener extends RunListener<Run> {
     public void onCompleted(Run run, @Nonnull TaskListener listener) {
         if (shouldPollRun(run)) {
             runsToPoll.remove(run);
-            pollRun(run);
-            logger.info("onCompleted " + run.getUrl());
+            boolean updated = pollRun(run);
+            logger.info("onCompleted " + run.getUrl() + "updated: " + updated);
             maybeScheduleNext(((WorkflowRun) run).getParent());
         }
         super.onCompleted(run, listener);
@@ -187,8 +187,8 @@ public class BuildSyncRunListener extends RunListener<Run> {
     public void onDeleted(Run run) {
         if (shouldPollRun(run)) {
             runsToPoll.remove(run);
-            pollRun(run);
-            logger.info("onDeleted " + run.getUrl());
+            boolean updated = pollRun(run);
+            logger.info("onDeleted " + run.getUrl() + "updated: " + updated);
             maybeScheduleNext(((WorkflowRun) run).getParent());
         }
         super.onDeleted(run);
@@ -198,9 +198,9 @@ public class BuildSyncRunListener extends RunListener<Run> {
     public void onFinalized(Run run) {
         if (shouldPollRun(run)) {
             runsToPoll.remove(run);
-            pollRun(run);
+            boolean updated = pollRun(run);
             String jenkinsURL = Jenkins.get().getRootUrl();
-            logger.info("Run COMPLETED: Build details can be accessed at: " + jenkinsURL + run.getUrl());
+            logger.info("Run COMPLETED: " + run.getUrl() + " updated: " + updated);
         }
         super.onFinalized(run);
     }
@@ -212,7 +212,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
         }
     }
 
-    protected void pollRun(Run run) {
+    protected boolean pollRun(Run run) {
         if (!(run instanceof WorkflowRun)) {
             throw new IllegalStateException("Cannot poll a non-workflow run");
         }
@@ -232,12 +232,12 @@ public class BuildSyncRunListener extends RunListener<Run> {
         }
 
         try {
-            upsertBuild(run, wfRunExt, blueRun);
+            return upsertBuild(run, wfRunExt, blueRun);
         } catch (KubernetesClientException e) {
             if (e.getCode() == HttpStatus.SC_UNPROCESSABLE_ENTITY) {
                 runsToPoll.remove(run);
-                logger.warn("Cannot update status: {0}", e.getMessage());
-                return;
+                logger.warn(String.format("Cannot update status: %s with status %s", e.getMessage(), e.getStatus().toString()));
+                return false;
             }
             throw e;
         }
@@ -276,14 +276,15 @@ public class BuildSyncRunListener extends RunListener<Run> {
         return false;
     }
 
-    private void upsertBuild(Run run, RunExt wfRunExt, BlueRun blueRun) {
+    private boolean upsertBuild(Run run, RunExt wfRunExt, BlueRun blueRun) {
         if (run == null) {
-            return;
+            return false;
         }
 
         BuildCause cause = (BuildCause) run.getCause(BuildCause.class);
         if (cause == null) {
-            return;
+        	logger.warn("upsert build run " + run.getDisplayName() + " unexpectedly does not have a BuildCause");
+            return false;
         }
 
         String namespace = OpenShiftUtils.getNamespacefromPodInputs();
@@ -390,7 +391,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
         boolean needToUpdate = this.shouldUpdateOpenShiftBuild(cause, newNumStages, newNumFlowNodes,
                 wfRunExt.getStatus());
         if (!needToUpdate) {
-            return;
+            return false;
         }
 
         String json;
@@ -398,7 +399,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
             json = new ObjectMapper().writeValueAsString(wfRunExt);
         } catch (JsonProcessingException e) {
             logger.error("Failed to serialize workflow run. " + e, e);
-            return;
+            return false;
         }
 
         String pendingActions = null;
@@ -421,7 +422,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
         }
 
         String name = cause.getName();
-        logger.debug("Patching build {0}/{1}: setting phase to {2}", new Object[] { ns, name, phase });
+        logger.info(String.format("Patching build %s/%s: setting phase to %s with status %s run %s", ns, name, phase, wfRunExt.getStatus(), run.getDisplayName()));
         try {
 
             Map<String, String> annotations = new HashMap<String, String>();
@@ -456,8 +457,9 @@ public class BuildSyncRunListener extends RunListener<Run> {
         cause.setNumFlowNodes(newNumFlowNodes);
         cause.setNumStages(newNumStages);
         cause.setLastUpdateToOpenshift(TimeUnit.NANOSECONDS.toMillis(System.nanoTime()));
+        return true;
     }
-
+    
     // annotate the Build with pending input JSON so consoles can do the
     // Proceed/Abort stuff if they want
     private String getPendingActionsJson(WorkflowRun run) {

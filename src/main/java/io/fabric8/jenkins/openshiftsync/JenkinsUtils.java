@@ -405,7 +405,9 @@ public class JenkinsUtils {
             // We need to ensure that we do not remove existing Causes from a Run since
             // other plugins may rely on them.
             List<Cause> newCauses = new ArrayList<>();
-            newCauses.add(new BuildCause(build, buildConfigProject.getUid()));
+            BuildCause buildCause = new BuildCause(build, buildConfigProject.getUid());
+            LOGGER.info(String.format("triggering run for build %s/%s", buildCause.getNamespace(), buildCause.getName()));
+            newCauses.add(buildCause);
             CauseAction originalCauseAction = BuildToActionMapper.removeCauseAction(build.getMetadata().getName());
             if (originalCauseAction != null) {
                 if (LOGGER.isLoggable(Level.FINE)) {
@@ -482,7 +484,9 @@ public class JenkinsUtils {
     }
     
 	private static boolean isAlreadyTriggered(WorkflowJob job, Build build) {
-		return getRun(job, build) != null;
+		boolean rc = getRun(job, build) != null;
+		LOGGER.info(String.format("isAlreadyTriggered build %s/%s %s", build.getMetadata().getNamespace(), build.getMetadata().getName(), String.valueOf(rc)));
+		return rc;
 	}
 
 	public static void cancelBuild(WorkflowJob job, Build build) {

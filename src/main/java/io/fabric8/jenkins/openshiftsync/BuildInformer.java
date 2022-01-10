@@ -80,7 +80,7 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
         if (obj != null) {
             ObjectMeta metadata = obj.getMetadata();
             String name = metadata.getName();
-            LOGGER.info("Build informer received add event for: {}" + name);
+            LOGGER.info(String.format("Build informer received add event for: %s", name));
             try {
                 addEventToJenkinsJobRun(obj);
             } catch (IOException e) {
@@ -96,14 +96,14 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
         if (newObj != null) {
             String oldRv = oldObj.getMetadata().getResourceVersion();
             String newRv = newObj.getMetadata().getResourceVersion();
-            LOGGER.info("Build informer received update event for: {} to: {}" + oldRv + " " + newRv);
+            LOGGER.info(String.format("Build informer received update event for: %s to: %s", oldRv,newRv));
             modifyEventToJenkinsJobRun(newObj);
         }
     }
 
     @Override
     public void onDelete(Build obj, boolean deletedFinalStateUnknown) {
-        LOGGER.info("Build informer received delete event for: {}" + obj);
+        LOGGER.info(String.format("Build informer received delete event for: %s", obj));
         if (obj != null) {
             try {
                 deleteEventToJenkinsJobRun(obj);
