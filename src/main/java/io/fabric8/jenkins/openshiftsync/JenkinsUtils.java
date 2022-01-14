@@ -42,7 +42,9 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -77,6 +79,7 @@ import hudson.model.RunParameterDefinition;
 import hudson.model.StringParameterDefinition;
 import hudson.model.StringParameterValue;
 import hudson.model.TopLevelItem;
+import hudson.model.queue.QueueTaskFuture;
 import hudson.plugins.git.RevisionParameterAction;
 import hudson.security.ACL;
 import hudson.slaves.Cloud;
@@ -466,16 +469,19 @@ public class JenkinsUtils {
             }
             putJobWithBuildConfig(job, buildConfig);
 
-            if (job.scheduleBuild2(0, buildActions.toArray(new Action[buildActions.size()])) != null) {
-                updateOpenShiftBuildPhase(build, PENDING);
-                // If builds are queued too quickly, Jenkins can add the cause
-                // to the previous queued build so let's add a tiny
-                // sleep.
+            QueueTaskFuture<WorkflowRun> runFuture = job.scheduleBuild2(0, buildActions.toArray(new Action[buildActions.size()]));
+            if (runFuture != null) {
+                updateOpenShiftBuildPhase(build, PENDING);                
+                // If multiple runs are queued for a given build, Jenkins can add the cause
+                // to the previous queued build so we wait until the run has started so our 
+                // isAlreadyTriggered logic on a subsequent request will catch the duplicate
                 try {
-                    Thread.sleep(50l);
-                } catch (InterruptedException e) {
-                    // Ignore
-                }
+                	runFuture.getStartCondition().get(10, TimeUnit.SECONDS);
+				} catch (InterruptedException | ExecutionException e) {
+					LOGGER.info(String.format("triggerJob waitForStart for %s/%s produced exception: %s", buildCause.getNamespace(), buildCause.getName(), e.getMessage()));
+				} catch (TimeoutException e) {
+					LOGGER.warning(String.format("triggerJob waitForStart for %s/%s timed out after 10 seconds waiting for Jenkins to schedule a Run", buildCause.getNamespace(), buildCause.getName()));
+				}
                 return true;
             }
 
