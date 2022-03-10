@@ -859,6 +859,7 @@ public class JenkinsUtils {
 			return (KubernetesCloud) openShiftCloud;
 		}
 
+		LOGGER.warning("Cannot find Kuberenetes Cloud configuration with name: openshift")
 		return null;
 	}
 
