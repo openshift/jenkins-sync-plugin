@@ -50,18 +50,18 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
     }
 
     public void start() {
-        LOGGER.info("Starting BuildConfig informer for {} !!" + namespace);
+        LOGGER.info("Starting BuildConfig informer for " + namespace + "!!");
         LOGGER.debug("listing BuildConfig resources");
         SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
         this.informer = factory.sharedIndexInformerFor(BuildConfig.class, getResyncPeriodMilliseconds());
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
         reconcileJobsAndBuildConfigs();
-        LOGGER.info("BuildConfig informer started for namespace: {}" + namespace);
+        LOGGER.info("BuildConfig informer started for namespace: " + namespace);
     }
 
     public void stop() {
-        LOGGER.info("Stopping informer {} !!" + namespace);
+        LOGGER.info("Stopping informer " + namespace + "!!");
         if( this.informer != null ) {
           this.informer.stop();
         }
@@ -69,11 +69,11 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
 
     @Override
     public void onAdd(BuildConfig obj) {
-        LOGGER.debug("BuildConfig informer  received add event for: {}" + obj);
+        LOGGER.debug("BuildConfig informer  received add event for: " + obj);
         if (obj != null) {
             ObjectMeta metadata = obj.getMetadata();
             String name = metadata.getName();
-            LOGGER.info("BuildConfig informer received add event for: {}" + name);
+            LOGGER.info("BuildConfig informer received add event for: " + name);
             try {
                 upsertJob(obj);
                 BuildManager.flushBuildsWithNoBCList();
@@ -86,11 +86,11 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
 
     @Override
     public void onUpdate(BuildConfig oldObj, BuildConfig newObj) {
-        LOGGER.debug("BuildConfig informer received update event for: {} to: {}" + oldObj + " " + newObj);
+        LOGGER.debug("BuildConfig informer received update event for: " + oldObj + " to: " + newObj);
         if (newObj != null) {
             String oldRv = oldObj.getMetadata().getResourceVersion();
             String newRv = newObj.getMetadata().getResourceVersion();
-            LOGGER.info("BuildConfig informer received update event for: {} to: {}" + oldRv + " " + newRv);
+            LOGGER.info("BuildConfig informer received update event for: " + oldRv + " to: " + newRv);
             try {
                 modifyEventToJenkinsJob(newObj);
                 BuildManager.flushBuildsWithNoBCList();
@@ -103,7 +103,7 @@ public class BuildConfigInformer implements ResourceEventHandler<BuildConfig>, L
 
     @Override
     public void onDelete(BuildConfig obj, boolean deletedFinalStateUnknown) {
-        LOGGER.info("BuildConfig informer received delete event for: {}" + obj);
+        LOGGER.info("BuildConfig informer received delete event for: " + obj);
         if (obj != null) {
             try {
                 deleteEventToJenkinsJob(obj);

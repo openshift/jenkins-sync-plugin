@@ -59,18 +59,18 @@ public class BuildClusterInformer implements ResourceEventHandler<Build>, Lifecy
     }
 
     public void start() {
-        LOGGER.info("Starting Build informer for {} !!" + namespaces);
+        LOGGER.info("Starting Build informer for " + namespaces + "!!");
         LOGGER.debug("Listing Build resources");
         SharedInformerFactory factory = getInformerFactory();
         this.informer = factory.sharedIndexInformerFor(Build.class, getListIntervalInSeconds());
         this.informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
         reconcileRunsAndBuilds();
-        LOGGER.info("Build informer started for namespaces: {}" + namespaces);
+        LOGGER.info("Build informer started for namespaces: " + namespaces);
     }
 
     public void stop() {
-      LOGGER.info("Stopping informer {} !!" + namespaces);
+      LOGGER.info("Stopping informer " + namespaces + "!!");
       if( this.informer != null ) {
         this.informer.stop();
       }
@@ -79,13 +79,13 @@ public class BuildClusterInformer implements ResourceEventHandler<Build>, Lifecy
 
     @Override
     public void onAdd(Build obj) {
-        LOGGER.debug("Build informer  received add event for: {}" + obj);
+        LOGGER.debug("Build informer  received add event for: " + obj);
         if (obj != null) {
             ObjectMeta metadata = obj.getMetadata();
             String namespace = metadata.getNamespace();
             if (namespaces.contains(namespace)) {
                 String name = metadata.getName();
-                LOGGER.info("Build informer received add event for: {}" + name);
+                LOGGER.info("Build informer received add event for: " + name);
                 try {
                     addEventToJenkinsJobRun(obj);
                 } catch (IOException e) {
@@ -98,14 +98,14 @@ public class BuildClusterInformer implements ResourceEventHandler<Build>, Lifecy
 
     @Override
     public void onUpdate(Build oldObj, Build newObj) {
-        LOGGER.debug("Build informer received update event for: {} to: {}" + oldObj + " " + newObj);
+        LOGGER.debug("Build informer received update event for: " + oldObj + " to: " + newObj);
         if (newObj != null) {
             ObjectMeta metadata = oldObj.getMetadata();
             String namespace = metadata.getNamespace();
             if (namespaces.contains(namespace)) {
                 String oldRv = oldObj.getMetadata().getResourceVersion();
                 String newRv = newObj.getMetadata().getResourceVersion();
-                LOGGER.info("Build informer received update event for: {} to: {}" + oldRv + " " + newRv);
+                LOGGER.info("Build informer received update event for: " + oldRv + " to: " + newRv);
                 modifyEventToJenkinsJobRun(newObj);
             }
         }
@@ -113,7 +113,7 @@ public class BuildClusterInformer implements ResourceEventHandler<Build>, Lifecy
 
     @Override
     public void onDelete(Build obj, boolean deletedFinalStateUnknown) {
-        LOGGER.info("Build informer received delete event for: {}" + obj);
+        LOGGER.info("Build informer received delete event for: " + obj);
         if (obj != null) {
             ObjectMeta metadata = obj.getMetadata();
             String namespace = metadata.getNamespace();

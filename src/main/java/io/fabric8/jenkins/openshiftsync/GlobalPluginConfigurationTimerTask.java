@@ -125,9 +125,9 @@ public class GlobalPluginConfigurationTimerTask extends SafeTimerTask {
         logger.info("Stopping all informers ...");
         synchronized (this) {
             for (Lifecyclable informer : informers) {
-                logger.info("Stopping informer: {}" + informer);
+                logger.info("Stopping informer: " + informer);
                 informer.stop();
-                logger.info("Stopped informer: {}" + informer);
+                logger.info("Stopped informer: " + informer);
             }
             informers.clear();
             logger.info("Stopped all informers");

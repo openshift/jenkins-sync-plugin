@@ -52,7 +52,7 @@ public class SecretInformer implements ResourceEventHandler<Secret>, Lifecyclabl
     }
 
     public void start() {
-        LOGGER.info("Starting secret informer {} !!" + namespace);
+        LOGGER.info("Starting secret informer " + namespace + "!!");
         LOGGER.debug("listing Secret resources");
         SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
         Map<String, String> labels = singletonMap(OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC, VALUE_SECRET_SYNC);
@@ -60,14 +60,14 @@ public class SecretInformer implements ResourceEventHandler<Secret>, Lifecyclabl
         this.informer = factory.sharedIndexInformerFor(Secret.class, withLabels, getResyncPeriodMilliseconds());
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
-        LOGGER.info("Secret informer started for namespace: {}" + namespace);
+        LOGGER.info("Secret informer started for namespace: " + namespace);
 
 //        SecretList list = getOpenshiftClient().secrets().inNamespace(namespace).withLabels(labels).list();
 //        onInit(list.getItems());
     }
 
     public void stop() {
-      LOGGER.info("Stopping informer {} !!" + namespace);
+      LOGGER.info("Stopping informer " + namespace + "!!");
       if( this.informer != null ) {
         this.informer.stop();
       }
@@ -76,18 +76,18 @@ public class SecretInformer implements ResourceEventHandler<Secret>, Lifecyclabl
 
     @Override
     public void onAdd(Secret obj) {
-        LOGGER.debug("Secret informer  received add event for: {}" + obj);
+        LOGGER.debug("Secret informer received add event for: " + obj);
         if (obj != null) {
             ObjectMeta metadata = obj.getMetadata();
             String name = metadata.getName();
-            LOGGER.info("Secret informer received add event for: {}" + name);
+            LOGGER.info("Secret informer received add event for: " + name);
             SecretManager.insertOrUpdateCredentialFromSecret(obj);
         }
     }
 
     @Override
     public void onUpdate(Secret oldObj, Secret newObj) {
-        LOGGER.debug("Secret informer received update event for: {} to: {}" + oldObj + newObj);
+        LOGGER.debug("Secret informer received update event for: " + oldObj + " to: " + newObj);
         if (oldObj != null) {
             final String name = oldObj.getMetadata().getName();
             LOGGER.info("Secret informer received update event for: {}", name);

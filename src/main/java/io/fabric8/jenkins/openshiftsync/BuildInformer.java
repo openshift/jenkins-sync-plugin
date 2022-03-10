@@ -57,18 +57,18 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
     }
 
     public void start() {
-        LOGGER.info("Starting Build informer for {} !!" + namespace);
+        LOGGER.info("Starting Build informer for " + namespace + "!!");
         LOGGER.debug("Listing Build resources");
         SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
         this.informer = factory.sharedIndexInformerFor(Build.class, getResyncPeriodMilliseconds());
         this.informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
         reconcileRunsAndBuilds();
-        LOGGER.info("Build informer started for namespace: {}" + namespace);
+        LOGGER.info("Build informer started for namespace: " + namespace);
     }
 
     public void stop() {
-      LOGGER.info("Stopping informer {} !!" + namespace);
+      LOGGER.info("Stopping informer " + namespace + "!!");
       if( this.informer != null ) {
         this.informer.stop();
       }
@@ -76,7 +76,7 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
 
     @Override
     public void onAdd(Build obj) {
-        LOGGER.debug("Build informer  received add event for: {}" + obj);
+        LOGGER.debug("Build informer  received add event for: " + obj);
         if (obj != null) {
             ObjectMeta metadata = obj.getMetadata();
             String name = metadata.getName();
@@ -92,7 +92,7 @@ public class BuildInformer implements ResourceEventHandler<Build>, Lifecyclable 
 
     @Override
     public void onUpdate(Build oldObj, Build newObj) {
-        LOGGER.debug("Build informer received update event for: {} to: {}" + oldObj + " " + newObj);
+        LOGGER.debug("Build informer received update event for: " + oldObj + " to: " + newObj);
         if (newObj != null) {
             String oldRv = oldObj.getMetadata().getResourceVersion();
             String newRv = newObj.getMetadata().getResourceVersion();

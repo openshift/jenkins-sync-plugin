@@ -53,7 +53,7 @@ public class ConfigMapInformer implements ResourceEventHandler<ConfigMap>, Lifec
     }
 
     public void start() {
-        LOGGER.info("Starting configMap informer for {} !!" + namespace);
+        LOGGER.info("Starting configMap informer for " + namespace + "!!");
         LOGGER.debug("listing ConfigMap resources");
         SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
         Map<String, String[]> labels = singletonMap(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUES);
@@ -61,13 +61,13 @@ public class ConfigMapInformer implements ResourceEventHandler<ConfigMap>, Lifec
         this.informer = factory.sharedIndexInformerFor(ConfigMap.class, withLabels, getResyncPeriodMilliseconds());
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
-        LOGGER.info("ConfigMap informer started for namespace: {}" + namespace);
+        LOGGER.info("ConfigMap informer started for namespace: " + namespace);
 //        ConfigMapList list = getOpenshiftClient().configMaps().inNamespace(namespace).list();
 //        onInit(list.getItems());
     }
 
     public void stop() {
-      LOGGER.info("Stopping informer {} !!" + namespace);
+      LOGGER.info("Stopping informer " + namespace + "!!");
       if( this.informer != null ) {
         this.informer.stop();
       }
@@ -76,11 +76,11 @@ public class ConfigMapInformer implements ResourceEventHandler<ConfigMap>, Lifec
 
     @Override
     public void onAdd(ConfigMap obj) {
-        LOGGER.debug("ConfigMap informer  received add event for: {}" + obj);
+        LOGGER.debug("ConfigMap informer  received add event for: " + obj);
         if (obj != null) {
             ObjectMeta metadata = obj.getMetadata();
             String name = metadata.getName();
-            LOGGER.info("ConfigMap informer received add event for: {}" + name);
+            LOGGER.info("ConfigMap informer received add event for: " + name);
             List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(obj);
             String uid = metadata.getUid();
             String namespace = metadata.getNamespace();
@@ -90,14 +90,14 @@ public class ConfigMapInformer implements ResourceEventHandler<ConfigMap>, Lifec
 
     @Override
     public void onUpdate(ConfigMap oldObj, ConfigMap newObj) {
-        LOGGER.debug("ConfigMap informer  received update event for: {} to: {}" + oldObj + newObj);
+        LOGGER.debug("ConfigMap informer  received update event for: " + oldObj + " to: " + newObj);
         if (oldObj != null) {
             String oldResourceVersion = oldObj.getMetadata() != null ? oldObj.getMetadata().getResourceVersion() : null;
             String newResourceVersion = newObj.getMetadata() != null ? newObj.getMetadata().getResourceVersion() : null;
             // fabric8 will call onUpdate on re-list even if nothing changed.
             // This is to prevent constantly purging pod templates when there are no changes
             if (!Objects.equals(oldResourceVersion, newResourceVersion)) {
-                LOGGER.info("Update event received resource versions: {} to: {}" + oldResourceVersion + newResourceVersion);
+                LOGGER.info("Update event received resource versions: " + oldResourceVersion + " to: " + newResourceVersion);
                 List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(newObj);
                 ObjectMeta metadata = newObj.getMetadata();
                 String uid = metadata.getUid();
@@ -111,7 +111,7 @@ public class ConfigMapInformer implements ResourceEventHandler<ConfigMap>, Lifec
 
     @Override
     public void onDelete(ConfigMap obj, boolean deletedFinalStateUnknown) {
-        LOGGER.debug("ConfigMap informer received delete event for: {}" + obj);
+        LOGGER.debug("ConfigMap informer received delete event for: " + obj);
         if (obj != null) {
             List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(obj);
             ObjectMeta metadata = obj.getMetadata();

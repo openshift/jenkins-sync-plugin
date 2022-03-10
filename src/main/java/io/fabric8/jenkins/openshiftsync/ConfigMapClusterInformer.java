@@ -50,7 +50,7 @@ public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>
     }
 
     public void start() {
-        LOGGER.info("Starting cluster wide configMap informer for {} !!" + namespaces);
+        LOGGER.info("Starting cluster wide configMap informer for " + namespaces + "!!");
         LOGGER.debug("listing ConfigMap resources");
         SharedInformerFactory factory = getInformerFactory();
         Map<String, String[]> labels = singletonMap(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUES);
@@ -58,13 +58,13 @@ public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>
         this.informer = factory.sharedIndexInformerFor(ConfigMap.class, withLabels, getListIntervalInSeconds());
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
-        LOGGER.info("ConfigMap informer started for namespaces: {}" + namespaces);
+        LOGGER.info("ConfigMap informer started for namespaces: " + namespaces);
 //        ConfigMapList list = getOpenshiftClient().configMaps().inNamespace(namespace).list();
 //        onInit(list.getItems());
     }
 
     public void stop() {
-      LOGGER.info("Stopping informer {} !!" + namespaces);
+      LOGGER.info("Stopping informer " + namespaces + "!!");
       if( this.informer != null ) {
         this.informer.stop();
       }
@@ -72,13 +72,13 @@ public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>
 
     @Override
     public void onAdd(ConfigMap obj) {
-        LOGGER.debug("ConfigMap informer received add event for: {}" + obj);
+        LOGGER.debug("ConfigMap informer received add event for: " + obj);
         if (obj != null) {
             ObjectMeta metadata = obj.getMetadata();
             String namespace = metadata.getNamespace();
             if (namespaces.contains(namespace)) {
                 String name = metadata.getName();
-                LOGGER.info("ConfigMap informer received add event for: {}" + name);
+                LOGGER.info("ConfigMap informer received add event for: " + name);
                 List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(obj);
                 String uid = metadata.getUid();
                 PodTemplateUtils.addAgents(podTemplates, CONFIGMAP, uid, name, namespace);
@@ -90,7 +90,7 @@ public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>
 
     @Override
     public void onUpdate(ConfigMap oldObj, ConfigMap newObj) {
-        LOGGER.debug("ConfigMap informer  received update event for: {} to: {}" + oldObj + newObj);
+        LOGGER.debug("ConfigMap informer  received update event for: " + oldObj + " to: " + newObj);
         if (oldObj != null) {
             ObjectMeta oldMetadata = oldObj.getMetadata();
             String namespace = oldMetadata.getNamespace();
@@ -98,7 +98,7 @@ public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>
                 String oldRv = oldMetadata != null ? oldMetadata.getResourceVersion() : null;
                 ObjectMeta newMetadata = newObj.getMetadata();
                 String newResourceVersion = newMetadata != null ? newMetadata.getResourceVersion() : null;
-                LOGGER.info("Update event received resource versions: {} to: {}" + oldRv + newResourceVersion);
+                LOGGER.info("Update event received resource versions: " + oldRv + " to: " + newResourceVersion);
                 List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(newObj);
                 ObjectMeta metadata = newMetadata;
                 String uid = metadata.getUid();
@@ -113,7 +113,7 @@ public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>
 
     @Override
     public void onDelete(ConfigMap obj, boolean deletedFinalStateUnknown) {
-        LOGGER.debug("ConfigMap informer received delete event for: {}" + obj);
+        LOGGER.debug("ConfigMap informer received delete event for: " + obj);
         if (obj != null) {
             ObjectMeta metadata = obj.getMetadata();
             String namespace = metadata.getNamespace();

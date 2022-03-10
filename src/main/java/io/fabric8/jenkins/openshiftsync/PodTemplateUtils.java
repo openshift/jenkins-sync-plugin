@@ -496,7 +496,7 @@ public class PodTemplateUtils {
                 List<PodTemplate> templates = podTemplatesFromConfigMap(configMap);
                 trackedPodTemplates.put(uid, templates);
                 for (PodTemplate podTemplate : templates) {
-                    LOGGER.info("Adding PodTemplate {}" + podTemplate);
+                    LOGGER.info("Adding PodTemplate " + podTemplate);
                     addPodTemplate(podTemplate);
                 }
             }

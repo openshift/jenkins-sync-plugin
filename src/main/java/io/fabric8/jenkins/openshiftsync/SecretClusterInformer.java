@@ -55,7 +55,7 @@ public class SecretClusterInformer implements ResourceEventHandler<Secret>, Life
     }
 
     public void start() {
-        LOGGER.info("Starting cluster wide secret informer {} !!" + namespaces);
+        LOGGER.info("Starting cluster wide secret informer " + namespaces + "!!");
         LOGGER.debug("listing Secret resources");
         SharedInformerFactory factory = getInformerFactory();
         Map<String, String> labels = singletonMap(OPENSHIFT_LABELS_SECRET_CREDENTIAL_SYNC, VALUE_SECRET_SYNC);
@@ -63,13 +63,13 @@ public class SecretClusterInformer implements ResourceEventHandler<Secret>, Life
         this.informer = factory.sharedIndexInformerFor(Secret.class, withLabels, getResyncPeriodMilliseconds());
         informer.addEventHandler(this);
         factory.startAllRegisteredInformers();
-        LOGGER.info("Secret informer started for namespace: {}" + namespaces);
+        LOGGER.info("Secret informer started for namespace: " + namespaces);
 //        SecretList list = getOpenshiftClient().secrets().inNamespace(namespace).withLabels(labels).list();
 //        onInit(list.getItems());
     }
 
     public void stop() {
-      LOGGER.info("Stopping informer {} !!" + namespaces);
+      LOGGER.info("Stopping informer " + namespaces + "!!");
       if( this.informer != null ) {
         this.informer.stop();
       }
@@ -78,13 +78,13 @@ public class SecretClusterInformer implements ResourceEventHandler<Secret>, Life
 
     @Override
     public void onAdd(Secret obj) {
-        LOGGER.debug("Secret informer  received add event for: {}" + obj);
+        LOGGER.debug("Secret informer  received add event for: " + obj);
         if (obj != null) {
             ObjectMeta metadata = obj.getMetadata();
             String namespace = metadata.getNamespace();
             if (namespaces.contains(namespace)) {
                 String name = metadata.getName();
-                LOGGER.info("Secret informer received add event for: {}" + name);
+                LOGGER.info("Secret informer received add event for: " + name);
                 SecretManager.insertOrUpdateCredentialFromSecret(obj);
             } else {
                 LOGGER.debug("Received event for a namespace we are not watching: {} ... ignoring", namespace);
@@ -94,7 +94,7 @@ public class SecretClusterInformer implements ResourceEventHandler<Secret>, Life
 
     @Override
     public void onUpdate(Secret oldObj, Secret newObj) {
-        LOGGER.debug("Secret informer received update event for: {} to: {}" + oldObj + newObj);
+        LOGGER.debug("Secret informer received update event for: " + oldObj + " to: " + newObj);
         if (oldObj != null) {
             ObjectMeta metadata = oldObj.getMetadata();
             String namespace = metadata.getNamespace();
