@@ -23,6 +23,7 @@ import static java.util.Collections.singletonMap;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import io.fabric8.kubernetes.client.dsl.base.OperationContext;
@@ -93,14 +94,16 @@ public class ConfigMapInformer implements ResourceEventHandler<ConfigMap>, Lifec
         if (oldObj != null) {
             String oldResourceVersion = oldObj.getMetadata() != null ? oldObj.getMetadata().getResourceVersion() : null;
             String newResourceVersion = newObj.getMetadata() != null ? newObj.getMetadata().getResourceVersion() : null;
-            LOGGER.info("Update event received resource versions: {} to: {}" + oldResourceVersion + newResourceVersion);
-            List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(newObj);
-            ObjectMeta metadata = newObj.getMetadata();
-            String uid = metadata.getUid();
-            String name = metadata.getName();
-            String namespace = metadata.getNamespace();
-            LOGGER.info("ConfigMap informer received update event for: {}", name);
-            PodTemplateUtils.updateAgents(podTemplates, CONFIGMAP, uid, name, namespace);
+            if (!Objects.equals(oldResourceVersion, newResourceVersion)) {
+                LOGGER.info("Update event received resource versions: {} to: {}" + oldResourceVersion + newResourceVersion);
+                List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(newObj);
+                ObjectMeta metadata = newObj.getMetadata();
+                String uid = metadata.getUid();
+                String name = metadata.getName();
+                String namespace = metadata.getNamespace();
+                LOGGER.info("ConfigMap informer received update event for: {}", name);
+                PodTemplateUtils.updateAgents(podTemplates, CONFIGMAP, uid, name, namespace);
+            }
         }
     }
 
