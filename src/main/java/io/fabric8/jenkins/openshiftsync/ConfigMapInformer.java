@@ -94,6 +94,8 @@ public class ConfigMapInformer implements ResourceEventHandler<ConfigMap>, Lifec
         if (oldObj != null) {
             String oldResourceVersion = oldObj.getMetadata() != null ? oldObj.getMetadata().getResourceVersion() : null;
             String newResourceVersion = newObj.getMetadata() != null ? newObj.getMetadata().getResourceVersion() : null;
+            // fabric8 will call onUpdate on re-list even if nothing changed.
+            // This is to prevent constantly purging pod templates when there are no changes
             if (!Objects.equals(oldResourceVersion, newResourceVersion)) {
                 LOGGER.info("Update event received resource versions: {} to: {}" + oldResourceVersion + newResourceVersion);
                 List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(newObj);
