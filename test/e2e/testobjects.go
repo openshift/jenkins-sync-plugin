@@ -36,12 +36,14 @@ const (
              throw err
           }          
 `
-	simplemaven = `
+	simplemaven2 = `
           try {
              timeout(time: 20, unit: 'MINUTES') {
         
                 node("POD_TEMPLATE_NAME") {
-                  sh "mvn --version"
+                  container("java") {
+                    sh "mvn --version"
+                  }
                 }
 
              }
@@ -51,6 +53,23 @@ const (
              currentBuild.result = 'FAILURE'
              throw err
           }
+`
+
+	simplemaven1 = `
+         try {
+            timeout(time: 20, unit: 'MINUTES') {
+
+               node("POD_TEMPLATE_NAME") {
+                  sh "mvn --version"
+               }
+
+            }
+         } catch (err) {
+            echo "in catch block"
+            echo "Caught: ${err}"
+            currentBuild.result = 'FAILURE'
+            throw err
+         }
 `
 
 	javabuilder = `
@@ -99,7 +118,7 @@ try {
             agent {
               node {
                 // spin up a node.js slave pod to run this build on
-                label 'nodejs'
+                label 'nodejs-builder'
               }
             }
             options {

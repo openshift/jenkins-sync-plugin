@@ -237,10 +237,10 @@ func instantiateBuild(ta *testArgs) *buildv1.Build {
 	return waitForBuildSuccess(ta, build)
 }
 
-func podTemplateTest(podTemplateName string, ta *testArgs) {
+func podTemplateTest(podTemplateName, pipelineName string, ta *testArgs) {
 	bc := &buildv1.BuildConfig{}
 	bc.Name = strings.ReplaceAll(podTemplateName, ":", ".")
-	pipelineDefinition := strings.ReplaceAll(simplemaven, "POD_TEMPLATE_NAME", podTemplateName)
+	pipelineDefinition := strings.ReplaceAll(pipelineName, "POD_TEMPLATE_NAME", podTemplateName)
 	bc.Spec = buildv1.BuildConfigSpec{
 		CommonSpec: buildv1.CommonSpec{
 			Strategy: buildv1.BuildStrategy{
@@ -724,7 +724,7 @@ func TestConfigMapPodTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error creating pod template cm: %s", err.Error())
 	}
-	podTemplateTest(podTemplateName, ta)
+	podTemplateTest(podTemplateName, simplemaven2, ta)
 }
 
 func TestConfigMapLegacyPodTemplate(t *testing.T) {
@@ -738,42 +738,57 @@ func TestConfigMapLegacyPodTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error creating pod template cm: %s", err.Error())
 	}
-	podTemplateTest(podTemplateName, ta)
+	podTemplateTest(podTemplateName, simplemaven2, ta)
 }
 
 func newPodTemplateConfigMap(configMapName string, podTemplateName string, templateLabels map[string]string) *corev1.ConfigMap {
 	templateDefinition := `
-	      <org.csanchez.jenkins.plugins.kubernetes.PodTemplate>
-	        <inheritFrom></inheritFrom>
-	        <name>POD_TEMPLATE_NAME</name>
-	        <instanceCap>2147483647</instanceCap>
-	        <idleMinutes>0</idleMinutes>
-	        <label>POD_TEMPLATE_NAME</label>
-	        <serviceAccount>jenkins</serviceAccount>
-	        <nodeSelector></nodeSelector>
-	        <volumes/>
-	        <containers>
-	          <org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
-	            <name>jnlp</name>
-	            <image>image-registry.openshift-image-registry.svc:5000/openshift/jenkins-agent-maven:latest</image>
-	            <privileged>false</privileged>
-	            <alwaysPullImage>false</alwaysPullImage>
-	            <workingDir>/tmp</workingDir>
-	            <command></command>
-	            <args>${computer.jnlpmac} ${computer.name}</args>
-	            <ttyEnabled>false</ttyEnabled>
-	            <resourceRequestCpu></resourceRequestCpu>
-	            <resourceRequestMemory></resourceRequestMemory>
-	            <resourceLimitCpu></resourceLimitCpu>
-	            <resourceLimitMemory></resourceLimitMemory>
-	            <envVars/>
-	          </org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
-	        </containers>
-	        <envVars/>
-	        <annotations/>
-	        <imagePullSecrets/>
-	        <nodeProperties/>
-	      </org.csanchez.jenkins.plugins.kubernetes.PodTemplate>
+        <org.csanchez.jenkins.plugins.kubernetes.PodTemplate>
+          <inheritFrom></inheritFrom>
+          <name>POD_TEMPLATE_NAME</name>
+          <instanceCap>2147483647</instanceCap>
+          <idleMinutes>0</idleMinutes>
+          <label>POD_TEMPLATE_NAME</label>
+          <serviceAccount>jenkins</serviceAccount>
+          <nodeSelector></nodeSelector>
+          <volumes/>
+          <containers>
+            <org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
+              <name>jnlp</name>
+              <image>image-registry.openshift-image-registry.svc:5000/openshift/jenkins-agent-base:latest</image>
+              <privileged>false</privileged>
+              <alwaysPullImage>true</alwaysPullImage>
+              <workingDir>/home/jenkins/agent</workingDir>
+              <command></command>
+              <args>\$(JENKINS_SECRET) \$(JENKINS_NAME)</args>
+              <ttyEnabled>false</ttyEnabled>
+              <resourceRequestCpu></resourceRequestCpu>
+              <resourceRequestMemory></resourceRequestMemory>
+              <resourceLimitCpu></resourceLimitCpu>
+              <resourceLimitMemory></resourceLimitMemory>
+              <envVars/>
+            </org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
+            <org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
+              <name>java</name>
+              <image>image-registry.openshift-image-registry.svc:5000/openshift/java:latest</image>
+              <privileged>false</privileged>
+              <alwaysPullImage>true</alwaysPullImage>
+              <workingDir>/home/jenkins/agent</workingDir>
+              <command>cat</command>
+              <args></args>
+              <ttyEnabled>true</ttyEnabled>
+              <resourceRequestCpu></resourceRequestCpu>
+              <resourceRequestMemory></resourceRequestMemory>
+              <resourceLimitCpu></resourceLimitCpu>
+              <resourceLimitMemory></resourceLimitMemory>
+              <envVars/>
+            </org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
+          </containers>
+          <envVars/>
+          <annotations/>
+          <imagePullSecrets/>
+          <nodeProperties/>
+        </org.csanchez.jenkins.plugins.kubernetes.PodTemplate>
 	`
 	templateDefinition = strings.ReplaceAll(templateDefinition, "POD_TEMPLATE_NAME", podTemplateName)
 	cm := &corev1.ConfigMap{Data: map[string]string{podTemplateName: templateDefinition}}
@@ -793,9 +808,8 @@ func TestImageStreamPodTemplate(t *testing.T) {
 	is.Spec.Tags = []imagev1.TagReference{
 		{
 			From: &corev1.ObjectReference{
-				Kind:      "ImageStreamTag",
-				Namespace: "openshift",
-				Name:      "jenkins-agent-maven:latest",
+				Kind:      "DockerImage",
+				Name:      "registry.redhat.io/openshift4/ose-jenkins-agent-maven:v4.10",
 			},
 			Name: "base",
 		},
@@ -813,7 +827,7 @@ func TestImageStreamPodTemplate(t *testing.T) {
 		t.Fatalf("error creating pod template stream: %s", err.Error())
 	}
 
-	podTemplateTest(podTemplateName, ta)
+	podTemplateTest(podTemplateName, simplemaven1, ta)
 }
 
 func TestImageStreamTagPodTemplate(t *testing.T) {
@@ -828,9 +842,8 @@ func TestImageStreamTagPodTemplate(t *testing.T) {
 	is.Spec.Tags = []imagev1.TagReference{
 		{
 			From: &corev1.ObjectReference{
-				Kind:      "ImageStreamTag",
-				Namespace: "openshift",
-				Name:      "jenkins-agent-maven:latest",
+				Kind:      "DockerImage",
+				Name:      "registry.redhat.io/openshift4/ose-jenkins-agent-maven:v4.10",
 			},
 			Name: "base",
 		},
@@ -850,7 +863,7 @@ func TestImageStreamTagPodTemplate(t *testing.T) {
 		t.Fatalf("error creating pod template stream: %s", err.Error())
 	}
 
-	podTemplateTest(podTemplateName + ":" + podTemplateTag, ta)
+	podTemplateTest(podTemplateName + ":" + podTemplateTag, simplemaven1, ta)
 }
 
 func TestJavaBuilderPodTemplate(t *testing.T) {
