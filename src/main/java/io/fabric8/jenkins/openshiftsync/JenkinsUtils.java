@@ -536,19 +536,25 @@ public class JenkinsUtils {
                 }
 	            return getRun(job, buildUid, 1);
 	        }
-	        LOGGER.log(Level.WARNING, "Jenkins unavailability accessing job run; have to assume it does not exist", t);
+	        LOGGER.log(WARNING, "Jenkins unavailability accessing job run; have to assume it does not exist", t);
 	    }
+		LOGGER.log(WARNING, "No Run found for build: " + buildUid + " in job: " + job);
 		return null;
 	}
 
 	public static void deleteRun(WorkflowRun run) {
+		if( run != null ) {
 			try {
-			  LOGGER.info("Deleting run: " + run.toString());
-				run.delete();
-			} catch (IOException e) {
-				LOGGER.warning("Unable to delete run " + run.toString() + ":" + e.getMessage());
-			}
+				LOGGER.info("Deleting run: " + run.toString());
+				  run.delete();
+			  } catch (IOException e) {
+				  LOGGER.warning("Unable to delete run " + run.toString() + ":" + e.getMessage());
+			  }
+		} else {
+			LOGGER.warning("A null run has been passed to deleteRun");
+		}
 	}
+
 
   public static void deleteRun(WorkflowJob job, Build build) {
       WorkflowRun run = getRun(job, build);
