@@ -802,14 +802,14 @@ func TestImageStreamPodTemplate(t *testing.T) {
 	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
 
 	is := &imagev1.ImageStream{}
-        podTemplateName := "sync-plugin-imagestream-pod-template"
+	podTemplateName := "sync-plugin-imagestream-pod-template"
 	is.Name = podTemplateName
 	is.Labels = map[string]string{"role": "jenkins-slave"}
 	is.Spec.Tags = []imagev1.TagReference{
 		{
 			From: &corev1.ObjectReference{
-				Kind:      "DockerImage",
-				Name:      "registry.redhat.io/openshift4/ose-jenkins-agent-maven:v4.10",
+				Kind: "DockerImage",
+				Name: "registry.redhat.io/openshift4/ose-jenkins-agent-maven:v4.10",
 			},
 			Name: "base",
 		},
@@ -835,15 +835,15 @@ func TestImageStreamTagPodTemplate(t *testing.T) {
 	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
 
 	is := &imagev1.ImageStream{}
-        podTemplateName := "sync-plugin-imagestreamtag-pod-template"
-        podTemplateTag := "latest"
+	podTemplateName := "sync-plugin-imagestreamtag-pod-template"
+	podTemplateTag := "latest"
 	is.Name = podTemplateName
 	is.Labels = map[string]string{"role": "jenkins-slave"}
 	is.Spec.Tags = []imagev1.TagReference{
 		{
 			From: &corev1.ObjectReference{
-				Kind:      "DockerImage",
-				Name:      "registry.redhat.io/openshift4/ose-jenkins-agent-maven:v4.10",
+				Kind: "DockerImage",
+				Name: "registry.redhat.io/openshift4/ose-jenkins-agent-maven:v4.10",
 			},
 			Name: "base",
 		},
@@ -863,7 +863,7 @@ func TestImageStreamTagPodTemplate(t *testing.T) {
 		t.Fatalf("error creating pod template stream: %s", err.Error())
 	}
 
-	podTemplateTest(podTemplateName + ":" + podTemplateTag, simplemaven1, ta)
+	podTemplateTest(podTemplateName+":"+podTemplateTag, simplemaven1, ta)
 }
 
 func TestJavaBuilderPodTemplate(t *testing.T) {
