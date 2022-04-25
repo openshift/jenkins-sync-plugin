@@ -35,6 +35,9 @@ func (ut *Tester) CreateExecPod(name, cmd string) error {
 	}
 	ut.t.Logf("Creating new curl pod %s", name)
 	immediate := int64(0)
+	user := int64(65532)
+	truVal := true
+	falVal := false
 	execPod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -48,6 +51,17 @@ func (ut *Tester) CreateExecPod(name, cmd string) error {
 					Name:            "hostexec",
 					Image:           "centos:7",
 					ImagePullPolicy: v1.PullIfNotPresent,
+					SecurityContext: &v1.SecurityContext{
+						AllowPrivilegeEscalation: &falVal,
+						Capabilities: &v1.Capabilities{
+							Drop: []v1.Capability{"ALL"},
+						},
+						RunAsNonRoot: &truVal,
+						RunAsUser:    &user,
+						SeccompProfile: &v1.SeccompProfile{
+							Type: v1.SeccompProfileTypeRuntimeDefault,
+						},
+					},
 				},
 			},
 			HostNetwork:                   false,
