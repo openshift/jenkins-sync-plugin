@@ -66,7 +66,12 @@ import com.cloudbees.workflow.rest.external.RunExt;
 import com.cloudbees.workflow.rest.external.StageNodeExt;
 import com.cloudbees.workflow.rest.external.StatusExt;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.annotation.JsonFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.ser.FilterProvider;
+import com.fasterxml.jackson.databind.ser.impl.SimpleBeanPropertyFilter;
+import com.fasterxml.jackson.databind.ser.impl.SimpleFilterProvider;
 
 import hudson.Extension;
 import hudson.PluginManager;
@@ -396,7 +401,8 @@ public class BuildSyncRunListener extends RunListener<Run> {
 
         String json;
         try {
-            json = new ObjectMapper().writeValueAsString(wfRunExt);
+
+            json = asJSON(wfRunExt);
         } catch (JsonProcessingException e) {
             logger.error("Failed to serialize workflow run. " + e, e);
             return false;
@@ -459,7 +465,19 @@ public class BuildSyncRunListener extends RunListener<Run> {
         cause.setLastUpdateToOpenshift(TimeUnit.NANOSECONDS.toMillis(System.nanoTime()));
         return true;
     }
-    
+
+    protected static String asJSON(Object obj) throws JsonProcessingException {
+        String json;
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.addMixInAnnotations(StageNodeExt.class, StageFlowNodesFilterMixIn.class);
+        FilterProvider filters = new SimpleFilterProvider().addFilter(
+                "stageFlowNodesFilter",
+                SimpleBeanPropertyFilter.serializeAllExcept("stageFlowNodes"));
+        ObjectWriter writer = mapper.writer(filters);
+        json = writer.writeValueAsString(obj);
+        return json;
+    }
+
     // annotate the Build with pending input JSON so consoles can do the
     // Proceed/Abort stuff if they want
     private String getPendingActionsJson(WorkflowRun run) {
@@ -480,7 +498,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
             }
         }
         try {
-            return new ObjectMapper().writeValueAsString(pendingInputActions);
+            return asJSON(pendingInputActions);
         } catch (JsonProcessingException e) {
             logger.error("Failed to serialize pending actions. " + e, e);
             return null;
@@ -530,3 +548,6 @@ public class BuildSyncRunListener extends RunListener<Run> {
                 && GlobalPluginConfiguration.get().isEnabled();
     }
 }
+
+@JsonFilter("stageFlowNodesFilter")
+class StageFlowNodesFilterMixIn {}
