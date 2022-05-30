@@ -138,13 +138,13 @@ public class JenkinsUtils {
                             job = Jenkins.getActiveInstance()
                                     .getItemByFullName(fullName,
                                             WorkflowJob.class);
-                            
+
                             if (job != null) {
                                 if (anyErrors)
                                     LOGGER.info("finally found workflow job for " + job.getFullName());
                                 break;
                             }
-                            
+
                             anyErrors = true;
                             // this should not occur if an impersonate call has been made higher up
                             // the stack
@@ -163,12 +163,12 @@ public class JenkinsUtils {
                             }
                         } while ((System.currentTimeMillis() - 5000) > now);
                         if (job == null) {
-                            // seen instances where if we throw exception immediately we lose our 
+                            // seen instances where if we throw exception immediately we lose our
                             // most recent logger updates
                             try {
                                 Thread.sleep(1000);
                             } catch (Throwable t) {
-                                
+
                             }
                             throw new AbortException("workflow job " + workflowJob.getName() + " via fullname " + workflowJob.getFullName() + " could not be found ");
                         }
@@ -183,7 +183,7 @@ public class JenkinsUtils {
                     return null;
                 }
             });
-            
+
         } catch (Exception e) {
             if (e instanceof AbortException)
                 throw (AbortException)e;
@@ -471,9 +471,9 @@ public class JenkinsUtils {
 
             QueueTaskFuture<WorkflowRun> runFuture = job.scheduleBuild2(0, buildActions.toArray(new Action[buildActions.size()]));
             if (runFuture != null) {
-                updateOpenShiftBuildPhase(build, PENDING);                
+                updateOpenShiftBuildPhase(build, PENDING);
                 // If multiple runs are queued for a given build, Jenkins can add the cause
-                // to the previous queued build so we wait until the run has started so our 
+                // to the previous queued build so we wait until the run has started so our
                 // isAlreadyTriggered logic on a subsequent request will catch the duplicate
                 try {
                 	runFuture.getStartCondition().get(10, TimeUnit.SECONDS);
@@ -488,7 +488,7 @@ public class JenkinsUtils {
             return false;
         }
     }
-    
+
 	private static boolean isAlreadyTriggered(WorkflowJob job, Build build) {
 		boolean rc = getRun(job, build) != null;
 		LOGGER.info(String.format("isAlreadyTriggered build %s/%s %s", build.getMetadata().getNamespace(), build.getMetadata().getName(), String.valueOf(rc)));
@@ -552,7 +552,9 @@ public class JenkinsUtils {
 
   public static void deleteRun(WorkflowJob job, Build build) {
       WorkflowRun run = getRun(job, build);
-      deleteRun(run);
+      if (run != null) {
+        deleteRun(run);
+      }
   }
 
 	private static boolean cancelRunningBuild(WorkflowJob job, Build build) {
@@ -679,7 +681,7 @@ public class JenkinsUtils {
                     return null;
                 }
             });
-            
+
         } catch (Exception e) {
             throw new IOException(e);
         }
