@@ -10,7 +10,7 @@
   <parent>
     <groupId>org.jenkins-ci.plugins</groupId>
     <artifactId>plugin</artifactId>
-    <version>4.16</version>
+    <version>4.32</version>
     <relativePath />
   </parent>
   <groupId>io.fabric8.jenkins.plugins</groupId>
@@ -22,10 +22,8 @@
     <spotbugs.failOnError>false</spotbugs.failOnError>
     <animal.sniffer.skip>true</animal.sniffer.skip>
     <enforcer.skip>true</enforcer.skip>
-    <jenkins.version>2.303.3</jenkins.version>
-    <java.level>8</java.level>
-    <jenkins-test-harness.version>2.71</jenkins-test-harness.version>
-    <openshift-client.version>5.10.1</openshift-client.version>
+    <jenkins.version>2.361.4</jenkins.version>
+    <java.level>11</java.level>
     <log.level>DEBUG</log.level>
     <findbugs-maven-plugin.version>3.0.4</findbugs-maven-plugin.version>
     <findbugs.failOnError>false</findbugs.failOnError>
@@ -39,13 +37,13 @@
 
   <organization>
     <name>Red Hat</name>
-    <url>http://redhat.com</url>
+    <url>https://redhat.com</url>
   </organization>
 
   <licenses>
     <license>
       <name>Apache License, Version 2.0</name>
-      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
       <distribution>repo</distribution>
     </license>
   </licenses>
@@ -55,7 +53,7 @@
       <id>jimmi</id>
       <name>Jimmi Dyson</name>
       <organization>fabric8</organization>
-      <organizationUrl>http://fabric8.io/</organizationUrl>
+      <organizationUrl>https://fabric8.io/</organizationUrl>
       <email>jimmidyson@gmail.com</email>
     </developer>
   </developers>
@@ -63,7 +61,7 @@
   <scm>
     <connection>scm:git:git@github.com:jenkinsci/${project.artifactId}-plugin.git</connection>
     <developerConnection>scm:git:git@github.com:jenkinsci/${project.artifactId}-plugin.git</developerConnection>
-    <url>http://github.com/jenkinsci/${project.artifactId}-plugin/</url>
+    <url>https://github.com/jenkinsci/${project.artifactId}-plugin/</url>
     <tag>${project.version}</tag>
   </scm>
 
@@ -98,20 +96,73 @@
     <dependency>
       <groupId>io.fabric8</groupId>
       <artifactId>openshift-client</artifactId>
-      <version>${openshift-client.version}</version>
+      <version>5.12.2</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins.workflow</groupId>
+      <artifactId>workflow-api</artifactId>
+      <version>1200.v8005c684b_a_c6</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins.workflow</groupId>
+      <artifactId>workflow-step-api</artifactId>
+      <version>639.v6eca_cd8c04a_a_</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins.workflow</groupId>
       <artifactId>workflow-cps</artifactId>
+      <version>3565.v4b_d9b_8c29a_b_3</version>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins.workflow</groupId>
       <artifactId>workflow-multibranch</artifactId>
+      <version>716.vc692a_e52371b_</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins.workflow</groupId>
+      <artifactId>workflow-support</artifactId>
+      <version>839.v35e2736cfd5c</version>
+    </dependency>
+    <dependency>
+      <groupId>io.jenkins.plugins</groupId>
+      <artifactId>caffeine-api</artifactId>
+      <version>2.9.3-65.v6a_47d0f4d1fe</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins.workflow</groupId>
+      <artifactId>workflow-scm-step</artifactId>
+      <version>400.v6b_89a_1317c9a_</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins.workflow</groupId>
+      <artifactId>workflow-job</artifactId>
+      <version>1145.v7f2433caa07f</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>branch-api</artifactId>
+      <version>2.1044.v2c007e51b_87f</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>script-security</artifactId>
+      <version>1189.vb_a_b_7c8fd5fde</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>structs</artifactId>
+      <version>324.va_f5d6774f3a_d</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>scm-api</artifactId>
+      <version>621.vda_a_b_055e58f7</version>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>cloudbees-folder</artifactId>
+      <version>6.714.v79e858ef76a_2</version>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
@@ -142,7 +193,11 @@
       <artifactId>slf4j-api</artifactId>
       <scope>provided</scope>
     </dependency>
-
+<dependency>
+    <groupId>javax.mail</groupId>
+    <artifactId>javax.mail-api</artifactId>
+    <version>1.6.1</version>
+</dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins.pipeline-stage-view</groupId>
       <artifactId>pipeline-stage-view</artifactId>
@@ -152,23 +207,23 @@
     <dependency>
       <groupId>org.csanchez.jenkins.plugins</groupId>
       <artifactId>kubernetes</artifactId>
-      <version>1.31.0</version>
+      <version>1.31.2</version>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>kubernetes-client-api</artifactId>
-      <version>5.10.1-171.vaa0774fb8c20</version>
+      <version>5.12.2-193.v26a_6078f65a_9</version>
     </dependency>
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>jackson2-api</artifactId>
-      <version>2.13.0-230.v59243c64b0a5</version>
+      <version>2.13.2-260.v43d711474c77</version>
     </dependency> 
 
     <dependency>
       <groupId>org.eclipse.jetty</groupId>
       <artifactId>jetty-util</artifactId>
-      <version>9.4.36.v20210114</version>
+      <version>9.4.44.v20210927</version>
     </dependency>
   </dependencies>
 
@@ -190,15 +245,6 @@
   </dependencyManagement>
 
   <build>
-    <pluginManagement>
-      <plugins>
-        <plugin>
-          <groupId>org.kohsuke</groupId>
-          <artifactId>access-modifier-checker</artifactId>
-          <version>1.16</version>
-        </plugin>
-      </plugins>
-    </pluginManagement>
     <plugins>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
@@ -222,6 +268,7 @@
         <groupId>org.jenkins-ci.tools</groupId>
         <artifactId>maven-hpi-plugin</artifactId>
         <configuration>
+          <minimumJavaVersion>11</minimumJavaVersion>
           <pluginFirstClassLoader>true</pluginFirstClassLoader>
           <loggers>
             <io.fabric8>${log.level}</io.fabric8>
@@ -306,6 +353,7 @@
                 </goals>
                 <configuration>
                   <rules>
+                    <dependencyConvergence/>
                     <requireReleaseDeps>
                       <message>No Snapshots Allowed!</message>
                     </requireReleaseDeps>

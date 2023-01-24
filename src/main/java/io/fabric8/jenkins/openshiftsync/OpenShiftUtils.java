@@ -149,11 +149,6 @@ public class OpenShiftUtils {
         openShiftClient = new DefaultOpenShiftClient(config);
         logger.log(INFO, "New OpenShift client initialized: " + openShiftClient);
 
-        DefaultOpenShiftClient defClient = (DefaultOpenShiftClient) openShiftClient;
-        Dispatcher dispatcher = defClient.getHttpClient().dispatcher();
-//        int maxConnections = 100;//GlobalPluginConfiguration.get().getMaxConnections();
-        dispatcher.setMaxRequestsPerHost(maxConnections);
-        dispatcher.setMaxRequests(maxConnections);
     }
 
     public synchronized static OpenShiftClient getOpenShiftClient() {
