@@ -352,25 +352,33 @@ func checkPodsForText(podName, searchItem string, ta *testArgs) bool {
 	if err != nil {
 		debugAndFailTest(ta, fmt.Sprintf("error list pods %v", err))
 	}
-	ta.t.Logf("dumpPods looking at pod %s in phase %s", pod.Name, pod.Status.Phase)
+	ta.t.Logf("checkPodsForText looking at pod %s in phase %s", pod.Name, pod.Status.Phase)
 
 	for _, container := range pod.Spec.Containers {
-		req := podClient.GetLogs(pod.Name, &corev1.PodLogOptions{Container: container.Name})
-		readCloser, err := req.Stream(context.TODO())
-		if err != nil {
-			debugAndFailTest(ta, fmt.Sprintf("error getting pod logs for container %s: %s", container.Name, err.Error()))
-		}
-		b, err := ioutil.ReadAll(readCloser)
-		if err != nil {
-			debugAndFailTest(ta, fmt.Sprintf("error reading pod stream %s", err.Error()))
-		}
-		podLog := string(b)
-		ta.t.Logf("pod logs for container %s in pod %s:  %s", container.Name, pod.Name, podLog)
-		if strings.Contains(podLog, searchItem) {
-			found = true
-			break
-		}
+		// Retry getting the logs since the container might not be up yet
+		err := wait.PollImmediate(30*time.Second, 5*time.Minute, func() (done bool, err error) {
+			req := podClient.GetLogs(pod.Name, &corev1.PodLogOptions{Container: container.Name})
+			readCloser, err := req.Stream(context.TODO())
+			if err != nil {
+				ta.t.Logf("error getting pod logs for container %q: %q", container.Name, err.Error())
+				return false, nil
+			}
+			b, err := ioutil.ReadAll(readCloser)
+			if err != nil {
+				ta.t.Logf("error reading pod stream %s", err.Error())
+				return false, nil
+			}
+			podLog := string(b)
+			ta.t.Logf("pod logs for container %s in pod %s:  %s", container.Name, pod.Name, podLog)
+			if strings.Contains(podLog, searchItem) {
+				found = true
+			}
 
+			return true, nil
+		})
+		if err != nil {
+			debugAndFailTest(ta, fmt.Sprintf("unexpected results for %s", searchItem))
+		}
 	}
 
 	return found
