@@ -7,11 +7,12 @@ import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOp
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isPipelineStrategyBuildConfig;
 
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.commons.lang.StringUtils;
-import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 
 import hudson.model.Job;
@@ -35,7 +36,7 @@ public class BuildConfigManager {
      * to properly differentiate; we don't use UUID since when we filter on the
      * ItemListener side the UUID may not be available
      **/
-    private static final ConcurrentHashSet<String> deletesInProgress = new ConcurrentHashSet<String>();
+    private static final Set<String> deletesInProgress = ConcurrentHashMap.newKeySet();
 
 
     public static boolean isDeleteInProgress(String ns, String bcName) {

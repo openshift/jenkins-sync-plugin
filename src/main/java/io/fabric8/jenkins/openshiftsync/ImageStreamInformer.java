@@ -15,9 +15,10 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
-import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL;
-import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL_VALUES;
+import static io.fabric8.jenkins.openshiftsync.Constants.*;
+import static io.fabric8.jenkins.openshiftsync.Constants.VALUE_SECRET_SYNC;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.IMAGESTREAM_TYPE;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.addAgents;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.addPodTemplate;
@@ -30,12 +31,12 @@ import static java.util.Collections.singletonMap;
 import java.util.List;
 import java.util.Map;
 
+import io.fabric8.openshift.client.OpenShiftClient;
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.fabric8.kubernetes.api.model.ObjectMeta;
-import io.fabric8.kubernetes.client.dsl.base.OperationContext;
 import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
@@ -56,21 +57,16 @@ public class ImageStreamInformer implements ResourceEventHandler<ImageStream>, L
     }
 
     public void start() {
-        LOGGER.info("Starting ImageStream informer for " + namespace + "!!");
-        LOGGER.debug("Listing ImageStream resources");
-        SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
-        Map<String, String[]> labels = singletonMap(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUES);
-        OperationContext withLabels = new OperationContext().withLabelsIn(labels);
-        this.informer = factory.sharedIndexInformerFor(ImageStream.class, withLabels, getResyncPeriodMilliseconds());
+        LOGGER.info("Starting ImageStream informer " + namespace + "!!");
+        OpenShiftClient client = getOpenShiftClient();
+        this.informer = client.imageStreams().inNamespace(namespace).withLabelIn(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUES).inform();
         informer.addEventHandler(this);
-        factory.startAllRegisteredInformers();
+        client.informers().startAllRegisteredInformers();
         LOGGER.info("ImageStream informer started for namespace: " + namespace);
-//        ImageStreamList list = getOpenshiftClient().imageStreams().inNamespace(namespace).withLabels(labels).list();
-//        onInit(list.getItems());
     }
 
     public void stop() {
-      LOGGER.info("Stopping informer " + namespace + "!!");
+      LOGGER.info("Stopping ImageStream informer for namespace: " + namespace + "!!");
       if( this.informer != null ) {
         this.informer.stop();
       }
@@ -79,7 +75,7 @@ public class ImageStreamInformer implements ResourceEventHandler<ImageStream>, L
 
     @Override
     public void onAdd(ImageStream obj) {
-        LOGGER.debug("ImageStream informer  received add event for: " + obj);
+        LOGGER.debug("ImageStream informer received add event for: " + obj);
         if (obj != null) {
             ObjectMeta metadata = obj.getMetadata();
             String name = metadata.getName();

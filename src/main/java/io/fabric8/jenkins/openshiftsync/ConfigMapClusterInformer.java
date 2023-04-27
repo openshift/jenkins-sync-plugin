@@ -18,13 +18,14 @@ package io.fabric8.jenkins.openshiftsync;
 import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL;
 import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL_VALUES;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.CONFIGMAP;
 import static java.util.Collections.singletonMap;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-import io.fabric8.kubernetes.client.dsl.base.OperationContext;
+import io.fabric8.openshift.client.OpenShiftClient;
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,17 +51,12 @@ public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>
     }
 
     public void start() {
-        LOGGER.info("Starting cluster wide configMap informer for " + namespaces + "!!");
-        LOGGER.debug("listing ConfigMap resources");
-        SharedInformerFactory factory = getInformerFactory();
-        Map<String, String[]> labels = singletonMap(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUES);
-        OperationContext withLabels = new OperationContext().withLabelsIn(labels);
-        this.informer = factory.sharedIndexInformerFor(ConfigMap.class, withLabels, getListIntervalInSeconds());
+        LOGGER.info("Starting ConfigMaps informer for namespaces: " + namespaces + "!!");
+        OpenShiftClient client = getOpenShiftClient();
+        this.informer = client.configMaps().withLabelIn(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUES).inform();
         informer.addEventHandler(this);
-        factory.startAllRegisteredInformers();
+        client.informers().startAllRegisteredInformers();
         LOGGER.info("ConfigMap informer started for namespaces: " + namespaces);
-//        ConfigMapList list = getOpenshiftClient().configMaps().inNamespace(namespace).list();
-//        onInit(list.getItems());
     }
 
     public void stop() {

@@ -18,6 +18,7 @@ package io.fabric8.jenkins.openshiftsync;
 import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL;
 import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL_VALUES;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.IMAGESTREAM_TYPE;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.addAgents;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.addPodTemplate;
@@ -33,12 +34,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import io.fabric8.openshift.client.OpenShiftClient;
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.fabric8.kubernetes.api.model.ObjectMeta;
-import io.fabric8.kubernetes.client.dsl.base.OperationContext;
 import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
 import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
@@ -59,21 +60,18 @@ public class ImageStreamClusterInformer implements ResourceEventHandler<ImageStr
     }
 
     public void start() {
-        LOGGER.info("Starting ImageStream informer for " + namespaces + "!!");
-        LOGGER.debug("Listing ImageStream resources");
-        SharedInformerFactory factory = getInformerFactory();
-        Map<String, String[]> labels = singletonMap(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUES);
-        OperationContext withLabels = new OperationContext().withLabelsIn(labels);
-        this.informer = factory.sharedIndexInformerFor(ImageStream.class, withLabels, getResyncPeriodMilliseconds());
+        LOGGER.info("Starting ImageStream informer for namespaces: " + namespaces + "!!");
+        OpenShiftClient client = getOpenShiftClient();
+        this.informer = client.imageStreams().withLabelIn(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUES).inform();
         informer.addEventHandler(this);
-        factory.startAllRegisteredInformers();
-        LOGGER.info("ImageStream informer started for namespace: " + namespaces);
+        client.informers().startAllRegisteredInformers();
+        LOGGER.info("ImageStream informer started for namespaces: " + namespaces);
 //        ImageStreamList list = getOpenshiftClient().imageStreams().inNamespace(namespace).withLabels(labels).list();
 //        onInit(list.getItems());
     }
 
     public void stop() {
-        LOGGER.info("Stopping secret informer " + namespaces + "!!");
+        LOGGER.info("Stopping ImageStream informer " + namespaces + "!!");
         this.informer.stop();
     }
 
