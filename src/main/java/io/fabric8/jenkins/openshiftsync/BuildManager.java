@@ -58,7 +58,7 @@ import io.fabric8.openshift.client.OpenShiftClient;
 import jenkins.model.Jenkins;
 import jenkins.security.NotReallyRoleSensitiveCallable;
 
-@SuppressWarnings({ "deprecation", "serial" })
+
 public class BuildManager {
   private static final Logger logger = Logger.getLogger(BuildManager.class.getName());
   
@@ -222,8 +222,7 @@ public class BuildManager {
       return;
     try {
       buildsWithNoBCList.put(build.getMetadata().getNamespace() + build.getMetadata().getName(), build);
-    } catch (ConcurrentModificationException | IllegalArgumentException | UnsupportedOperationException
-      | NullPointerException e) {
+    } catch (ConcurrentModificationException | IllegalArgumentException | UnsupportedOperationException e) {
       logger.log(Level.WARNING, "Failed to add item " + build.getMetadata().getName(), e);
     }
   }
@@ -236,10 +235,10 @@ public class BuildManager {
   // corresponding build config watch events
   public static void flushBuildsWithNoBCList() {
 
-    ConcurrentHashMap<String, Build> clone = null;
-    synchronized (buildsWithNoBCList) {
+    ConcurrentHashMap<String, Build> clone;
+
       clone = new ConcurrentHashMap<String, Build>(buildsWithNoBCList);
-    }
+
     boolean anyRemoveFailures = false;
     for (Build build : clone.values()) {
       WorkflowJob job = getJobFromBuild(build);
@@ -251,9 +250,7 @@ public class BuildManager {
           logger.log(Level.WARNING, "flushBuildsWithNoBCList", e);
         }
         try {
-          synchronized (buildsWithNoBCList) {
             removeBuildFromNoBCList(build);
-          }
         } catch (Throwable t) {
           // TODO
           // concurrent mod exceptions are not suppose to occur
@@ -266,13 +263,9 @@ public class BuildManager {
           logger.log(Level.WARNING, "flushBuildsWithNoBCList", t);
         }
       }
-
-      synchronized (buildsWithNoBCList) {
         if (anyRemoveFailures && buildsWithNoBCList.size() > 0) {
           buildsWithNoBCList.clear();
         }
-
-      }
     }
   }
 
@@ -308,7 +301,7 @@ public class BuildManager {
     // order
     static void deleteEventToJenkinsJobRun(final Build build) throws Exception {
         List<OwnerReference> ownerRefs = build.getMetadata().getOwnerReferences();
-        String bcUid = null;
+        String bcUid;
         for (OwnerReference ref : ownerRefs) {
             if ("BuildConfig".equals(ref.getKind()) && ref.getUid() != null && ref.getUid().length() > 0) {
                 // employ intern to facilitate sync'ing on the same actual

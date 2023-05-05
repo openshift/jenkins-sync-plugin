@@ -16,8 +16,6 @@
 package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.Constants.*;
-import static io.fabric8.jenkins.openshiftsync.Constants.VALUE_SECRET_SYNC;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
 import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.IMAGESTREAM_TYPE;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.addAgents;
@@ -26,10 +24,8 @@ import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.deleteAgents;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.getPodTemplatesListFromImageStreams;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.hasPodTemplate;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.updateAgents;
-import static java.util.Collections.singletonMap;
 
 import java.util.List;
-import java.util.Map;
 
 import io.fabric8.openshift.client.OpenShiftClient;
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
@@ -39,7 +35,6 @@ import org.slf4j.LoggerFactory;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
-import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 import io.fabric8.openshift.api.model.ImageStream;
 
 public class ImageStreamInformer implements ResourceEventHandler<ImageStream>, Lifecyclable {
@@ -59,7 +54,7 @@ public class ImageStreamInformer implements ResourceEventHandler<ImageStream>, L
     public void start() {
         LOGGER.info("Starting ImageStream informer " + namespace + "!!");
         OpenShiftClient client = getOpenShiftClient();
-        this.informer = client.imageStreams().inNamespace(namespace).withLabelIn(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUES).inform();
+        this.informer = client.imageStreams().inNamespace(namespace).withLabelIn(IMAGESTREAM_AGENT_LABEL, Constants.imageStreamAgentLabelValues()).inform();
         informer.addEventHandler(this);
         client.informers().startAllRegisteredInformers();
         LOGGER.info("ImageStream informer started for namespace: " + namespace);

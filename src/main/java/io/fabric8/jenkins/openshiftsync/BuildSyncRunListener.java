@@ -203,7 +203,6 @@ public class BuildSyncRunListener extends RunListener<Run> {
         if (shouldPollRun(run)) {
             runsToPoll.remove(run);
             boolean updated = pollRun(run);
-            String jenkinsURL = Jenkins.get().getRootUrl();
             logger.info("Run COMPLETED: " + run.getUrl() + " updated: " + updated);
         }
         super.onFinalized(run);

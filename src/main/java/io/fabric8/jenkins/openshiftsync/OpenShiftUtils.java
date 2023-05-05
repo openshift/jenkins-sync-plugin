@@ -19,8 +19,7 @@ import static io.fabric8.jenkins.openshiftsync.BuildPhases.NEW;
 import static io.fabric8.jenkins.openshiftsync.BuildPhases.PENDING;
 import static io.fabric8.jenkins.openshiftsync.BuildPhases.RUNNING;
 import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_DEFAULT_NAMESPACE;
-import static java.util.logging.Level.FINE;
-import static java.util.logging.Level.INFO;
+import static java.util.logging.Level.*;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -28,15 +27,18 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ResourceBundle;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import hudson.PluginWrapper;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.builder.ReflectionToStringBuilder;
 import org.apache.tools.ant.filters.StringInputStream;
@@ -94,12 +96,15 @@ public class OpenShiftUtils {
         if (jenkinsPodNamespace != null && jenkinsPodNamespace.trim().length() > 0) {
             jenkinsPodNamespace = jenkinsPodNamespace.trim();
         } else {
-            File f = new File(Constants.OPENSHIFT_PROJECT_FILE);
+            ResourceBundle bundle = ResourceBundle.getBundle("io.fabric8.jenkins.openshiftsync.FileLocations");
+
+            String OPENSHIFT_PROJECT_FILE = bundle.getString("OPENSHIFT_PROJECT_FILE");
+            File f = new File(OPENSHIFT_PROJECT_FILE);
             if (f.exists()) {
                 FileReader fr = null;
                 BufferedReader br = null;
                 try {
-                    fr = new FileReader(Constants.OPENSHIFT_PROJECT_FILE);
+                    fr = new FileReader(OPENSHIFT_PROJECT_FILE, StandardCharsets.UTF_8);
                     br = new BufferedReader(fr);
                     // should just be one line
                     jenkinsPodNamespace = br.readLine();
@@ -107,14 +112,16 @@ public class OpenShiftUtils {
                         jenkinsPodNamespace = jenkinsPodNamespace.trim();
                     }
 
-                } catch (FileNotFoundException e) {
-                    logger.log(Level.FINE, "getNamespaceFromPodInputs", e);
                 } catch (IOException e) {
                     logger.log(Level.FINE, "getNamespaceFromPodInputs", e);
-                } finally {
+                }  finally {
                     try {
-                        br.close();
-                        fr.close();
+                        if (br != null) {
+                            br.close();
+                        }
+                        if (fr != null) {
+                            fr.close();
+                        }
                     } catch (Throwable e) {
                         logger.log(Level.FINE, "getNamespaceFromPodInputs", e);
                     }
@@ -144,9 +151,18 @@ public class OpenShiftUtils {
         }
         Config config = configBuilder.build();
         logger.log(INFO, "Current OpenShift Client Configuration: " + ReflectionToStringBuilder.toString(config));
-
-        String version = JENKINS_INSTANCE.getPluginManager().getPlugin("openshift-sync").getVersion();
-        config.setUserAgent("openshift-sync-plugin-" + version + "/fabric8-" + Version.clientVersion());
+        try {
+            String version = null;
+            if (JENKINS_INSTANCE != null) {
+                PluginWrapper plugin = JENKINS_INSTANCE.getPluginManager().getPlugin("openshift-sync");
+                if (plugin != null) {
+                    version = plugin.getVersion();
+                }
+            }
+            config.setUserAgent("openshift-sync-plugin-" + version + "/fabric8-" + Version.clientVersion());
+        } catch (Exception e) {
+            logger.log(WARNING, e.getMessage());
+        }
         openShiftClient = new DefaultOpenShiftClient(config);
         logger.log(INFO, "New OpenShift client initialized: " + openShiftClient);
 

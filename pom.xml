@@ -23,7 +23,6 @@
         <revision>1.1.0</revision>
         <changelist>999999-SNAPSHOT</changelist>
         <jenkins.version>2.387.2</jenkins.version>
-        <java.level>11</java.level>
         <log.level>INFO</log.level>
     </properties>
 
@@ -200,6 +199,7 @@
                         </goals>
                         <configuration>
                             <fileMask>Messages.properties</fileMask>
+                            <fileMask>FileLocations.properties</fileMask>
                             <outputDirectory>target/generated-sources/localizer</outputDirectory>
                         </configuration>
                     </execution>
