@@ -1,0 +1,21 @@
+on:
+  pull_request:
+    types:
+      - closed
+
+jobs:
+  if_merged:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: pull-request
+        uses: repo-sync/pull-request@v2
+        with:
+          source_branch: "master"                                 # If blank, default: triggered branch
+          destination_branch: "master"                      # If blank, default: master
+          pr_title: "Pulling ${{ github.ref }} into master" # Title of pull request
+          pr_body: |                                        # Full markdown support, requires pr_title to be set
+            *Automated pull request from ${{ github.repositoryUrl }}*
+          pr_assignee: "apoorvajagtap,mbharatk,coreydaley,divyansh42"                         # Comma-separated list (no spaces)
+          pr_label: "enhancement"                               # Comma-separated list (no spaces)
