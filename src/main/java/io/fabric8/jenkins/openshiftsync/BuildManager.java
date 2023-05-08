@@ -44,6 +44,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
@@ -57,7 +58,6 @@ import io.fabric8.openshift.api.model.BuildStatus;
 import io.fabric8.openshift.client.OpenShiftClient;
 import jenkins.model.Jenkins;
 import jenkins.security.NotReallyRoleSensitiveCallable;
-
 
 public class BuildManager {
   private static final Logger logger = Logger.getLogger(BuildManager.class.getName());
@@ -272,6 +272,7 @@ public class BuildManager {
     // innerDeleteEventToJenkinsJobRun is the actual delete logic at the heart
     // of deleteEventToJenkinsJobRun
     // that is either in a sync block or not based on the presence of a BC uid
+    @SuppressFBWarnings(value="SE_BAD_FIELD")
     private static void innerDeleteEventToJenkinsJobRun(final Build build) throws Exception {
         final WorkflowJob job = getJobFromBuild(build);
         if (job != null) {

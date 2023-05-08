@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 
@@ -150,7 +151,8 @@ public class BuildConfigManager {
         }
 
     }
-    
+
+    @SuppressFBWarnings(value="SE_BAD_FIELD")
     static void reconcileJobsAndBuildConfigs() {
         logger.info("Reconciling jobs and build configs");
         List<WorkflowJob> jobs = Jenkins.getActiveInstance().getAllItems(WorkflowJob.class);
