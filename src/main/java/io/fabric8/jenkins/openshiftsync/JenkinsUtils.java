@@ -1,12 +1,12 @@
 /**
  * Copyright (C) 2016 Red Hat, Inc.
- * <p>
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ *
+ *         http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,11 +15,70 @@
  */
 package io.fabric8.jenkins.openshiftsync;
 
+import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
+import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.putJobWithBuildConfig;
+import static io.fabric8.jenkins.openshiftsync.BuildPhases.CANCELLED;
+import static io.fabric8.jenkins.openshiftsync.BuildPhases.PENDING;
+import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL;
+import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL_LATEST_ONLY;
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_ANNOTATIONS_BUILD_NUMBER;
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_BUILD_STATUS_FIELD;
+import static io.fabric8.jenkins.openshiftsync.Constants.OPENSHIFT_LABELS_BUILD_CONFIG_NAME;
+import static io.fabric8.jenkins.openshiftsync.CredentialsUtils.updateSourceCredentials;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getAuthenticatedOpenShiftClient;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.isCancelled;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.updateOpenShiftBuildPhase;
+import static java.util.Collections.sort;
+import static java.util.logging.Level.SEVERE;
+import static java.util.logging.Level.WARNING;
+import static org.apache.commons.lang.StringUtils.isBlank;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import javax.xml.transform.Source;
+import javax.xml.transform.stream.StreamSource;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.tools.ant.filters.StringInputStream;
+import org.csanchez.jenkins.plugins.kubernetes.KubernetesCloud;
+import org.eclipse.jgit.transport.URIish;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
+import org.jenkinsci.plugins.workflow.job.WorkflowRun;
+
 import com.cloudbees.plugins.credentials.CredentialsParameterDefinition;
+
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.AbortException;
+import hudson.model.Action;
+import hudson.model.BooleanParameterDefinition;
+import hudson.model.Cause;
+import hudson.model.CauseAction;
+import hudson.model.ChoiceParameterDefinition;
+import hudson.model.FileParameterDefinition;
+import hudson.model.Job;
+import hudson.model.ParameterDefinition;
+import hudson.model.ParameterValue;
+import hudson.model.ParametersAction;
+import hudson.model.ParametersDefinitionProperty;
+import hudson.model.PasswordParameterDefinition;
 import hudson.model.Queue;
-import hudson.model.*;
+import hudson.model.RunParameterDefinition;
+import hudson.model.StringParameterDefinition;
+import hudson.model.StringParameterValue;
+import hudson.model.TopLevelItem;
 import hudson.model.queue.QueueTaskFuture;
 import hudson.plugins.git.RevisionParameterAction;
 import hudson.security.ACL;
@@ -29,42 +88,16 @@ import hudson.util.XStream2;
 import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.openshift.api.model.Build;
-import io.fabric8.openshift.api.model.*;
+import io.fabric8.openshift.api.model.BuildBuilder;
+import io.fabric8.openshift.api.model.BuildConfig;
+import io.fabric8.openshift.api.model.BuildSpec;
+import io.fabric8.openshift.api.model.GitBuildSource;
+import io.fabric8.openshift.api.model.GitSourceRevision;
+import io.fabric8.openshift.api.model.JenkinsPipelineBuildStrategy;
+import io.fabric8.openshift.api.model.SourceRevision;
 import jenkins.model.Jenkins;
 import jenkins.security.NotReallyRoleSensitiveCallable;
 import jenkins.util.Timer;
-import org.apache.commons.lang.StringUtils;
-import org.apache.tools.ant.filters.StringInputStream;
-import org.csanchez.jenkins.plugins.kubernetes.KubernetesCloud;
-import org.eclipse.jgit.transport.URIish;
-import org.jenkinsci.plugins.workflow.job.WorkflowJob;
-import org.jenkinsci.plugins.workflow.job.WorkflowRun;
-
-import javax.xml.transform.Source;
-import javax.xml.transform.stream.StreamSource;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URISyntaxException;
-import java.util.*;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.getJobFromBuildConfig;
-import static io.fabric8.jenkins.openshiftsync.BuildConfigToJobMap.putJobWithBuildConfig;
-import static io.fabric8.jenkins.openshiftsync.BuildPhases.CANCELLED;
-import static io.fabric8.jenkins.openshiftsync.BuildPhases.PENDING;
-import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL;
-import static io.fabric8.jenkins.openshiftsync.BuildRunPolicy.SERIAL_LATEST_ONLY;
-import static io.fabric8.jenkins.openshiftsync.Constants.*;
-import static io.fabric8.jenkins.openshiftsync.CredentialsUtils.updateSourceCredentials;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.*;
-import static java.util.Collections.sort;
-import static java.util.logging.Level.SEVERE;
-import static java.util.logging.Level.WARNING;
-import static org.apache.commons.lang.StringUtils.isBlank;
 
 /**
  */
@@ -90,11 +123,13 @@ public class JenkinsUtils {
         return root;
     }
 
+
     public static void verifyEnvVars(Map<String, ParameterDefinition> paramMap, WorkflowJob workflowJob, BuildConfig buildConfig) throws AbortException {
         boolean rc;
         try {
             ACL.impersonate(ACL.SYSTEM, new NotReallyRoleSensitiveCallable<Void, Exception>() {
                 @Override
+                @SuppressFBWarnings(value="SBSC_USE_STRINGBUFFER_CONCATENATION")
                 public Void call() throws Exception {
                     if (paramMap != null) {
                         String fullName = workflowJob.getFullName();
@@ -117,14 +152,14 @@ public class JenkinsUtils {
                             // the stack
                             LOGGER.warning("A run of workflow job " + workflowJob.getName() + " via fullname " + workflowJob.getFullName() + " unexpectantly not saved to disk.");
                             List<WorkflowJob> jobList = Jenkins.getActiveInstance().getAllItems(WorkflowJob.class);
-                            StringBuilder jobNames = new StringBuilder();
+                            String jobNames = "";
                             for (WorkflowJob j : jobList) {
-                                jobNames.append(j.getFullName());
+                                jobNames = jobNames + j.getFullName();
                             }
                             LOGGER.warning("The current list of full job names: " + jobNames);
 
                             try {
-                                Thread.sleep(50L);
+                                Thread.sleep(50l);
                             } catch (Throwable t) {
                                 break;
                             }
@@ -153,15 +188,16 @@ public class JenkinsUtils {
 
         } catch (Exception e) {
             if (e instanceof AbortException)
-                throw (AbortException) e;
+                throw (AbortException)e;
             throw new AbortException(e.getMessage());
         }
     }
 
+    @SuppressFBWarnings("NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE")
     public static Map<String, ParameterDefinition> addJobParamForBuildEnvs(WorkflowJob job, JenkinsPipelineBuildStrategy strat,
                                                                            boolean replaceExisting) throws IOException {
         List<EnvVar> envs = strat.getEnv();
-        Map<String, ParameterDefinition> paramMap = new HashMap<String, ParameterDefinition>();
+        Map<String, ParameterDefinition> paramMap = null;
         if (envs.size() > 0) {
             // build list of current env var names for possible deletion of env
             // vars currently stored
@@ -173,22 +209,18 @@ public class JenkinsUtils {
             // get existing property defs, including any manually added from the
             // jenkins console independent of BC
             ParametersDefinitionProperty params = job.removeProperty(ParametersDefinitionProperty.class);
+            paramMap = new HashMap<String, ParameterDefinition>();
             // store any existing parameters in map for easy key lookup
             if (params != null) {
                 List<ParameterDefinition> existingParamList = params.getParameterDefinitions();
                 for (ParameterDefinition param : existingParamList) {
                     // if a user supplied param, add
-                    if (param.getDescription() == null) {
+                    if (param.getDescription() == null || !param.getDescription().equals(PARAM_FROM_ENV_DESCRIPTION))
                         paramMap.put(param.getName(), param);
-                    } else if (envKeys.contains(param.getName())) {
+                    else if (envKeys.contains(param.getName())) {
+                        // the env var still exists on the openshift side so
+                        // keep
                         paramMap.put(param.getName(), param);
-                    } else {
-                        String description = param.getDescription();
-                        if (description != null) {
-                            if (description.equals(PARAM_FROM_ENV_DESCRIPTION)) {
-                                paramMap.put(param.getName(), param);
-                            }
-                        }
                     }
                 }
             }
@@ -462,7 +494,7 @@ public class JenkinsUtils {
 
     private static boolean isAlreadyTriggered(WorkflowJob job, Build build) {
         boolean rc = getRun(job, build) != null;
-        LOGGER.info(String.format("isAlreadyTriggered build %s/%s %s", build.getMetadata().getNamespace(), build.getMetadata().getName(), rc));
+        LOGGER.info(String.format("isAlreadyTriggered build %s/%s %s", build.getMetadata().getNamespace(), build.getMetadata().getName(), String.valueOf(rc)));
         return rc;
     }
 
@@ -514,12 +546,12 @@ public class JenkinsUtils {
     }
 
     public static void deleteRun(WorkflowRun run) {
-        if (run != null) {
+        if( run != null ) {
             try {
-                LOGGER.info("Deleting run: " + run);
+                LOGGER.info("Deleting run: " + run.toString());
                 run.delete();
             } catch (IOException e) {
-                LOGGER.warning("Unable to delete run " + run + ":" + e.getMessage());
+                LOGGER.warning("Unable to delete run " + run.toString() + ":" + e.getMessage());
             }
         } else {
             LOGGER.warning("A null run has been passed to deleteRun");
@@ -771,7 +803,7 @@ public class JenkinsUtils {
             }
             boolean buildAdded = false;
             try {
-                buildAdded = BuildManager.addEventToJenkinsJobRun(b);
+                buildAdded =  BuildManager.addEventToJenkinsJobRun(b);
             } catch (IOException e) {
                 ObjectMeta meta = b.getMetadata();
                 LOGGER.log(WARNING, "Failed to add new build " + meta.getNamespace() + "/" + meta.getName(), e);
