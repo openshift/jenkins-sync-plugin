@@ -11,7 +11,7 @@
     <parent>
         <groupId>org.jenkins-ci.plugins</groupId>
         <artifactId>plugin</artifactId>
-        <version>4.61</version>
+        <version>4.69</version>
         <relativePath />
     </parent>
     <groupId>io.fabric8.jenkins.plugins</groupId>
@@ -22,7 +22,7 @@
     <properties>
         <revision>1.1.0</revision>
         <changelist>999999-SNAPSHOT</changelist>
-        <jenkins.version>2.387.2</jenkins.version>
+        <jenkins.version>2.401.1</jenkins.version>
         <log.level>INFO</log.level>
     </properties>
 
@@ -85,14 +85,13 @@
         <dependency>
             <groupId>org.jenkins-ci.plugins.workflow</groupId>
             <artifactId>workflow-multibranch</artifactId>
-            <version>746.v05814d19c001</version>
+            <version>756.v891d88f2cd46</version>
         </dependency>
         <dependency>
             <groupId>org.jenkins-ci.plugins</groupId>
             <artifactId>script-security</artifactId>
-            <version>1244.ve463715a_f89c</version>
+            <version>1251.vfe552ed55f8d</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/joda-time/joda-time -->
         <dependency>
             <groupId>joda-time</groupId>
             <artifactId>joda-time</artifactId>
@@ -101,22 +100,22 @@
         <dependency>
             <groupId>org.jenkins-ci.plugins</groupId>
             <artifactId>git</artifactId>
-            <version>5.0.0</version>
+            <version>5.1.0</version>
         </dependency>
         <dependency>
             <groupId>io.jenkins.blueocean</groupId>
             <artifactId>blueocean-rest</artifactId>
-            <version>1.27.3</version>
+            <version>1.27.4</version>
         </dependency>
         <dependency>
             <groupId>org.jenkins-ci.plugins.pipeline-stage-view</groupId>
             <artifactId>pipeline-rest-api</artifactId>
-            <version>2.32</version>
+            <version>2.33</version>
         </dependency>
         <dependency>
             <groupId>org.csanchez.jenkins.plugins</groupId>
             <artifactId>kubernetes</artifactId>
-            <version>3923.v294a_d4250b_91</version>
+            <version>3937.vd7b_82db_e347b_</version>
         </dependency>
     </dependencies>
 
@@ -125,8 +124,8 @@
             <!-- https://mvnrepository.com/artifact/io.jenkins.tools.bom/bom-2.303.x -->
             <dependency>
                 <groupId>io.jenkins.tools.bom</groupId>
-                <artifactId>bom-2.303.x</artifactId>
-                <version>1505.vcc5b_40a_15e40</version>
+                <artifactId>bom-2.401.x</artifactId>
+                <version>2220.vea_cea_f1a_35e4</version>
                 <type>pom</type>
             </dependency>
             <!-- https://mvnrepository.com/artifact/io.jenkins.plugins/snakeyaml-api -->
@@ -139,7 +138,13 @@
             <dependency>
                 <groupId>org.jenkins-ci.plugins.workflow</groupId>
                 <artifactId>workflow-job</artifactId>
-                <version>1289.vd1c337fd5354</version>
+                <version>1316.vd2290d3341a_f</version>
+            </dependency>
+            <!-- https://mvnrepository.com/artifact/io.jenkins.plugins/ionicons-api -->
+            <dependency>
+                <groupId>io.jenkins.plugins</groupId>
+                <artifactId>ionicons-api</artifactId>
+                <version>56.v1b_1c8c49374e</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -149,7 +154,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>versions-maven-plugin</artifactId>
-                <version>2.7</version>
+                <version>2.16.0</version>
                 <configuration>
                     <excludes>
                         <exclude>org.apache.commons:commons-collections4</exclude>
@@ -159,7 +164,7 @@
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.7.2.1</version>
+                <version>4.7.3.5</version>
                 <dependencies>
                     <!-- overwrite dependency on spotbugs if you want to specify the version of spotbugs -->
                     <dependency>
@@ -172,7 +177,7 @@
             <plugin>
                 <groupId>org.jenkins-ci.tools</groupId>
                 <artifactId>maven-hpi-plugin</artifactId>
-                <version>3.43</version>
+                <version>3.47</version>
                 <configuration>
                     <pluginFirstClassLoader>true</pluginFirstClassLoader>
                     <loggers>
@@ -187,7 +192,7 @@
             <plugin>
                 <groupId>org.jvnet.localizer</groupId>
                 <artifactId>maven-localizer-plugin</artifactId>
-                <version>1.12</version>
+                <version>1.26</version>
                 <executions>
                     <execution>
                         <phase>generate-sources</phase>
@@ -205,7 +210,7 @@
             <plugin>
                 <groupId>com.mycila</groupId>
                 <artifactId>license-maven-plugin</artifactId>
-                <version>2.11</version>
+                <version>4.2</version>
                 <configuration>
                     <aggregate>true</aggregate>
                     <header>header.txt</header>
@@ -237,7 +242,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-gpg-plugin</artifactId>
-                        <version>1.6</version>
+                        <version>3.1.0</version>
                         <executions>
                             <execution>
                                 <id>sign-artifacts</id>
@@ -286,7 +291,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-source-plugin</artifactId>
-                        <version>2.4</version>
+                        <version>3.3.0</version>
                         <executions>
                             <execution>
                                 <id>attach-sources</id>
