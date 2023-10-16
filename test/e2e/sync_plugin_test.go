@@ -25,6 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 const (
@@ -120,7 +122,7 @@ func instantiateTemplate(ta *testArgs) {
 			}
 
 		default:
-			ta.t.Logf("unexpected event type %s: %#v", string(event.Type), event.Object)
+			ta.t.Logf("unexpected event type %s: %#v", string(event.Type), spew.Sdump(event.Object))
 		}
 	}
 
