@@ -18,7 +18,10 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
@@ -953,47 +956,47 @@ func TestPruningFailedPipeline(t *testing.T) {
 	isPruningDone(ta)
 }
 
-// func TestDeclarativePlusNodejs(t *testing.T) {
-// 	ta := setupThroughJenkinsLaunch(t, nil)
-// 	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
+func TestDeclarativePlusNodejs(t *testing.T) {
+	ta := setupThroughJenkinsLaunch(t, nil)
+	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
 
-// 	bc := &buildv1.BuildConfig{}
-// 	bc.Name = "sync-plugin-nodejs-declarative-builds"
-// 	bc.Spec = buildv1.BuildConfigSpec{
-// 		CommonSpec: buildv1.CommonSpec{
-// 			Strategy: buildv1.BuildStrategy{
-// 				Type: buildv1.JenkinsPipelineBuildStrategyType,
-// 				JenkinsPipelineStrategy: &buildv1.JenkinsPipelineBuildStrategy{
-// 					Jenkinsfile: fmt.Sprintf(nodejsDeclarative, ta.ns),
-// 				},
-// 			},
-// 		},
-// 	}
+	bc := &buildv1.BuildConfig{}
+	bc.Name = "sync-plugin-nodejs-declarative-builds"
+	bc.Spec = buildv1.BuildConfigSpec{
+		CommonSpec: buildv1.CommonSpec{
+			Strategy: buildv1.BuildStrategy{
+				Type: buildv1.JenkinsPipelineBuildStrategyType,
+				JenkinsPipelineStrategy: &buildv1.JenkinsPipelineBuildStrategy{
+					Jenkinsfile: fmt.Sprintf(nodejsDeclarative, ta.ns),
+				},
+			},
+		},
+	}
 
-// 	ta.bc = bc
-// 	ta.skipBCCreate = true
-// 	var err error
-// 	if ta.bc, err = buildClient.BuildV1().BuildConfigs(ta.ns).Create(context.Background(), bc, metav1.CreateOptions{}); err != nil {
-// 		debugAndFailTest(ta, fmt.Sprintf("error creating bc: %s", err.Error()))
-// 	}
+	ta.bc = bc
+	ta.skipBCCreate = true
+	var err error
+	if ta.bc, err = buildClient.BuildV1().BuildConfigs(ta.ns).Create(context.Background(), bc, metav1.CreateOptions{}); err != nil {
+		debugAndFailTest(ta, fmt.Sprintf("error creating bc: %s", err.Error()))
+	}
 
-// 	ta.jobLogSearch = finishedSuccess
-// 	basicPipelineInvocationAndValidation(ta)
+	ta.jobLogSearch = finishedSuccess
+	basicPipelineInvocationAndValidation(ta)
 
-// 	err = wait.PollImmediate(5*time.Second, 1*time.Minute, func() (done bool, err error) {
-// 		ep, err := kubeClient.CoreV1().Endpoints(ta.ns).Get(context.Background(), "nodejs-postgresql-example", metav1.GetOptions{})
-// 		if err != nil {
-// 			ta.t.Logf("%s", err.Error())
-// 			return false, nil
-// 		}
-// 		if len(ep.Subsets) == 0 || len(ep.Subsets[0].Addresses) == 0 {
-// 			ta.t.Logf("endpoint %s not ready", ep.Name)
-// 			return false, nil
-// 		}
-// 		return true, nil
-// 	})
+	err = wait.PollImmediate(5*time.Second, 1*time.Minute, func() (done bool, err error) {
+		ep, err := kubeClient.CoreV1().Endpoints(ta.ns).Get(context.Background(), "nodejs-postgresql-example", metav1.GetOptions{})
+		if err != nil {
+			ta.t.Logf("%s", err.Error())
+			return false, nil
+		}
+		if len(ep.Subsets) == 0 || len(ep.Subsets[0].Addresses) == 0 {
+			ta.t.Logf("endpoint %s not ready", ep.Name)
+			return false, nil
+		}
+		return true, nil
+	})
 
-// }
+}
 
 func TestDeletedBuildDeletesRun(t *testing.T) {
 	ta := setupThroughJenkinsLaunch(t, nil)
@@ -1070,82 +1073,87 @@ func TestDeletedBuildDeletesRun(t *testing.T) {
 
 }
 
-// func TestBlueGreen(t *testing.T) {
-// 	ta := setupThroughJenkinsLaunch(t, nil)
-// 	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
+func TestBlueGreen(t *testing.T) {
+	ta := setupThroughJenkinsLaunch(t, nil)
+	defer projectClient.ProjectV1().Projects().Delete(context.Background(), ta.ns, metav1.DeleteOptions{})
 
-// 	data := []byte(bluegreenTemplateYAML)
-// 	annotationDecodingScheme := runtime.NewScheme()
-// 	utilruntime.Must(templatev1.Install(annotationDecodingScheme))
-// 	utilruntime.Must(templatev1.DeprecatedInstallWithoutGroup(annotationDecodingScheme))
-// 	annotationDecoderCodecFactory := serializer.NewCodecFactory(annotationDecodingScheme)
-// 	decoder := annotationDecoderCodecFactory.UniversalDecoder(templatev1.GroupVersion)
-// 	bgt := &templatev1.Template{}
-// 	err := runtime.DecodeInto(decoder, data, bgt)
-// 	if err != nil {
-// 		t.Fatalf("err creating template from yaml: %s", err.Error())
-// 	}
+	data := []byte(bluegreenTemplateYAML)
+	annotationDecodingScheme := runtime.NewScheme()
+	utilruntime.Must(templatev1.Install(annotationDecodingScheme))
+	utilruntime.Must(templatev1.DeprecatedInstallWithoutGroup(annotationDecodingScheme))
+	annotationDecoderCodecFactory := serializer.NewCodecFactory(annotationDecodingScheme)
+	decoder := annotationDecoderCodecFactory.UniversalDecoder(templatev1.GroupVersion)
+	bgt := &templatev1.Template{}
+	err := runtime.DecodeInto(decoder, data, bgt)
+	if err != nil {
+		t.Fatalf("err creating template from yaml: %s", err.Error())
+	}
 
-// 	ta.template = bgt.Name
-// 	ta.templateNs = ta.ns
-// 	ta.templateObj = bgt
-// 	ta.templateParams = map[string]string{"VERBOSE": "true", "APPLICATION_DOMAIN": fmt.Sprintf("nodejs-%s.ocp.io", ta.ns)}
-// 	instantiateTemplate(ta)
+	ta.template = bgt.Name
+	ta.templateNs = ta.ns
+	ta.templateObj = bgt
+	ta.templateParams = map[string]string{"VERBOSE": "true", "APPLICATION_DOMAIN": fmt.Sprintf("nodejs-%s.ocp.io", ta.ns)}
+	instantiateTemplate(ta)
 
-// 	ta.skipBCCreate = true
-// 	ta.returnBeforeBuildDone = true
-// 	ta.bc = &buildv1.BuildConfig{}
-// 	ta.bc.Name = "bluegreen-pipeline"
-// 	buildAndSwitch := func(newColor string) {
-// 		b := instantiateBuild(ta)
+	ta.skipBCCreate = true
+	ta.returnBeforeBuildDone = true
+	ta.bc = &buildv1.BuildConfig{}
+	ta.bc.Name = "bluegreen-pipeline"
+	buildAndSwitch := func(newColor string) {
+		b := instantiateBuild(ta)
 
-// 		jenkinsBuildURI := b.Annotations[buildv1.BuildJenkinsBuildURIAnnotation]
-// 		if len(jenkinsBuildURI) == 0 {
-// 			err = wait.PollImmediate(5*time.Second, 1*time.Minute, func() (done bool, err error) {
-// 				b, err = buildClient.BuildV1().Builds(ta.ns).Get(context.Background(), b.Name, metav1.GetOptions{})
-// 				if err != nil {
-// 					t.Logf("build get error: %s", err.Error())
-// 					return false, nil
-// 				}
-// 				jenkinsBuildURI = b.Annotations[buildv1.BuildJenkinsBuildURIAnnotation]
-// 				if len(jenkinsBuildURI) > 0 {
-// 					return true, nil
-// 				}
-// 				return false, nil
-// 			})
-// 		}
+		jenkinsBuildURI := b.Annotations[buildv1.BuildJenkinsBuildURIAnnotation]
+		if len(jenkinsBuildURI) == 0 {
+			err = wait.PollImmediate(5*time.Second, 1*time.Minute, func() (done bool, err error) {
+				b, err = buildClient.BuildV1().Builds(ta.ns).Get(context.Background(), b.Name, metav1.GetOptions{})
+				if err != nil {
+					t.Logf("build get error: %s", err.Error())
+					return false, nil
+				}
+				jenkinsBuildURI = b.Annotations[buildv1.BuildJenkinsBuildURIAnnotation]
+				if len(jenkinsBuildURI) > 0 {
+					return true, nil
+				}
+				return false, nil
+			})
+		}
 
-// 		u, err := url.Parse(jenkinsBuildURI)
-// 		if err != nil {
-// 			t.Fatalf("bad build uri %s: %s", jenkinsBuildURI, err.Error())
-// 		}
-// 		jenkinsBuildURI = strings.Trim(u.Path, "/") // trim leading https://host/ and trailing /
+		u, err := url.Parse(jenkinsBuildURI)
+		if err != nil {
+			t.Fatalf("bad build uri %s: %s", jenkinsBuildURI, err.Error())
+		}
+		jenkinsBuildURI = strings.Trim(u.Path, "/") // trim leading https://host/ and trailing /
 
-// 		rawURICheck(jenkinsBuildURI+"/consoleText", ta, "Approve?")
+		rawURICheck(jenkinsBuildURI+"/consoleText", ta, "Approve?")
 
-// 		uriPost(jenkinsBuildURI+"/input/Approval/proceedEmpty", ta)
+		uriPost(jenkinsBuildURI+"/input/Approval/proceedEmpty", ta)
 
-// 		t.Logf("approval post for %s done", newColor)
+		t.Logf("approval post for %s done", newColor)
 
-// 		waitForBuildSuccess(ta, b)
-// 		jobLogCheck("bluegreen-pipeline", ta, finishedSuccess)
+		waitForBuildSuccess(ta, b)
+		jobLogCheck("bluegreen-pipeline", ta, finishedSuccess)
 
-// 		// verify route color
-// 		r, err := routeClient.RouteV1().Routes(ta.ns).Get(context.Background(), "nodejs-postgresql-example", metav1.GetOptions{})
-// 		if err != nil {
-// 			t.Fatalf("error on route get: %s", err.Error())
-// 		}
-// 		activeRoute := strings.TrimSpace(r.Spec.To.Name)
-// 		if activeRoute != fmt.Sprintf("nodejs-postgresql-example-%s", newColor) {
-// 			t.Fatalf("unexpected route value for %s: %s", newColor, activeRoute)
-// 		}
-// 	}
+		// verify route color
+		r, err := routeClient.RouteV1().Routes(ta.ns).Get(context.Background(), "nodejs-postgresql-example", metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("error on route get: %s", err.Error())
+		}
+		activeRoute := strings.TrimSpace(r.Spec.To.Name)
+		if activeRoute != fmt.Sprintf("nodejs-postgresql-example-%s", newColor) {
+			t.Fatalf("unexpected route value for %s: %s", newColor, activeRoute)
+		}
+	}
 
-// 	buildAndSwitch("green")
-// 	buildAndSwitch("blue")
-// }
+	buildAndSwitch("green")
+	buildAndSwitch("blue")
+}
 
-func TestPersistentVolumes(t *testing.T) {
+/*
+Failing due to more restrictive Security Policies in newer OCP versions
+It is unlikely that we will reenable this test without a drastic overhaul
+*/
+/*
+ func TestPersistentVolumes(t *testing.T) {
 	ta := &testArgs{t: t}
 	setupClients(ta.t)
 	randomTestNamespaceName := generateName(testNamespace)
@@ -1257,3 +1265,4 @@ func TestPersistentVolumes(t *testing.T) {
 	}
 
 }
+*/

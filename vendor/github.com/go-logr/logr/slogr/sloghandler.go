@@ -152,12 +152,13 @@ func (l *slogHandler) addGroupPrefix(name string) string {
 // levels could be negative or what that meant.
 //
 // Some example usage:
-//     logrV0 := getMyLogger()
-//     logrV2 := logrV0.V(2)
-//     slogV2 := slog.New(slogr.NewSlogHandler(logrV2))
-//     slogV2.Debug("msg") // =~ logrV2.V(4) =~ logrV0.V(6)
-//     slogV2.Info("msg")  // =~  logrV2.V(0) =~ logrV0.V(2)
-//     slogv2.Warn("msg")  // =~ logrV2.V(-4) =~ logrV0.V(0)
+//
+//	logrV0 := getMyLogger()
+//	logrV2 := logrV0.V(2)
+//	slogV2 := slog.New(slogr.NewSlogHandler(logrV2))
+//	slogV2.Debug("msg") // =~ logrV2.V(4) =~ logrV0.V(6)
+//	slogV2.Info("msg")  // =~  logrV2.V(0) =~ logrV0.V(2)
+//	slogv2.Warn("msg")  // =~ logrV2.V(-4) =~ logrV0.V(0)
 func (l *slogHandler) levelFromSlog(level slog.Level) int {
 	result := -level
 	result += l.levelBias // in case the original logr.Logger had a V level
