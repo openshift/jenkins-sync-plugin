@@ -647,7 +647,7 @@ func TestCreateThenDeleteBC(t *testing.T) {
 		t.Fatalf("error on bc %s delete: %s", bc.Name, err.Error())
 	}
 
-	jobLogCheck(bc.Name, ta, "<body><h2>HTTP ERROR 404 Not Found</h2>")
+	jobLogCheck(bc.Name, ta, "<h2>Not Found</h2>")
 }
 
 func TestSecretCredentialSync(t *testing.T) {
@@ -673,7 +673,7 @@ func TestSecretCredentialSync(t *testing.T) {
 		t.Fatalf("error updating secret: %s", err.Error())
 	}
 
-	credCheck(secret.Name, ta, "<body><h2>HTTP ERROR 404 Not Found</h2>")
+	credCheck(secret.Name, ta, "<h2>Not Found</h2>")
 
 	secret.Labels = map[string]string{"credential.sync.jenkins.openshift.io": "true"}
 	secret, err = kubeClient.CoreV1().Secrets(ta.ns).Update(context.Background(), secret, metav1.UpdateOptions{})
@@ -688,7 +688,7 @@ func TestSecretCredentialSync(t *testing.T) {
 		t.Fatalf("error deleting secret %s: %s", secret.Name, err.Error())
 	}
 
-	credCheck(secret.Name, ta, "<body><h2>HTTP ERROR 404 Not Found</h2>")
+	credCheck(secret.Name, ta, "<h2>Not Found</h2>")
 }
 
 func TestSecretCredentialSyncAfterStartup(t *testing.T) {
@@ -1065,7 +1065,7 @@ func TestDeletedBuildDeletesRun(t *testing.T) {
 	for _, buildInfo := range buildNameToBuildInfoMap {
 		dbg(buildInfo.number)
 		if buildInfo.number%2 == 0 {
-			rawURICheck(buildInfo.jenkinsBuildURI, ta, "<body><h2>HTTP ERROR 404 Not Found</h2>")
+			rawURICheck(buildInfo.jenkinsBuildURI, ta, "<h2>Not Found</h2>")
 		} else {
 			rawURICheck(buildInfo.jenkinsBuildURI, ta, fmt.Sprintf("Build #%d", buildInfo.number))
 		}
