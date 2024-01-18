@@ -1148,7 +1148,12 @@ func TestDeletedBuildDeletesRun(t *testing.T) {
  	buildAndSwitch("blue")
  }
 
-func TestPersistentVolumes(t *testing.T) {
+/*
+Failing due to more restrictive Security Policies in newer OCP versions
+It is unlikely that we will reenable this test without a drastic overhaul
+*/
+/*
+ func TestPersistentVolumes(t *testing.T) {
 	ta := &testArgs{t: t}
 	setupClients(ta.t)
 	randomTestNamespaceName := generateName(testNamespace)
@@ -1260,3 +1265,4 @@ func TestPersistentVolumes(t *testing.T) {
 	}
 
 }
+*/
