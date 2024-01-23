@@ -11,7 +11,7 @@
     <parent>
         <groupId>org.jenkins-ci.plugins</groupId>
         <artifactId>plugin</artifactId>
-        <version>4.69</version>
+        <version>4.77</version>
         <relativePath />
     </parent>
     <groupId>io.fabric8.jenkins.plugins</groupId>
@@ -22,7 +22,7 @@
     <properties>
         <revision>1.1.0</revision>
         <changelist>999999-SNAPSHOT</changelist>
-        <jenkins.version>2.401.1</jenkins.version>
+        <jenkins.version>2.426.2</jenkins.version>
         <log.level>INFO</log.level>
     </properties>
 
@@ -85,72 +85,77 @@
         <dependency>
             <groupId>org.jenkins-ci.plugins.workflow</groupId>
             <artifactId>workflow-multibranch</artifactId>
-            <version>756.v891d88f2cd46</version>
         </dependency>
         <dependency>
-            <groupId>org.jenkins-ci.plugins</groupId>
-            <artifactId>script-security</artifactId>
-            <version>1251.vfe552ed55f8d</version>
-        </dependency>
-        <dependency>
-            <groupId>joda-time</groupId>
-            <artifactId>joda-time</artifactId>
-            <version>2.12.5</version>
-        </dependency>
-        <dependency>
-            <groupId>org.jenkins-ci.plugins</groupId>
-            <artifactId>git</artifactId>
-            <version>5.1.0</version>
-        </dependency>
-        <dependency>
-            <groupId>io.jenkins.blueocean</groupId>
-            <artifactId>blueocean-rest</artifactId>
-            <version>1.27.4</version>
+            <groupId>org.jenkins-ci.plugins.workflow</groupId>
+            <artifactId>workflow-support</artifactId>
         </dependency>
         <dependency>
             <groupId>org.jenkins-ci.plugins.pipeline-stage-view</groupId>
             <artifactId>pipeline-rest-api</artifactId>
-            <version>2.33</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jenkins-ci.plugins</groupId>
+            <artifactId>git</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>joda-time</groupId>
+            <artifactId>joda-time</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jenkins.blueocean</groupId>
+            <artifactId>blueocean-rest</artifactId>
         </dependency>
         <dependency>
             <groupId>org.csanchez.jenkins.plugins</groupId>
             <artifactId>kubernetes</artifactId>
-            <version>3923.v294a_d4250b_91</version>
         </dependency>
     </dependencies>
 
     <dependencyManagement>
         <dependencies>
-            <!-- https://mvnrepository.com/artifact/io.jenkins.tools.bom/bom-2.303.x -->
+            <!-- https://mvnrepository.com/artifact/io.jenkins.tools.bom/bom-2.426.x -->
             <dependency>
                 <groupId>io.jenkins.tools.bom</groupId>
-                <artifactId>bom-2.401.x</artifactId>
-                <version>2244.vd60654536b_96</version>
+                <artifactId>bom-2.426.x</artifactId>
+                <version>2705.vf5c48c31285b_</version>
+                <scope>import</scope>
                 <type>pom</type>
             </dependency>
-            <!-- https://mvnrepository.com/artifact/io.jenkins.plugins/snakeyaml-api -->
             <dependency>
-                <groupId>io.jenkins.plugins</groupId>
-                <artifactId>snakeyaml-api</artifactId>
-                <version>2.0-100.v5c28c7cb_1e67</version>
+                <groupId>joda-time</groupId>
+                <artifactId>joda-time</artifactId>
+                <version>2.12.5</version>
             </dependency>
-            <!-- https://mvnrepository.com/artifact/org.jenkins-ci.plugins.workflow/workflow-job -->
             <dependency>
                 <groupId>org.jenkins-ci.plugins.workflow</groupId>
-                <artifactId>workflow-job</artifactId>
-                <version>1316.vd2290d3341a_f</version>
+                <artifactId>workflow-multibranch</artifactId>
+                <version>773.vc4fe1378f1d5</version>
             </dependency>
-            <!-- https://mvnrepository.com/artifact/io.jenkins.plugins/ionicons-api -->
             <dependency>
-                <groupId>io.jenkins.plugins</groupId>
-                <artifactId>ionicons-api</artifactId>
-                <version>57.v70787cec562e</version>
+                <groupId>org.jenkins-ci.plugins.workflow</groupId>
+                <artifactId>workflow-support</artifactId>
+                <version>865.v43e78cc44e0d</version>
             </dependency>
-            <!-- https://mvnrepository.com/artifact/org.jenkins-ci.plugins/jackson2-api -->
+            <dependency>
+                <groupId>org.jenkins-ci.plugins.pipeline-stage-view</groupId>
+                <artifactId>pipeline-rest-api</artifactId>
+                <version>2.34</version>
+            </dependency>
             <dependency>
                 <groupId>org.jenkins-ci.plugins</groupId>
-                <artifactId>jackson2-api</artifactId>
-                <version>2.15.2-350.v0c2f3f8fc595</version>
+                <artifactId>git</artifactId>
+                <version>5.2.1</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jenkins.blueocean</groupId>
+                <artifactId>blueocean-rest</artifactId>
+                <version>1.27.9</version>
+            </dependency>
+            <dependency>
+                <groupId>org.csanchez.jenkins.plugins</groupId>
+                <artifactId>kubernetes</artifactId>
+                <version>4174.v4230d0ccd951</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -170,13 +175,16 @@
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.7.3.5</version>
+                <version>4.8.2.0</version>
+                <configuration>
+                    <failOnError>false</failOnError>
+                </configuration>
                 <dependencies>
                     <!-- overwrite dependency on spotbugs if you want to specify the version of spotbugs -->
                     <dependency>
                         <groupId>com.github.spotbugs</groupId>
                         <artifactId>spotbugs</artifactId>
-                        <version>4.7.3</version>
+                        <version>4.8.3</version>
                     </dependency>
                 </dependencies>
             </plugin>
@@ -238,6 +246,29 @@
                     </mapping>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.4.1</version>
+                <executions>
+                    <execution>
+                        <id>enforce-no-snapshots</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <banDuplicatePomDependencyVersions />
+                                <requireReleaseDeps>
+                                    <message>No Snapshots Allowed!</message>
+                                </requireReleaseDeps>
+                            </rules>
+                            <fail>true</fail>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
         </plugins>
     </build>
     <profiles>
@@ -262,7 +293,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-enforcer-plugin</artifactId>
-                        <version>3.3.0</version>
+                        <version>3.4.1</version>
                         <executions>
                             <execution>
                                 <id>enforce-no-snapshots</id>

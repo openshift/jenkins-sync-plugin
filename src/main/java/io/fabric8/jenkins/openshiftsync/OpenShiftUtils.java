@@ -52,6 +52,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.BulkChange;
 import hudson.model.Item;
 import hudson.model.ItemGroup;
@@ -685,6 +686,7 @@ public class OpenShiftUtils {
         @JsonIgnore
         private ReplicationControllerStatus status;
 
+        @SuppressFBWarnings(value="SIC_INNER_SHOULD_BE_STATIC")
         StatelessReplicationControllerMixIn() {
         }
 
@@ -706,6 +708,7 @@ public class OpenShiftUtils {
         @JsonIgnore
         private String uid;
 
+        @SuppressFBWarnings(value="SIC_INNER_SHOULD_BE_STATIC")
         ObjectMetaMixIn() {
         }
 
