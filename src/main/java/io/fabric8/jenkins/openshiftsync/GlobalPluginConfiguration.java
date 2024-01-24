@@ -127,10 +127,10 @@ public class GlobalPluginConfiguration extends GlobalConfiguration {
         if (this.enabled) {
             OpenShiftUtils.initializeOpenShiftClient(this.server, this.maxConnections);
             this.namespaces = getNamespaceOrUseDefault(this.namespaces, getOpenShiftClient());
-            if (TASK != null) {
-                logger.warning("Previously existing configuration task");
-            }
-            TASK = new GlobalPluginConfigurationTimerTask(this.namespaces);
+
+                TASK = new GlobalPluginConfigurationTimerTask(this.namespaces);
+
+
             FUTURE = Timer.get().schedule(TASK, 1, SECONDS); // lets give jenkins a while to get started ;)
         } else {
             logger.info("OpenShift Sync Plugin has been disabled");

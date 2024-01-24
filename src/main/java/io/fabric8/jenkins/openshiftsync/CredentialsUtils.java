@@ -22,6 +22,7 @@ import static java.util.logging.Level.WARNING;
 import static org.apache.commons.lang.StringUtils.isNotBlank;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Base64.Decoder;
 import java.util.Collections;
@@ -351,7 +352,7 @@ public class CredentialsUtils {
             return null;
         }
         return newSecretTextCredential(generatedCredentialsName,
-                new String(Base64.getEncoder().encode(text.getBytes())));
+                new String(Base64.getEncoder().encode(text.getBytes(StandardCharsets.UTF_8)), StandardCharsets.UTF_8));
     }
 
     private static Credentials secretToCredentials(Secret secret) {
@@ -442,7 +443,7 @@ public class CredentialsUtils {
             logInvalidSecretData(secretName, certificateData, "certificate");
             return null;
         }
-        String certificatePassword = passwordData != null ? new String(DECODER.decode(passwordData)) : null;
+        String certificatePassword = passwordData != null ? new String(DECODER.decode(passwordData), StandardCharsets.UTF_8) : null;
         return new CertificateCredentialsImpl(GLOBAL, secretName, secretName, certificatePassword,
                 new CertificateCredentialsImpl.UploadedKeyStoreSource(SecretBytes.fromString(certificateData)));
     }
