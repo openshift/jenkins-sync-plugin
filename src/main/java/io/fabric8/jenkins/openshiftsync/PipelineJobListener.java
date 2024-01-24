@@ -306,7 +306,7 @@ public class PipelineJobListener extends ItemListener {
             }
         } else {
             try {
-                getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(jobBuildConfig.getMetadata().getNamespace()).withName(jobBuildConfig.getMetadata().getName()).cascading(false).replace(jobBuildConfig);
+                getAuthenticatedOpenShiftClient().buildConfigs().inNamespace(jobBuildConfig.getMetadata().getNamespace()).withName(jobBuildConfig.getMetadata().getName()).replace(jobBuildConfig);
             } catch (Exception e) {
                 logger.log(Level.WARNING, "Failed to update BuildConfig: " + NamespaceName.create(jobBuildConfig) + ". " + e, e);
             }

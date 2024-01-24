@@ -43,7 +43,7 @@ func NewRef(t *testing.T, kubeClient *kubeset.Clientset, testNamespace string) *
 func (j *JenkinsRef) RawURL(uri string) (string, error) {
 	podName := "curl-raw-pod"
 	fullURL := fmt.Sprintf("http://%s:%v/%s", j.host, j.port, uri)
-	cmd := fmt.Sprintf("TOKEN=`cat /var/run/secrets/kubernetes.io/serviceaccount/token` && curl -X GET -H \"Authorization: Bearer $TOKEN\" %s", fullURL)
+	cmd := fmt.Sprintf("TOKEN=`cat /var/run/secrets/kubernetes.io/serviceaccount/token` && curl -v -X GET -H \"Authorization: Bearer $TOKEN\" %s", fullURL)
 	return podName, j.uri_tester.CreateExecPod(podName, cmd)
 }
 
@@ -54,7 +54,7 @@ func (j *JenkinsRef) DelRawPod() error {
 func (j *JenkinsRef) RawPost(uri string) (string, error) {
 	podName := "curl-raw-post-pod"
 	fullURL := fmt.Sprintf("http://%s:%v/%s", j.host, j.port, uri)
-	cmd := fmt.Sprintf("TOKEN=`cat /var/run/secrets/kubernetes.io/serviceaccount/token` && curl -X POST -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: ''\" -d '' %s", fullURL)
+	cmd := fmt.Sprintf("TOKEN=`cat /var/run/secrets/kubernetes.io/serviceaccount/token` && curl -v -X POST -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: ''\"  %s", fullURL)
 	return podName, j.uri_tester.CreateExecPod(podName, cmd)
 }
 
