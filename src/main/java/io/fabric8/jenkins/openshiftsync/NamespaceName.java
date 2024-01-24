@@ -18,9 +18,6 @@ package io.fabric8.jenkins.openshiftsync;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 
-/**
- * Represents a name in a namespace we can use as a key in a map
- */
 public class NamespaceName {
     private final String namespace;
     private final String name;
@@ -77,14 +74,11 @@ public class NamespaceName {
     }
 
     /**
-     * Asserts whether the value is <b>not</b> <tt>null</tt>
+     * Asserts whether the value is not null
      *
-     * @param value
-     *            the value to test
-     * @param name
-     *            the key that resolved the value
-     * @throws IllegalArgumentException
-     *             is thrown if assertion fails
+     * @param value the value to test
+     * @param name  the key that resolved the value
+     * @throws IllegalArgumentException is thrown if assertion fails
      */
     public static void notNull(Object value, String name) {
         if (value == null) {

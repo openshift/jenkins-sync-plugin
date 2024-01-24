@@ -51,7 +51,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nonnull;
 
-import org.apache.commons.httpclient.HttpStatus;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.jenkinsci.plugins.workflow.support.steps.input.InputAction;
 import org.jenkinsci.plugins.workflow.support.steps.input.InputStepExecution;
@@ -204,7 +203,6 @@ public class BuildSyncRunListener extends RunListener<Run> {
         if (shouldPollRun(run)) {
             runsToPoll.remove(run);
             boolean updated = pollRun(run);
-            String jenkinsURL = Jenkins.get().getRootUrl();
             logger.info("Run COMPLETED: " + run.getUrl() + " updated: " + updated);
         }
         super.onFinalized(run);
@@ -239,7 +237,7 @@ public class BuildSyncRunListener extends RunListener<Run> {
         try {
             return upsertBuild(run, wfRunExt, blueRun);
         } catch (KubernetesClientException e) {
-            if (e.getCode() == HttpStatus.SC_UNPROCESSABLE_ENTITY) {
+            if (e.getCode() == 422) {
                 runsToPoll.remove(run);
                 logger.warn(String.format("Cannot update status: %s with status %s", e.getMessage(), e.getStatus().toString()));
                 return false;

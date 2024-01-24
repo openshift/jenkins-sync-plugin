@@ -16,15 +16,13 @@
 package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL;
-import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL_VALUES;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.CONFIGMAP;
-import static java.util.Collections.singletonMap;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-import io.fabric8.kubernetes.client.dsl.base.OperationContext;
+import io.fabric8.openshift.client.OpenShiftClient;
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +31,6 @@ import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
-import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 
 public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>, Lifecyclable {
 
@@ -50,17 +47,12 @@ public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>
     }
 
     public void start() {
-        LOGGER.info("Starting cluster wide configMap informer for " + namespaces + "!!");
-        LOGGER.debug("listing ConfigMap resources");
-        SharedInformerFactory factory = getInformerFactory();
-        Map<String, String[]> labels = singletonMap(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUES);
-        OperationContext withLabels = new OperationContext().withLabelsIn(labels);
-        this.informer = factory.sharedIndexInformerFor(ConfigMap.class, withLabels, getListIntervalInSeconds());
+        LOGGER.info("Starting ConfigMaps informer for namespaces: " + namespaces + "!!");
+        OpenShiftClient client = getOpenShiftClient();
+        this.informer = client.configMaps().withLabelIn(IMAGESTREAM_AGENT_LABEL, Constants.imageStreamAgentLabelValues()).inform();
         informer.addEventHandler(this);
-        factory.startAllRegisteredInformers();
+        client.informers().startAllRegisteredInformers();
         LOGGER.info("ConfigMap informer started for namespaces: " + namespaces);
-//        ConfigMapList list = getOpenshiftClient().configMaps().inNamespace(namespace).list();
-//        onInit(list.getItems());
     }
 
     public void stop() {
@@ -95,16 +87,18 @@ public class ConfigMapClusterInformer implements ResourceEventHandler<ConfigMap>
             ObjectMeta oldMetadata = oldObj.getMetadata();
             String namespace = oldMetadata.getNamespace();
             if (namespaces.contains(namespace)) {
-                String oldRv = oldMetadata != null ? oldMetadata.getResourceVersion() : null;
+                String oldRv = oldMetadata.getResourceVersion();
                 ObjectMeta newMetadata = newObj.getMetadata();
                 String newResourceVersion = newMetadata != null ? newMetadata.getResourceVersion() : null;
                 LOGGER.info("Update event received resource versions: " + oldRv + " to: " + newResourceVersion);
                 List<PodTemplate> podTemplates = PodTemplateUtils.podTemplatesFromConfigMap(newObj);
                 ObjectMeta metadata = newMetadata;
-                String uid = metadata.getUid();
-                String name = metadata.getName();
-                LOGGER.info("ConfigMap informer received update event for: {}", name);
-                PodTemplateUtils.updateAgents(podTemplates, CONFIGMAP, uid, name, namespace);
+                if (metadata != null) {
+                    String uid = metadata.getUid();
+                    String name = metadata.getName();
+                    LOGGER.info("ConfigMap informer received update event for: {}", name);
+                    PodTemplateUtils.updateAgents(podTemplates, CONFIGMAP, uid, name, namespace);
+                }
             } else {
                 LOGGER.debug("Received event for a namespace we are not watching: {} ... ignoring", namespace);
             }
