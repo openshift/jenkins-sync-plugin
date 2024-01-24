@@ -47,7 +47,7 @@ public class PodTemplateUtils {
     private static final String SPECIAL_IST_PREFIX = "imagestreamtag:";
     private static final int SPECIAL_IST_PREFIX_IDX = SPECIAL_IST_PREFIX.length();
     protected final static ConcurrentHashMap<String, List<PodTemplate>> trackedPodTemplates = new ConcurrentHashMap<String, List<PodTemplate>>();
-    protected static ConcurrentHashMap<String, String> podTemplateToApiType = new ConcurrentHashMap<String, String>();
+    protected final static ConcurrentHashMap<String, String> podTemplateToApiType = new ConcurrentHashMap<String, String>();
 
     protected static boolean hasOneAndOnlyOneWithSomethingAfter(String str, String substr) {
         return str.contains(substr) && str.indexOf(substr) == str.lastIndexOf(substr)
@@ -375,8 +375,7 @@ public class PodTemplateUtils {
                                     Image imageFromIst = ist.getImage();
                                     String dockerImageReference = imageFromIst.getDockerImageReference();
 
-                                    if (ist != null && imageFromIst != null && dockerImageReference != null
-                                            && dockerImageReference.length() > 0) {
+                                    if (dockerImageReference != null && dockerImageReference.length() > 0) {
                                         newImage = dockerImageReference;
                                         LOGGER.fine(String.format(
                                                 "Converting image ref %s as an imagestreamtag %s to fully qualified image %s",
@@ -494,10 +493,11 @@ public class PodTemplateUtils {
             String uid = configMap.getMetadata().getUid();
             if (configMapContainsSlave(configMap) && !trackedPodTemplates.containsKey(uid)) {
                 List<PodTemplate> templates = podTemplatesFromConfigMap(configMap);
-                trackedPodTemplates.put(uid, templates);
-                for (PodTemplate podTemplate : templates) {
-                    LOGGER.info("Adding PodTemplate " + podTemplate);
-                    addPodTemplate(podTemplate);
+                if (trackedPodTemplates.putIfAbsent(uid, templates) == null) {
+                    for (PodTemplate podTemplate : templates) {
+                        LOGGER.info("Adding PodTemplate " + podTemplate);
+                        addPodTemplate(podTemplate);
+                    }
                 }
             }
         } catch (Exception e) {

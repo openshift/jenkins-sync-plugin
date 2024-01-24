@@ -41,18 +41,18 @@
 
   <name>OpenShift Jenkins Sync Plugin :: System Tests</name>
   <description>Syncs OpenShift BuildConfigs with Jenkins jobs</description>
-  <url>http://fabric8.io</url>
+  <url>https://fabric8.io</url>
   <inceptionYear>2016</inceptionYear>
 
   <organization>
     <name>Red Hat</name>
-    <url>http://redhat.com</url>
+    <url>https://redhat.com</url>
   </organization>
 
   <licenses>
     <license>
       <name>Apache License, Version 2.0</name>
-      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
       <distribution>repo</distribution>
     </license>
   </licenses>
@@ -62,14 +62,14 @@
       <id>geeks</id>
       <name>Fabric8 Development Team</name>
       <organization>fabric8</organization>
-      <organizationUrl>http://fabric8.io/</organizationUrl>
+      <organizationUrl>https://fabric8.io/</organizationUrl>
     </developer>
   </developers>
 
   <scm>
     <connection>scm:git:git@github.com:fabric8io/${project.artifactId}.git</connection>
     <developerConnection>scm:git:git@github.com:fabric8io/${project.artifactId}.git</developerConnection>
-    <url>http://github.com/fabric8io/${project.artifactId}/</url>
+    <url>https://github.com/fabric8io/${project.artifactId}/</url>
     <tag>${project.version}</tag>
   </scm>
 
