@@ -18,7 +18,7 @@ public class BuildComparator implements Comparator<Build> {
 		ObjectMeta b1Metadata = b1.getMetadata();
 		Map<String, String> b1Annotations = b1Metadata.getAnnotations();
 		String b1BuildNumber = b1Annotations.get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER);
-		if (b1Annotations == null || b1BuildNumber == null) {
+		if (b1BuildNumber == null) {
 			String b1Namespace = b1Metadata.getNamespace();
 			String b1Name = b1Metadata.getName();
 			LOGGER.warning("Build " + b1Namespace + "/" + b1Name + ", has bad annotations: " + b1Annotations);
@@ -27,7 +27,7 @@ public class BuildComparator implements Comparator<Build> {
 		ObjectMeta b2Metadata = b2.getMetadata();
 		Map<String, String> b2Annotations = b2Metadata.getAnnotations();
 		String b2BuildNumber = b2Annotations.get(OPENSHIFT_ANNOTATIONS_BUILD_NUMBER);
-		if (b2Annotations == null || b2BuildNumber == null) {
+		if (b2BuildNumber == null) {
 			String b2Namespace = b2Metadata.getNamespace();
 			String b2Name = b2Metadata.getName();
 			LOGGER.warning("Build " + b2Namespace + "/" + b2Name + ", has bad annotations: " + b2Annotations);
