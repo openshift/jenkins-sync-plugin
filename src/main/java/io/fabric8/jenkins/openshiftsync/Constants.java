@@ -61,7 +61,10 @@ public class Constants {
 
     public static final String IMAGESTREAM_AGENT_LABEL_VALUE =  "jenkins-slave";
     public static final String IMAGESTREAM_AGENT_ALTERNATE_LABEL_VALUE = "jenkins-agent";
-    protected static final String[] IMAGESTREAM_AGENT_LABEL_VALUES = {IMAGESTREAM_AGENT_LABEL_VALUE, IMAGESTREAM_AGENT_ALTERNATE_LABEL_VALUE};
+    private static final String[] IMAGESTREAM_AGENT_LABEL_VALUES = {IMAGESTREAM_AGENT_LABEL_VALUE, IMAGESTREAM_AGENT_ALTERNATE_LABEL_VALUE};
     public static final String IMAGESTREAM_AGENT_LABEL = "role";
 
+    public static String[] imageStreamAgentLabelValues() {
+        return IMAGESTREAM_AGENT_LABEL_VALUES;
+    }
 }

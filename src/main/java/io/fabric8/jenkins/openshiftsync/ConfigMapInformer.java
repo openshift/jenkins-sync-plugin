@@ -16,17 +16,14 @@
 package io.fabric8.jenkins.openshiftsync;
 
 import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL;
-import static io.fabric8.jenkins.openshiftsync.Constants.IMAGESTREAM_AGENT_LABEL_VALUES;
-import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getInformerFactory;
+import static io.fabric8.jenkins.openshiftsync.OpenShiftUtils.getOpenShiftClient;
 import static io.fabric8.jenkins.openshiftsync.PodTemplateUtils.CONFIGMAP;
-import static java.util.Collections.singletonMap;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
-import io.fabric8.kubernetes.client.dsl.base.OperationContext;
+import io.fabric8.openshift.client.OpenShiftClient;
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +32,6 @@ import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.client.informers.ResourceEventHandler;
 import io.fabric8.kubernetes.client.informers.SharedIndexInformer;
-import io.fabric8.kubernetes.client.informers.SharedInformerFactory;
 
 public class ConfigMapInformer implements ResourceEventHandler<ConfigMap>, Lifecyclable,Resyncable {
 
@@ -53,17 +49,12 @@ public class ConfigMapInformer implements ResourceEventHandler<ConfigMap>, Lifec
     }
 
     public void start() {
-        LOGGER.info("Starting configMap informer for " + namespace + "!!");
-        LOGGER.debug("listing ConfigMap resources");
-        SharedInformerFactory factory = getInformerFactory().inNamespace(namespace);
-        Map<String, String[]> labels = singletonMap(IMAGESTREAM_AGENT_LABEL, IMAGESTREAM_AGENT_LABEL_VALUES);
-        OperationContext withLabels = new OperationContext().withLabelsIn(labels);
-        this.informer = factory.sharedIndexInformerFor(ConfigMap.class, withLabels, getResyncPeriodMilliseconds());
+        LOGGER.info("Starting ConfigMap informer for namespace: " + namespace + "!!");
+        OpenShiftClient client = getOpenShiftClient();
+        this.informer = client.configMaps().inNamespace(namespace).withLabelIn(IMAGESTREAM_AGENT_LABEL, Constants.imageStreamAgentLabelValues()).inform();
         informer.addEventHandler(this);
-        factory.startAllRegisteredInformers();
+        client.informers().startAllRegisteredInformers();
         LOGGER.info("ConfigMap informer started for namespace: " + namespace);
-//        ConfigMapList list = getOpenshiftClient().configMaps().inNamespace(namespace).list();
-//        onInit(list.getItems());
     }
 
     public void stop() {
