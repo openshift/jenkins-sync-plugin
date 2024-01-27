@@ -33,6 +33,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.logging.Level;
@@ -97,7 +98,7 @@ public class OpenShiftUtils {
         if (jenkinsPodNamespace != null && jenkinsPodNamespace.trim().length() > 0) {
             jenkinsPodNamespace = jenkinsPodNamespace.trim();
         } else {
-            ResourceBundle bundle = ResourceBundle.getBundle("io.fabric8.jenkins.openshiftsync.FileLocations");
+            ResourceBundle bundle = ResourceBundle.getBundle("io.fabric8.jenkins.openshiftsync.FileLocations", Locale.getDefault());
 
             String OPENSHIFT_PROJECT_FILE = bundle.getString("OPENSHIFT_PROJECT_FILE");
             File f = new File(OPENSHIFT_PROJECT_FILE);

@@ -107,6 +107,10 @@
             <artifactId>blueocean-rest</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.jenkins.blueocean</groupId>
+            <artifactId>blueocean-commons</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.csanchez.jenkins.plugins</groupId>
             <artifactId>kubernetes</artifactId>
         </dependency>
@@ -150,12 +154,17 @@
             <dependency>
                 <groupId>io.jenkins.blueocean</groupId>
                 <artifactId>blueocean-rest</artifactId>
-                <version>1.27.9</version>
+                <version>1.27.10</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jenkins.blueocean</groupId>
+                <artifactId>blueocean-commons</artifactId>
+                <version>1.27.10</version>
             </dependency>
             <dependency>
                 <groupId>org.csanchez.jenkins.plugins</groupId>
                 <artifactId>kubernetes</artifactId>
-                <version>4174.v4230d0ccd951</version>
+                <version>4179.v3b_88431df708</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
