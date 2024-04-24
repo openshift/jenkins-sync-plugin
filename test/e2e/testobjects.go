@@ -371,6 +371,8 @@ objects:
     strategy:
       sourceStrategy:
         env:
+        - name: NODE_ENV
+          value: development
         - name: NPM_MIRROR
           value: ${NPM_MIRROR}
         from:
