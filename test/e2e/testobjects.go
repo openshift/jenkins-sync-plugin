@@ -373,6 +373,8 @@ objects:
         env:
         - name: NPM_MIRROR
           value: ${NPM_MIRROR}
+        - name: NODE_ENV
+          value: "development"
         from:
           kind: ImageStreamTag
           name: nodejs:latest
