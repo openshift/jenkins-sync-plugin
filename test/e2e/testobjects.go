@@ -212,7 +212,7 @@ try {
         } // pipeline
 `
 	bluegreenTemplateYAML = `
-apiVersion: v1
+apiVersion: template.openshift.io/v1
 kind: Template
 labels:
   template: bluegreen-pipeline
@@ -227,7 +227,7 @@ metadata:
     tags: instant-app,jenkins
   name: bluegreen-pipeline
 objects:
-- apiVersion: v1
+- apiVersion: build.openshift.io/v1
   kind: BuildConfig
   metadata:
     annotations:
@@ -312,7 +312,7 @@ objects:
     database-admin-password: ${DATABASE_ADMIN_PASSWORD}
     database-password: ${DATABASE_PASSWORD}
     database-user: ${DATABASE_USER}
-- apiVersion: v1
+- apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
     name: blue-${NAME}
@@ -321,7 +321,7 @@ objects:
     to:
       kind: Service
       name: ${NAME}-blue
-- apiVersion: v1
+- apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
     name: green-${NAME}
@@ -330,7 +330,7 @@ objects:
     to:
       kind: Service
       name: ${NAME}-green
-- apiVersion: v1
+- apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
     name: ${NAME}
@@ -433,7 +433,7 @@ objects:
           image: ' '
           livenessProbe:
             httpGet:
-              path: /pagecount
+              path: /live
               port: 8080
             initialDelaySeconds: 30
             timeoutSeconds: 3
@@ -442,7 +442,7 @@ objects:
           - containerPort: 8080
           readinessProbe:
             httpGet:
-              path: /pagecount
+              path: /ready
               port: 8080
             initialDelaySeconds: 3
             timeoutSeconds: 3
