@@ -5,6 +5,7 @@ FROM quay.io/openshift/origin-jenkins-agent-maven:4.11.0 AS builder
 WORKDIR /java/src/github.com/openshift/jenkins-sync-plugin
 COPY . .
 USER 0
+# Test comment
 # We need a newer maven version as the RHEL package is still on 3.6.2
 RUN curl -L -o maven.tar.gz https://dlcdn.apache.org/maven/maven-3/3.8.8/binaries/apache-maven-3.8.8-bin.tar.gz && \
 	mkdir maven && \
