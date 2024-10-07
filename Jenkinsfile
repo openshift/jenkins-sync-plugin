@@ -1,5 +1,5 @@
 /*
- See the documentation for more options:
+ See the documentation for more option:
  https://github.com/jenkins-infra/pipeline-library/
 */
 buildPlugin(
