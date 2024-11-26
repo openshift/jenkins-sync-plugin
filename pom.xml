@@ -127,16 +127,6 @@
                 <artifactId>joda-time</artifactId>
                 <version>2.12.5</version>
             </dependency>
-            <dependency>
-                <groupId>io.jenkins.blueocean</groupId>
-                <artifactId>blueocean-rest</artifactId>
-                <version>1.27.16</version>
-            </dependency>
-            <dependency>
-                <groupId>org.csanchez.jenkins.plugins</groupId>
-                <artifactId>kubernetes</artifactId>
-                <version>4290.v93ea_4b_b_26a_61</version>
-            </dependency>
             <!-- Downgrade asm-api version from 9.7-33.x to 9.6-3.x to resolve compatibility issues with asm-util -->
             <dependency>
                 <groupId>io.jenkins.plugins</groupId>
@@ -151,11 +141,10 @@
             <dependency>
                 <groupId>io.jenkins.plugins.mina-sshd-api</groupId>
                 <artifactId>mina-sshd-api-common</artifactId>
-                <version>2.14.0-131.v04e9b_6b_e0362</version>
+                <version>2.14.0-136.v4d2b_0853615e</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
-
     <build>
         <plugins>
             <plugin>
