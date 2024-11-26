@@ -51,6 +51,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import hudson.model.Fingerprint;
+import hudson.model.Descriptor.FormException;
 import hudson.security.ACL;
 import io.fabric8.kubernetes.api.model.LocalObjectReference;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
@@ -485,8 +486,13 @@ public class CredentialsUtils {
             return null;
 
         }
-        return new UsernamePasswordCredentialsImpl(GLOBAL, secretName, secretName,
-                new String(DECODER.decode(usernameData), UTF_8), new String(DECODER.decode(passwordData), UTF_8));
+        try {
+            return new UsernamePasswordCredentialsImpl(GLOBAL, secretName, secretName,
+                    new String(DECODER.decode(usernameData), UTF_8), new String(DECODER.decode(passwordData), UTF_8));
+        } catch (FormException e) {
+            // TODO Auto-generated catch block
+            throw new RuntimeException(e);
+        }
     }
 
     /**
