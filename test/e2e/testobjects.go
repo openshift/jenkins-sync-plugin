@@ -55,12 +55,30 @@ const (
           }
 `
 
+	// simplemaven1 is no longer used in the test, as simpleoc replaces it. It should be removed in the cleanup PR.
 	simplemaven1 = `
          try {
             timeout(time: 20, unit: 'MINUTES') {
 
                node("POD_TEMPLATE_NAME") {
                   sh "mvn --version"
+               }
+
+            }
+         } catch (err) {
+            echo "in catch block"
+            echo "Caught: ${err}"
+            currentBuild.result = 'FAILURE'
+            throw err
+         }
+`
+
+	simpleoc = `
+         try {
+            timeout(time: 20, unit: 'MINUTES') {
+
+               node("POD_TEMPLATE_NAME") {
+                  sh "oc version"
                }
 
             }
