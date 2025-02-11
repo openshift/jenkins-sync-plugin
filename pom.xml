@@ -22,7 +22,7 @@
     <properties>
         <revision>1.1.0</revision>
         <changelist>999999-SNAPSHOT</changelist>
-        <jenkins.version>2.426.2</jenkins.version>
+        <jenkins.version>2.440.3</jenkins.version>
         <log.level>INFO</log.level>
     </properties>
 
@@ -114,11 +114,11 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- https://mvnrepository.com/artifact/io.jenkins.tools.bom/bom-2.426.x -->
+            <!-- https://mvnrepository.com/artifact/io.jenkins.tools.bom/bom-2.440.x -->
             <dependency>
                 <groupId>io.jenkins.tools.bom</groupId>
-                <artifactId>bom-2.426.x</artifactId>
-                <version>2705.vf5c48c31285b_</version>
+                <artifactId>bom-2.440.x</artifactId>
+                <version>3435.v238d66a_043fb_</version>
                 <scope>import</scope>
                 <type>pom</type>
             </dependency>
@@ -127,39 +127,24 @@
                 <artifactId>joda-time</artifactId>
                 <version>2.12.5</version>
             </dependency>
+            <!-- Downgrade asm-api version from 9.7-33.x to 9.6-3.x to resolve compatibility issues with asm-util -->
             <dependency>
-                <groupId>org.jenkins-ci.plugins.workflow</groupId>
-                <artifactId>workflow-multibranch</artifactId>
-                <version>773.vc4fe1378f1d5</version>
+                <groupId>io.jenkins.plugins</groupId>
+                <artifactId>asm-api</artifactId>
+                <version>9.6-3.v2e1fa_b_338cd7</version>
             </dependency>
             <dependency>
-                <groupId>org.jenkins-ci.plugins.workflow</groupId>
-                <artifactId>workflow-support</artifactId>
-                <version>865.v43e78cc44e0d</version>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>2.16.1</version>
             </dependency>
             <dependency>
-                <groupId>org.jenkins-ci.plugins.pipeline-stage-view</groupId>
-                <artifactId>pipeline-rest-api</artifactId>
-                <version>2.34</version>
-            </dependency>
-            <dependency>
-                <groupId>org.jenkins-ci.plugins</groupId>
-                <artifactId>git</artifactId>
-                <version>5.2.1</version>
-            </dependency>
-            <dependency>
-                <groupId>io.jenkins.blueocean</groupId>
-                <artifactId>blueocean-rest</artifactId>
-                <version>1.27.9</version>
-            </dependency>
-            <dependency>
-                <groupId>org.csanchez.jenkins.plugins</groupId>
-                <artifactId>kubernetes</artifactId>
-                <version>4174.v4230d0ccd951</version>
+                <groupId>io.jenkins.plugins.mina-sshd-api</groupId>
+                <artifactId>mina-sshd-api-common</artifactId>
+                <version>2.14.0-136.v4d2b_0853615e</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
-
     <build>
         <plugins>
             <plugin>
