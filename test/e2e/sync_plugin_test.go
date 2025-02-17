@@ -823,7 +823,7 @@ func TestImageStreamPodTemplate(t *testing.T) {
 		{
 			From: &corev1.ObjectReference{
 				Kind: "DockerImage",
-				Name: "registry.redhat.io/openshift4/ose-jenkins-agent-maven:v4.10",
+				Name: "registry.redhat.io/ocp-tools-4/jenkins-agent-base-rhel8:v4.15.0",
 			},
 			Name: "base",
 		},
@@ -841,7 +841,7 @@ func TestImageStreamPodTemplate(t *testing.T) {
 		t.Fatalf("error creating pod template stream: %s", err.Error())
 	}
 
-	podTemplateTest(podTemplateName, simplemaven1, ta)
+	podTemplateTest(podTemplateName, simpleoc, ta)
 }
 
 func TestImageStreamTagPodTemplate(t *testing.T) {
@@ -857,7 +857,7 @@ func TestImageStreamTagPodTemplate(t *testing.T) {
 		{
 			From: &corev1.ObjectReference{
 				Kind: "DockerImage",
-				Name: "registry.redhat.io/openshift4/ose-jenkins-agent-maven:v4.10",
+				Name: "registry.redhat.io/ocp-tools-4/jenkins-agent-base-rhel8:v4.15.0",
 			},
 			Name: "base",
 		},
@@ -877,7 +877,7 @@ func TestImageStreamTagPodTemplate(t *testing.T) {
 		t.Fatalf("error creating pod template stream: %s", err.Error())
 	}
 
-	podTemplateTest(podTemplateName+":"+podTemplateTag, simplemaven1, ta)
+	podTemplateTest(podTemplateName+":"+podTemplateTag, simpleoc, ta)
 }
 
 func TestJavaBuilderPodTemplate(t *testing.T) {
