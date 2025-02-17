@@ -399,14 +399,12 @@ func rawURICheck(rawURI string, ta *testArgs, query ...string) {
 			ta.t.Logf("got error %s on output for %s", err.Error(), rawURI)
 			return false, nil
 		}
-		found := true
 		for _, q := range query {
-			found = found && checkPodsForText(podName, q, ta)
+			if checkPodsForText(podName, q, ta) {
+				return true, nil
+			}
 		}
-		if !found {
-			return false, nil
-		}
-		return true, nil
+		return false, nil
 	})
 	if err != nil {
 		debugAndFailTest(ta, fmt.Sprintf("unexpected results for %s", rawURI))
@@ -1071,7 +1069,7 @@ func TestDeletedBuildDeletesRun(t *testing.T) {
 		if buildInfo.number%2 == 0 {
 			rawURICheck(buildInfo.jenkinsBuildURI, ta, "<h2>Not Found</h2>")
 		} else {
-			rawURICheck(buildInfo.jenkinsBuildURI, ta, fmt.Sprintf("Build #%d", buildInfo.number))
+			rawURICheck(buildInfo.jenkinsBuildURI, ta, fmt.Sprintf("<h1>#%d", buildInfo.number), fmt.Sprintf("Build #%d", buildInfo.number))
 		}
 	}
 
