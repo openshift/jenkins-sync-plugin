@@ -10,7 +10,7 @@ USER 0
 RUN mvn --version
 RUN mvn clean package
 
-FROM registry.ci.openshift.org/origin/4.14:jenkins
+FROM registry.redhat.io/ocp-tools-4/jenkins-rhel8:v4.14.0
 RUN rm /opt/openshift/plugins/openshift-sync.jpi
 COPY --from=builder /java/src/github.com/openshift/jenkins-sync-plugin/target/openshift-sync.hpi /opt/openshift/plugins
 RUN mv /opt/openshift/plugins/openshift-sync.hpi /opt/openshift/plugins/openshift-sync.jpi
