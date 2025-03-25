@@ -1,5 +1,6 @@
 #!/bin/bash
-
+set -x
+printenv
 echo "Jenkins image from CI pipeline:jenkins: ${JENKINS_IMAGE}"
 if [[ -z ${JENKINS_IMAGE} ]]; then
     echo "No jenkins image env var found, not overriding jenkins imagestream for e2e test of jenkins-sync-plugin."

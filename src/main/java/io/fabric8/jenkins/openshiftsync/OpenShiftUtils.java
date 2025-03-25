@@ -27,16 +27,21 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.*;
 
 import hudson.PluginWrapper;
 import org.apache.commons.lang.StringUtils;
@@ -51,6 +56,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.thoughtworks.xstream.core.util.Fields;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.BulkChange;
@@ -133,7 +139,25 @@ public class OpenShiftUtils {
 
     private static final DateTimeFormatter dateFormatter = ISODateTimeFormat.dateTimeNoMillis();
 
-    /**
+    private static String configAsString(Config tempConfig) {
+        List<String> sensitiveFields = Arrays.asList("password", "oauthToken", "autoOAuthToken", "proxyPassword");
+        Field[] fields = Config.class.getDeclaredFields();
+        for (Field field : fields) {
+            field.setAccessible(true);
+            try {
+                if (sensitiveFields.contains(field.getName())) {
+                    String fieldValue = (String) field.get(tempConfig);
+                    if (fieldValue != null) {
+                        field.set(tempConfig, "****");
+                    }
+                }
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            }
+        }
+        return ReflectionToStringBuilder.toString(tempConfig);
+    }
+     /**
      * Initializes an {@link OpenShiftClient}
      *
      * @param serverUrl      the optional URL of where the OpenShift cluster API
@@ -150,8 +174,8 @@ public class OpenShiftUtils {
         if (serverUrl != null && !serverUrl.isEmpty()) {
             configBuilder.withMasterUrl(serverUrl);
         }
-        Config config = configBuilder.build();
-        logger.log(INFO, "Current OpenShift Client Configuration: " + ReflectionToStringBuilder.toString(config));
+        Config config = configBuilder.build(), tempConfig = configBuilder.build();
+        logger.log(INFO, "Current OpenShift Client Configuration: " + configAsString(tempConfig));
         try {
             String version = null;
             if (JENKINS_INSTANCE != null) {
