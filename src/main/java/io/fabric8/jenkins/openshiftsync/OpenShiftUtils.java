@@ -27,12 +27,14 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.logging.Level;
@@ -133,6 +135,30 @@ public class OpenShiftUtils {
 
     private static final DateTimeFormatter dateFormatter = ISODateTimeFormat.dateTimeNoMillis();
 
+
+    /**
+     * @param tempConfig The {@link Config} object with sensitive data to be masked
+     * @return String  The {@link Config} object with sensitive fields replaced by "****".
+     */
+    private static String configAsString(Config tempConfig) {
+        List<String> sensitiveFields = Arrays.asList("password", "oauthToken", "autoOAuthToken", "proxyPassword");
+        Field[] fields = Config.class.getDeclaredFields();
+        for (Field field : fields) {
+            field.setAccessible(true);
+            try {
+                if (sensitiveFields.contains(field.getName())) {
+                    String fieldValue = (String) field.get(tempConfig);
+                    if (fieldValue != null) {
+                        field.set(tempConfig, "****");
+                    }
+                }
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            }
+        }
+        return ReflectionToStringBuilder.toString(tempConfig);
+    }
+
     /**
      * Initializes an {@link OpenShiftClient}
      *
@@ -150,8 +176,8 @@ public class OpenShiftUtils {
         if (serverUrl != null && !serverUrl.isEmpty()) {
             configBuilder.withMasterUrl(serverUrl);
         }
-        Config config = configBuilder.build();
-        logger.log(INFO, "Current OpenShift Client Configuration: " + ReflectionToStringBuilder.toString(config));
+        Config config = configBuilder.build(), tempConfig = configBuilder.build();
+        logger.log(INFO, "Current OpenShift Client Configuration: " + configAsString(tempConfig));
         try {
             String version = null;
             if (JENKINS_INSTANCE != null) {
