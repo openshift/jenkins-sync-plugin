@@ -27,14 +27,12 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.ResourceBundle;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -133,6 +131,22 @@ public class OpenShiftUtils {
 
     private static final DateTimeFormatter dateFormatter = ISODateTimeFormat.dateTimeNoMillis();
 
+    // Set of fields not to be printed into the log file at INFO level
+    // please add CVE when published
+    private static final Set<String> unprintableFields = new HashSet<String>(Arrays.asList("password", "oauthToken", "autoOAuthToken", "proxyPassword"));
+
+    protected static String configAsString(Config config) {
+        if (logger.getLevel().intValue() <= FINER.intValue()) {
+            return ReflectionToStringBuilder.toString(config);
+        } else {
+            return new ReflectionToStringBuilder(config) {
+                protected boolean accept(Field f) {
+                    return super.accept(f) && !unprintableFields.contains(f.getName());
+                }
+            }.toString();
+        }
+    }
+
     /**
      * Initializes an {@link OpenShiftClient}
      *
@@ -151,7 +165,7 @@ public class OpenShiftUtils {
             configBuilder.withMasterUrl(serverUrl);
         }
         Config config = configBuilder.build();
-        logger.log(INFO, "Current OpenShift Client Configuration: " + ReflectionToStringBuilder.toString(config));
+        logger.log(INFO, "Current OpenShift Client Configuration: " + configAsString(config));
         try {
             String version = null;
             if (JENKINS_INSTANCE != null) {
