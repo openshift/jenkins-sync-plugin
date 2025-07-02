@@ -35,6 +35,7 @@ import org.jenkinsci.plugins.workflow.flow.FlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.multibranch.BranchJobProperty;
 
+import hudson.model.Descriptor.FormException;
 import hudson.plugins.git.BranchSpec;
 import hudson.plugins.git.GitSCM;
 import hudson.plugins.git.SubmoduleConfig;
@@ -108,7 +109,12 @@ public class BuildConfigToJobMapper {
                 return null;
             }
         } else {
-            return new CpsFlowDefinition(jenkinsfile, true);
+            try {
+                return new CpsFlowDefinition(jenkinsfile, true);
+            } catch (FormException e) {
+                // TODO Auto-generated catch block
+                throw new RuntimeException(e);
+            }
         }
     }
 
