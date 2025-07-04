@@ -5,10 +5,14 @@ FROM registry.access.redhat.com/ubi9/openjdk-21:1.20 AS builder
 WORKDIR /java/src/github.com/openshift/jenkins-sync-plugin
 COPY . .
 USER 0
-
+# We need a newer maven version as the RHEL package is still on 3.8.5
+RUN microdnf -y install gzip
+RUN curl -L -o maven.tar.gz https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz && \
+ 	mkdir maven && \
+ 	tar -xvzf maven.tar.gz -C maven --strip-component 1
 # Use the downloaded version of maven to build the package
-RUN mvn --version
-RUN mvn clean package
+RUN ./maven/bin/mvn --version && \
+ 	./maven/bin/mvn clean package
 
 FROM registry.redhat.io/ocp-tools-4/jenkins-rhel9:v4.17.0
 RUN rm /opt/openshift/plugins/openshift-sync.jpi

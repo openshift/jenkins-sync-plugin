@@ -11,7 +11,7 @@
     <parent>
         <groupId>org.jenkins-ci.plugins</groupId>
         <artifactId>plugin</artifactId>
-        <version>4.77</version>
+        <version>5.18</version>
         <relativePath />
     </parent>
     <groupId>io.fabric8.jenkins.plugins</groupId>
@@ -22,7 +22,7 @@
     <properties>
         <revision>1.1.0</revision>
         <changelist>999999-SNAPSHOT</changelist>
-        <jenkins.version>2.426.2</jenkins.version>
+        <jenkins.version>2.504.2</jenkins.version>
         <log.level>INFO</log.level>
     </properties>
 
@@ -114,48 +114,48 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- https://mvnrepository.com/artifact/io.jenkins.tools.bom/bom-2.426.x -->
+            <!-- https://mvnrepository.com/artifact/io.jenkins.tools.bom/bom-2.504.x -->
             <dependency>
                 <groupId>io.jenkins.tools.bom</groupId>
-                <artifactId>bom-2.426.x</artifactId>
-                <version>2705.vf5c48c31285b_</version>
+                <artifactId>bom-2.504.x</artifactId>
+                <version>4969.v6ffa_18d90c9f</version>
                 <scope>import</scope>
                 <type>pom</type>
             </dependency>
             <dependency>
                 <groupId>joda-time</groupId>
                 <artifactId>joda-time</artifactId>
-                <version>2.12.5</version>
+                <version>2.14.0</version>
             </dependency>
             <dependency>
                 <groupId>org.jenkins-ci.plugins.workflow</groupId>
                 <artifactId>workflow-multibranch</artifactId>
-                <version>773.vc4fe1378f1d5</version>
+                <version>806.vb_b_688f609ee9</version>
             </dependency>
             <dependency>
                 <groupId>org.jenkins-ci.plugins.workflow</groupId>
                 <artifactId>workflow-support</artifactId>
-                <version>865.v43e78cc44e0d</version>
+                <version>968.v8f17397e87b_8</version>
             </dependency>
             <dependency>
                 <groupId>org.jenkins-ci.plugins.pipeline-stage-view</groupId>
                 <artifactId>pipeline-rest-api</artifactId>
-                <version>2.34</version>
+                <version>2.38</version>
             </dependency>
             <dependency>
                 <groupId>org.jenkins-ci.plugins</groupId>
                 <artifactId>git</artifactId>
-                <version>5.2.1</version>
+                <version>5.7.0</version>
             </dependency>
             <dependency>
                 <groupId>io.jenkins.blueocean</groupId>
                 <artifactId>blueocean-rest</artifactId>
-                <version>1.27.9</version>
+                <version>1.27.19</version>
             </dependency>
             <dependency>
                 <groupId>org.csanchez.jenkins.plugins</groupId>
                 <artifactId>kubernetes</artifactId>
-                <version>4174.v4230d0ccd951</version>
+                <version>4353.vb_47977da_9417</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -165,7 +165,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>versions-maven-plugin</artifactId>
-                <version>2.16.0</version>
+                <version>2.18.0</version>
                 <configuration>
                     <excludes>
                         <exclude>org.apache.commons:commons-collections4</exclude>
@@ -175,7 +175,7 @@
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.8.2.0</version>
+                <version>4.9.3.1</version>
                 <configuration>
                     <failOnError>false</failOnError>
                 </configuration>
@@ -184,14 +184,14 @@
                     <dependency>
                         <groupId>com.github.spotbugs</groupId>
                         <artifactId>spotbugs</artifactId>
-                        <version>4.8.3</version>
+                        <version>4.9.3</version>
                     </dependency>
                 </dependencies>
             </plugin>
             <plugin>
                 <groupId>org.jenkins-ci.tools</groupId>
                 <artifactId>maven-hpi-plugin</artifactId>
-                <version>3.47</version>
+                <version>3.65</version>
                 <configuration>
                     <pluginFirstClassLoader>true</pluginFirstClassLoader>
                     <loggers>
@@ -224,7 +224,7 @@
             <plugin>
                 <groupId>com.mycila</groupId>
                 <artifactId>license-maven-plugin</artifactId>
-                <version>4.2</version>
+                <version>5.0.0</version>
                 <configuration>
                     <aggregate>true</aggregate>
                     <header>header.txt</header>
@@ -249,7 +249,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
-                <version>3.4.1</version>
+                <version>3.5.0</version>
                 <executions>
                     <execution>
                         <id>enforce-no-snapshots</id>
@@ -279,7 +279,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-gpg-plugin</artifactId>
-                        <version>3.1.0</version>
+                        <version>3.2.7</version>
                         <executions>
                             <execution>
                                 <id>sign-artifacts</id>
@@ -293,7 +293,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-enforcer-plugin</artifactId>
-                        <version>3.4.1</version>
+                        <version>3.5.0</version>
                         <executions>
                             <execution>
                                 <id>enforce-no-snapshots</id>
@@ -316,7 +316,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-javadoc-plugin</artifactId>
-                        <version>3.5.0</version>
+                        <version>3.11.2</version>
                         <executions>
                             <execution>
                                 <id>attach-javadocs</id>
@@ -329,7 +329,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-source-plugin</artifactId>
-                        <version>3.3.0</version>
+                        <version>3.3.1</version>
                         <executions>
                             <execution>
                                 <id>attach-sources</id>
