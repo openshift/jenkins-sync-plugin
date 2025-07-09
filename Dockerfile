@@ -14,7 +14,7 @@ RUN curl -L -o maven.tar.gz https://archive.apache.org/dist/maven/maven-3/3.9.9/
 RUN ./maven/bin/mvn --version && \
  	./maven/bin/mvn clean package
 
-FROM registry.redhat.io/ocp-tools-4/jenkins-rhel8:v4.14.0
+FROM registry.redhat.io/ocp-tools-4/jenkins-rhel9:v4.17.0
 RUN rm /opt/openshift/plugins/openshift-sync.jpi
 COPY --from=builder /java/src/github.com/openshift/jenkins-sync-plugin/target/openshift-sync.hpi /opt/openshift/plugins
 RUN mv /opt/openshift/plugins/openshift-sync.hpi /opt/openshift/plugins/openshift-sync.jpi
