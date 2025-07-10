@@ -63,7 +63,7 @@ public class PipelineJobListener extends ItemListener {
     }
 
     @DataBoundConstructor
-    @SuppressFBWarnings("EI_EXPOSE_REP2")
+    // @SuppressFBWarnings("EI_EXPOSE_REP2")
     public PipelineJobListener(String server, String[] namespaces, String jobNamePattern) {
         this.server = server;
         this.namespace = namespaces[0];
